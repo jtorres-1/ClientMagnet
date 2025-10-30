@@ -1,11 +1,12 @@
-// scraper.cjs — Buyer Detection + Auto-Run + Dependent DM Chain (v3.1)
-
+// scraper.cjs — Buyer Detection + Auto-Run + Dependent DM Chain (v3.2, PM2-Ready)
 require("dotenv").config();
 const fs = require("fs");
+const path = require("path");
 const snoowrap = require("snoowrap");
 const { createObjectCsvWriter } = require("csv-writer");
 const { exec } = require("child_process");
 
+// ---- Reddit Client ----
 const reddit = new snoowrap({
   userAgent: process.env.REDDIT_USER_AGENT,
   clientId: process.env.REDDIT_CLIENT_ID,
@@ -14,8 +15,13 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-const csvPath = "logs/automation_clients.csv";
+// ---- Absolute CSV Path ----
+const baseDir = path.resolve(__dirname, "logs");
+const csvPath = path.join(baseDir, "automation_clients.csv");
 
+if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+
+// ---- CSV Writer ----
 const writer = createObjectCsvWriter({
   path: csvPath,
   header: [
@@ -68,6 +74,7 @@ const techWords = [
   "discord", "telegram", "reddit", "web", "selenium", "data extraction"
 ];
 
+// ---- Buyer Detector ----
 function isBuyer(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
   if (sellerWords.some((w) => text.includes(w))) return false;
@@ -76,6 +83,7 @@ function isBuyer(post) {
   return wantsWork && mentionsTech;
 }
 
+// ---- Scrape Runner ----
 async function runScrape() {
   const leads = [];
 
@@ -126,6 +134,7 @@ async function runScrape() {
     }
   }
 
+  // ---- Deduplicate and Write ----
   const unique = Array.from(new Map(leads.map((o) => [o.url, o])).values());
   if (!unique.length) return [];
 
@@ -137,10 +146,10 @@ async function runScrape() {
   return newLeads;
 }
 
-// === AUTO LOOP + DM DEPENDENCY ===
+// ---- Loop + Dependent DM Chain ----
 async function loopScraper() {
   while (true) {
-    console.log("\n Running Reddit Buyer-Focused Automation Lead Scraper v3.1...");
+    console.log("\n🚀 Running Reddit Buyer-Focused Automation Lead Scraper v3.2...");
     try {
       const leads = await runScrape();
 
@@ -149,7 +158,9 @@ async function loopScraper() {
       } else {
         console.log(`✅ Added ${leads.length} verified automation leads to CSV.`);
         console.log("📨 Launching DM sequence (agency_bot.cjs)...");
-        exec("node agency_bot.cjs automation_clients", (err, stdout, stderr) => {
+
+        const agencyBotPath = path.resolve(__dirname, "agency_bot.cjs");
+        exec(`node ${agencyBotPath} automation_clients`, (err, stdout, stderr) => {
           if (err) console.error("⚠️ Failed to run agency_bot:", err);
           if (stdout) console.log(stdout);
           if (stderr) console.error(stderr);
@@ -159,11 +170,12 @@ async function loopScraper() {
       console.error("💥 Scraper crashed:", err);
     }
 
-    // Wait 45–60 min before next run (randomized)
+    // Wait 45–60 min before next run
     const mins = 45 + Math.floor(Math.random() * 15);
     console.log(`💤 Sleeping ${mins} minutes before next scrape cycle...\n`);
     await new Promise((r) => setTimeout(r, mins * 60 * 1000));
   }
 }
 
+// ---- Start ----
 loopScraper();

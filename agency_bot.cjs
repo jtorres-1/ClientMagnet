@@ -1,10 +1,12 @@
-// agency_bot.cjs — Reddit DM Bot Sales Outreach (Auto + Safe)
+// agency_bot.cjs — Reddit DM Bot Sales Outreach (Auto + Safe + PM2-Ready)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
+const path = require("path");
 const csv = require("csv-parser");
 const { createObjectCsvWriter } = require("csv-writer");
 
+// ---- Reddit Client ----
 const reddit = new snoowrap({
   userAgent: process.env.REDDIT_USER_AGENT,
   clientId: process.env.REDDIT_CLIENT_ID,
@@ -13,11 +15,17 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
+// ---- Mode ----
 const mode = process.argv[2] || "automation_clients";
-const leadsPath = `logs/${mode}.csv`;
-const sentPath = `logs/${mode}_dmed.csv`;
 
-// --- CSV prep ---
+// ---- Absolute File Paths ----
+const baseDir = path.resolve(__dirname, "logs");
+const leadsPath = path.join(baseDir, `${mode}.csv`);
+const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
+
+if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+
+// ---- CSV Header Check ----
 if (fs.existsSync(leadsPath)) {
   const firstLine = fs.readFileSync(leadsPath, "utf8").split("\n")[0].trim();
   if (!firstLine.toLowerCase().startsWith("username")) {
@@ -27,6 +35,7 @@ if (fs.existsSync(leadsPath)) {
   }
 }
 
+// ---- Sent Log Writer ----
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
   header: [
@@ -40,6 +49,7 @@ const sentWriter = createObjectCsvWriter({
   append: true,
 });
 
+// ---- Helper: Load Already Messaged ----
 function getMessagedUsernames() {
   if (!fs.existsSync(sentPath)) return new Set();
   const data = fs.readFileSync(sentPath, "utf8");
@@ -52,8 +62,10 @@ function getMessagedUsernames() {
   return names;
 }
 
+// ---- Helper: Load Leads ----
 function loadLeads() {
   return new Promise((resolve, reject) => {
+    if (!fs.existsSync(leadsPath)) return resolve([]);
     const leads = [];
     fs.createReadStream(leadsPath)
       .pipe(csv())
@@ -63,6 +75,7 @@ function loadLeads() {
   });
 }
 
+// ---- Message Template ----
 function buildMessage(post) {
   return {
     subject: "Saw your post — quick automation idea",
@@ -78,10 +91,12 @@ It’s plug-and-play and built for safe Reddit automation.
   };
 }
 
+// ---- Sleep ----
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// ---- One Outreach Cycle ----
 async function runCycle() {
   if (!fs.existsSync(leadsPath)) {
     console.log(`❌ No leads file found at ${leadsPath}`);
@@ -120,15 +135,16 @@ async function runCycle() {
       await sentWriter.writeRecords([{ ...post, status: `ERROR: ${err.message}` }]);
     }
 
+    // Delay between messages (45–90s)
     const delay = 45000 + Math.random() * 45000;
     console.log(`⏳ Waiting ${(delay / 1000).toFixed(0)}s...`);
     await sleep(delay);
   }
 
-  console.log(`Cycle complete. Sent ${sentCount} messages.`);
+  console.log(`✅ Cycle complete. Sent ${sentCount} messages this round.`);
 }
 
-// --- AUTO RUN LOOP ---
+// ---- Continuous Loop ----
 (async () => {
   while (true) {
     console.log("🕒 Starting new outreach cycle...");

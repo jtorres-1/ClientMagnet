@@ -37,25 +37,51 @@ const writer = createObjectCsvWriter({
 
 // === Subreddits ===
 const subs = [
-  "forhire", "jobbit", "slavelabour", "WorkOnline", "RemoteJobs",
-  "Entrepreneur", "freelance", "SmallBusiness",
-  "SideProject", "Startup_Ideas", "SaaS",
-  "ProgrammingRequests", "developers", "remotedev", "remotework", "webdev"
+  // 🔥 High-Intent Hiring & Client Work
+  "forhire", "jobbit", "slavelabour", "HireaWriter", "HireaDeveloper",
+  "DesignJobs", "RemoteJobs", "WorkOnline", "freelance", "Upwork",
+
+  // 🚀 Entrepreneurs, Founders, and Builders
+  "Entrepreneur", "EntrepreneurRideAlong", "SideProject", "Startups", "SaaS",
+  "IndieHackers", "buildapcsales", "smallbusiness", "BusinessHub",
+
+  // 💻 Tech, Automation, and Dev-Oriented
+  "webdev", "ProgrammingRequests", "learnprogramming", "remotedev", "remotework",
+  "automation", "nocode", "AIinEntrepreneurship"
 ];
+
 
 // === Search Terms ===
 const searchTerms = [
+  // 🔧 Direct automation & bot intent
   "reddit bot",
   "need automation",
   "looking for bot",
-  "hire developer",
-  "automation help",
   "custom bot",
+  "bot developer",
+  "build me a bot",
   "dm automation",
-  "python script",
-  "bot builder",
-  "web scraper"
+  "reddit automation",
+  "web scraper",
+  "python automation",
+
+  // 💼 High buyer intent (they want to hire someone)
+  "hire developer",
+  "need developer",
+  "looking for developer",
+  "freelance developer",
+  "automation help",
+  "build script",
+  "looking to automate",
+
+  // 💡 Broader opportunity catchers
+  "ai tool idea",
+  "growth automation",
+  "lead generation",
+  "script for reddit",
+  "automation project"
 ];
+
 
 // === Filters ===
 const sellerWords = [

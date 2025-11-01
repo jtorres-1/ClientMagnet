@@ -78,18 +78,19 @@ function loadLeads() {
 // ---- Message Template ----
 function buildMessage(post) {
   return {
-    subject: "Saw your post — quick automation idea",
+    subject: "Saw your post — client lead idea",
     text: `Hey u/${post.username},
 
-I saw your post in r/${post.subreddit} about “${post.title}”.
-I’ve built a ready-to-use Reddit DM automation tool that handles outreach and lead generation — perfect for tasks like yours.
+Just saw your post in r/${post.subreddit} about “${post.title}”.
+I built a Reddit DM tool that finds people already asking for help in your niche and messages them for you — 24/7.
 
-👉 https://linktr.ee/jtxcode
+It’s been helping freelancers and small agencies get consistent leads without spending on ads.
+You can see it here 👉 https://linktr.ee/jtxcode
 
-It’s plug-and-play and built for safe Reddit automation.
-– Jesse (Automation Developer)`,
+– Jesse (Automation Dev)`,
   };
 }
+
 
 // ---- Sleep ----
 function sleep(ms) {

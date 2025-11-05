@@ -1,4 +1,4 @@
-// scraper.cjs — Buyer Detection + Auto-Run + Dependent DM Chain (v3.2, PM2-Ready)
+// scraper.cjs — Buyer Detection + Auto-Run + Dependent DM Chain (v3.4, Optimized Targeting)
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -35,64 +35,48 @@ const writer = createObjectCsvWriter({
   append: true,
 });
 
-// === Subreddits ===
+// === Subreddits (sorted by buyer intent) ===
 const subs = [
-  // 🔥 High-Intent Hiring & Client Work
-  "forhire", "jobbit", "slavelabour", "HireaWriter", "HireaDeveloper",
-  "DesignJobs", "RemoteJobs", "WorkOnline", "freelance", "Upwork",
+  // 🧠 Highest buyer intent
+  "forhire", "slavelabour", "jobbit", "HireaDeveloper", "ProgrammingRequests",
 
-  // 🚀 Entrepreneurs, Founders, and Builders
-  "Entrepreneur", "EntrepreneurRideAlong", "SideProject", "Startups", "SaaS",
-  "IndieHackers", "buildapcsales", "smallbusiness", "BusinessHub",
+  // 💼 Secondary: project-based and business
+  "RemoteJobs", "WorkOnline", "freelance", "Entrepreneur", "SideProject", "Startups", "SaaS", "smallbusiness",
 
-  // 💻 Tech, Automation, and Dev-Oriented
-  "webdev", "ProgrammingRequests", "learnprogramming", "remotedev", "remotework",
-  "automation", "nocode", "AIinEntrepreneurship"
+  // ⚙️ Tech/Automation specific
+  "automation", "nocode", "AIinEntrepreneurship", "webdev", "remotedev"
 ];
 
-
-// === Search Terms ===
+// === Search Terms (refined for dev/automation buyers) ===
 const searchTerms = [
-  // 🔧 Direct automation & bot intent
-  "reddit bot",
-  "need automation",
-  "looking for bot",
-  "custom bot",
-  "bot developer",
-  "build me a bot",
-  "dm automation",
-  "reddit automation",
-  "web scraper",
-  "python automation",
-
-  // 💼 High buyer intent (they want to hire someone)
+  "looking for developer",
   "hire developer",
   "need developer",
-  "looking for developer",
-  "freelance developer",
+  "need automation",
+  "build me a bot",
+  "custom bot",
+  "reddit bot",
+  "dm automation",
+  "web scraper",
   "automation help",
   "build script",
+  "python automation",
   "looking to automate",
-
-  // 💡 Broader opportunity catchers
-  "ai tool idea",
-  "growth automation",
-  "lead generation",
-  "script for reddit",
-  "automation project"
+  "automation project",
+  "telegram bot",
+  "ai automation"
 ];
-
 
 // === Filters ===
 const sellerWords = [
   "for hire", "offer", "offering", "available", "hire me", "portfolio", "we build",
-  "i build", "i made", "my tool", "our team", "commission me", "services"
+  "i build", "i made", "my tool", "our team", "commission me", "services", "dm me"
 ];
 
 const buyerWords = [
   "need", "looking for", "hire", "hiring", "developer needed",
   "can someone", "paid project", "budget", "commission", "create for me",
-  "build for me", "searching for", "any dev", "any coder"
+  "build for me", "searching for", "any dev", "any coder", "build bot"
 ];
 
 const techWords = [
@@ -104,9 +88,26 @@ const techWords = [
 function isBuyer(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
   if (sellerWords.some((w) => text.includes(w))) return false;
+
   const wantsWork = buyerWords.some((w) => text.includes(w));
   const mentionsTech = techWords.some((w) => text.includes(w));
-  return wantsWork && mentionsTech;
+
+  // Require both — clear buyer intent AND tech mention
+  if (!wantsWork || !mentionsTech) return false;
+
+  // Filter out spam/low-quality
+  if (text.length < 40) return false;
+  if (/(free|unpaid|exposure)/.test(text)) return false;
+
+  return true;
+}
+
+// ---- Freshness Filter (48h max) ----
+function isRecent(post) {
+  const now = Date.now();
+  const postTime = post.created_utc * 1000;
+  const hoursOld = (now - postTime) / (1000 * 60 * 60);
+  return hoursOld <= 48;
 }
 
 // ---- Scrape Runner ----
@@ -123,6 +124,7 @@ async function runScrape() {
           limit: 50,
         });
 
+        // Fallback for low-activity subs
         if (!posts.length) {
           console.log(`↩️ Retrying r/${sub} (top of month)...`);
           posts = await reddit.getSubreddit(sub).search({
@@ -135,10 +137,14 @@ async function runScrape() {
 
         posts.forEach((p) => {
           if (!p.author) return;
+          if (!isRecent(p)) return;
           if (!isBuyer(p)) return;
 
           const text = (p.title + " " + (p.selftext || "")).toLowerCase();
-          const isRedditBotLead = text.includes("reddit bot") || text.includes("dm bot");
+          const isRedditBotLead =
+            text.includes("reddit bot") ||
+            text.includes("dm bot") ||
+            text.includes("telegram bot");
 
           leads.push({
             username: p.author.name,
@@ -175,7 +181,7 @@ async function runScrape() {
 // ---- Loop + Dependent DM Chain ----
 async function loopScraper() {
   while (true) {
-    console.log("\n🚀 Running Reddit Buyer-Focused Automation Lead Scraper v3.2...");
+    console.log("\n🚀 Running Optimized Reddit Buyer-Focused Lead Scraper v3.4...");
     try {
       const leads = await runScrape();
 

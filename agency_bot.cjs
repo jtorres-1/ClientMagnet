@@ -22,8 +22,21 @@ const mode = process.argv[2] || "automation_clients";
 const baseDir = path.resolve(__dirname, "logs");
 const leadsPath = path.join(baseDir, `${mode}.csv`);
 const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
+const sentCachePath = path.join(baseDir, `${mode}_sentCache.json`);
 
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+
+// ---- Persistent Sent Cache (prevents duplicate DMs even after restart) ----
+let sentCache = new Set();
+
+if (fs.existsSync(sentCachePath)) {
+  try {
+    const data = JSON.parse(fs.readFileSync(sentCachePath, "utf8"));
+    sentCache = new Set(data);
+  } catch {
+    sentCache = new Set();
+  }
+}
 
 // ---- CSV Header Check ----
 if (fs.existsSync(leadsPath)) {
@@ -91,7 +104,6 @@ You can see it here 👉 https://linktr.ee/jtxcode
   };
 }
 
-
 // ---- Sleep ----
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -108,7 +120,9 @@ async function runCycle() {
   const alreadySent = getMessagedUsernames();
   const messagedNow = new Set();
 
-  console.log(`📬 Loaded ${leads.length} leads (${alreadySent.size} already messaged)`);
+  console.log(
+    `📬 Loaded ${leads.length} leads (${alreadySent.size} already in CSV, ${sentCache.size} cached globally)`
+  );
 
   const MAX_MESSAGES = 8;
   let sentCount = 0;
@@ -117,7 +131,13 @@ async function runCycle() {
     if (sentCount >= MAX_MESSAGES) break;
 
     const username = post.username?.trim();
-    if (!username || alreadySent.has(username) || messagedNow.has(username)) continue;
+    if (
+      !username ||
+      alreadySent.has(username) ||
+      messagedNow.has(username) ||
+      sentCache.has(username)
+    )
+      continue;
 
     messagedNow.add(username);
     const msg = buildMessage(post);
@@ -131,6 +151,10 @@ async function runCycle() {
       console.log(`✅ Sent message to u/${username}`);
       await sentWriter.writeRecords([{ ...post, status: "SENT" }]);
       sentCount++;
+
+      // ---- Add to persistent cache ----
+      sentCache.add(username);
+      fs.writeFileSync(sentCachePath, JSON.stringify([...sentCache], null, 2));
     } catch (err) {
       console.log(`⚠️ Failed to message u/${username}: ${err.message}`);
       await sentWriter.writeRecords([{ ...post, status: `ERROR: ${err.message}` }]);

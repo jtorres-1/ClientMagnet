@@ -94,15 +94,16 @@ function buildMessage(post) {
     subject: "Saw your post — client lead idea",
     text: `Hey u/${post.username},
 
-Just saw your post in r/${post.subreddit} about “${post.title}”.
-I built a Reddit DM tool that finds people already asking for help in your niche and messages them for you — 24/7.
+Saw your post in r/${post.subreddit} about “${post.title}.”  
+I built a small Reddit DM tool that finds people already asking for help in your niche and messages them for you — automatically.
 
-It’s been helping freelancers and small agencies get consistent leads without spending on ads.
-You can see it here 👉 https://linktr.ee/jtxcode
+It’s been helping freelancers and small agencies get consistent leads without paying for ads.  
+You can see it running live here 👉 https://linktr.ee/jtxcode  
 
-– Jesse (Automation Dev)`,
+– Jesse (Automation Dev)`
   };
 }
+
 
 // ---- Sleep ----
 function sleep(ms) {

@@ -37,35 +37,26 @@ const writer = createObjectCsvWriter({
 
 // === Subreddits (sorted by buyer intent) ===
 const subs = [
-  // 🧠 Highest buyer intent
-  "forhire", "slavelabour", "jobbit", "HireaDeveloper", "ProgrammingRequests",
-
-  // 💼 Secondary: project-based and business
-  "RemoteJobs", "WorkOnline", "freelance", "Entrepreneur", "SideProject", "Startups", "SaaS", "smallbusiness",
-
-  // ⚙️ Tech/Automation specific
-  "automation", "nocode", "AIinEntrepreneurship", "webdev", "remotedev"
+  // 💰 High intent: buyers actively hiring
+  "forhire", "slavelabour", "jobbit", "HireADeveloper", "ProgrammingRequests",
+  // 💼 Business owners / freelancers
+  "Entrepreneur", "smallbusiness", "freelance", "WorkOnline", "SideProject",
+  // 🤖 Automation & tech-specific
+  "automation", "nocode", "webdev", "remotedev", "ArtificialIntelligence",
+  "ChatGPTCoding", "GPTDevelopment", "SaaS", "SaaSBuild"
 ];
+
 
 // === Search Terms (refined for dev/automation buyers) ===
 const searchTerms = [
-  "looking for developer",
-  "hire developer",
-  "need developer",
-  "need automation",
-  "build me a bot",
-  "custom bot",
-  "reddit bot",
-  "dm automation",
-  "web scraper",
-  "automation help",
-  "build script",
-  "python automation",
-  "looking to automate",
-  "automation project",
-  "telegram bot",
-  "ai automation"
+  "need developer", "hire developer", "build me a bot", "need automation",
+  "looking for dev", "custom bot", "telegram bot", "reddit bot",
+  "automation help", "script for me", "freelancer needed",
+  "ai bot", "looking to automate", "help build script",
+  "automation project", "developer for hire", "bot developer",
+  "build tool", "create workflow"
 ];
+
 
 // === Filters ===
 const sellerWords = [

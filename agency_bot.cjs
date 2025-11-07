@@ -97,12 +97,15 @@ function buildMessage(post) {
 Saw your post in r/${post.subreddit} about “${post.title}.”  
 I built a small Reddit DM tool that finds people already asking for help in your niche and messages them for you — automatically.
 
-It’s been helping freelancers and small agencies get consistent leads without paying for ads.  
+It’s been helping freelancers and small agencies get consistent leads without paying for ads.
+
+⚡ I'm running early access for $29 (normally $49) until Sunday — figured you might want to grab it while it's discounted.  
 You can see it running live here 👉 https://linktr.ee/jtxcode  
 
 – Jesse (Automation Dev)`
   };
 }
+
 
 
 // ---- Sleep ----

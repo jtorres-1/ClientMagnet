@@ -1,4 +1,4 @@
-// agency_bot.cjs — Reddit DM Bot Sales Outreach (Auto + Safe + PM2-Ready)
+// agency_bot.cjs — Lead Finder DM Outreach (v4.0, Safe + Rotating Templates)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -16,7 +16,7 @@ const reddit = new snoowrap({
 });
 
 // ---- Mode ----
-const mode = process.argv[2] || "automation_clients";
+const mode = process.argv[2] || "lead_finder_clients";
 
 // ---- Absolute File Paths ----
 const baseDir = path.resolve(__dirname, "logs");
@@ -28,7 +28,6 @@ if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
 // ---- Persistent Sent Cache (prevents duplicate DMs even after restart) ----
 let sentCache = new Set();
-
 if (fs.existsSync(sentCachePath)) {
   try {
     const data = JSON.parse(fs.readFileSync(sentCachePath, "utf8"));
@@ -88,26 +87,57 @@ function loadLeads() {
   });
 }
 
-// ---- Message Template ----
-function buildMessage(post) {
-  return {
-    subject: "Saw your post — quick idea",
+// ---- Randomized Message Templates ----
+const templates = [
+  (post) => ({
+    subject: "Saw your post — quick idea for you",
     text: `Hey u/${post.username},
 
-Saw your post in r/${post.subreddit} about “${post.title}.”  
-I built a small Reddit bot that finds people already asking for help and messages them automatically.
+I saw your post in r/${post.subreddit} about “${post.title}.”  
+I actually run a service called **Lead Finder** — I personally find real Reddit users asking for help in your niche and deliver them to you as ready-to-contact leads.
 
-It’s been getting me real leads fast — figured it might help you too.  
-You can watch the short demo here 👉 https://linktr.ee/jtxcode`
-  };
-}
+Most clients start real convos within 48 hours.  
+Here’s the page: https://linktr.ee/jtxcode  
 
+If you want, I can run your first batch within 24 hours.`
+  }),
 
+  (post) => ({
+    subject: "Quick lead gen tip from Reddit 👀",
+    text: `Hey u/${post.username},
 
+I noticed your post about “${post.title}.”  
+If you’re trying to get more clients, I can help — I use **Lead Finder**, a system that scrapes Reddit for people *already* asking for what you offer.  
+
+You get a CSV of 50–100 qualified leads ready to DM.  
+Details: https://jtxcode.gumroad.com/l/leadfinder  
+
+It’s a simple way to get inbound convos without ads.`
+  }),
+
+  (post) => ({
+    subject: "Got something that might help you find clients fast",
+    text: `Hey u/${post.username},
+
+Noticed your post on r/${post.subreddit}.  
+I run **Lead Finder**, a done-for-you Reddit lead sourcing system — it finds posts where people literally say they need help with what you do.
+
+You just choose your niche, and I deliver verified leads in 24 hours.  
+More info here: https://jtxcode.gumroad.com/l/leadfinder  
+
+Might save you time doing outreach manually.`
+  })
+];
 
 // ---- Sleep ----
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// ---- Pick Random Template ----
+function getRandomTemplate(post) {
+  const random = Math.floor(Math.random() * templates.length);
+  return templates[random](post);
 }
 
 // ---- One Outreach Cycle ----
@@ -125,7 +155,7 @@ async function runCycle() {
     `📬 Loaded ${leads.length} leads (${alreadySent.size} already in CSV, ${sentCache.size} cached globally)`
   );
 
-  const MAX_MESSAGES = 8;
+  const MAX_MESSAGES = 8; // keep under Reddit's limits
   let sentCount = 0;
 
   for (const post of leads) {
@@ -141,7 +171,7 @@ async function runCycle() {
       continue;
 
     messagedNow.add(username);
-    const msg = buildMessage(post);
+    const msg = getRandomTemplate(post);
 
     try {
       await reddit.composeMessage({
@@ -153,7 +183,6 @@ async function runCycle() {
       await sentWriter.writeRecords([{ ...post, status: "SENT" }]);
       sentCount++;
 
-      // ---- Add to persistent cache ----
       sentCache.add(username);
       fs.writeFileSync(sentCachePath, JSON.stringify([...sentCache], null, 2));
     } catch (err) {
@@ -161,8 +190,8 @@ async function runCycle() {
       await sentWriter.writeRecords([{ ...post, status: `ERROR: ${err.message}` }]);
     }
 
-    // Delay between messages (45–90s)
-    const delay = 45000 + Math.random() * 45000;
+    // Delay between messages (60–120s randomized)
+    const delay = 60000 + Math.random() * 60000;
     console.log(`⏳ Waiting ${(delay / 1000).toFixed(0)}s...`);
     await sleep(delay);
   }
@@ -173,14 +202,14 @@ async function runCycle() {
 // ---- Continuous Loop ----
 (async () => {
   while (true) {
-    console.log("🕒 Starting new outreach cycle...");
+    console.log("🕒 Starting new Lead Finder outreach cycle...");
     try {
       await runCycle();
     } catch (err) {
       console.error("💥 Cycle crashed:", err);
     }
 
-    const waitMins = 20 + Math.floor(Math.random() * 10);
+    const waitMins = 25 + Math.floor(Math.random() * 15);
     console.log(`💤 Sleeping ${waitMins} min before next cycle...\n`);
     await sleep(waitMins * 60 * 1000);
   }

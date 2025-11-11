@@ -1,4 +1,4 @@
-// scraper.cjs — Buyer Detection + Auto-Run + Dependent DM Chain (v3.4, Optimized Targeting)
+// scraper.cjs — Lead Finder Edition (v4.0, Buyer Intent Optimized)
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -17,8 +17,7 @@ const reddit = new snoowrap({
 
 // ---- Absolute CSV Path ----
 const baseDir = path.resolve(__dirname, "logs");
-const csvPath = path.join(baseDir, "automation_clients.csv");
-
+const csvPath = path.join(baseDir, "lead_finder_clients.csv");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
 // ---- CSV Writer ----
@@ -35,28 +34,20 @@ const writer = createObjectCsvWriter({
   append: true,
 });
 
-// === Subreddits (sorted by buyer intent) ===
+// === Subreddits (sorted by lead-gen intent) ===
 const subs = [
-  "forhire", "slavelabour", "jobbit", "HireADeveloper", "ProgrammingRequests",
-  "Entrepreneur", "smallbusiness", "freelance", "WorkOnline", "SideProject",
-  "automation", "nocode", "webdev", "remotedev", "ArtificialIntelligence",
-  "ChatGPTCoding", "GPTDevelopment", "SaaS", "SaaSBuild",
-  "EntrepreneurRideAlong", "MarketingAutomation", "BusinessIdeas", "Startups"
+  "Entrepreneur", "smallbusiness", "freelance", "forhire", "SideProject",
+  "marketing", "EntrepreneurRideAlong", "SaaS", "Startups", "growthhacking",
+  "marketingautomation", "business", "sales", "agency", "indiehackers"
 ];
 
-
-
-// === Search Terms (refined for dev/automation buyers) ===
+// === Search Terms (refined for lead-gen + client acquisition buyers) ===
 const searchTerms = [
-  "need developer", "hire developer", "build me a bot", "need automation",
-  "looking for dev", "custom bot", "telegram bot", "reddit bot",
-  "automation help", "script for me", "freelancer needed",
-  "ai bot", "looking to automate", "help build script",
-  "automation project", "developer for hire", "bot developer",
-  "build tool", "create workflow", "find clients"
+  "need leads", "find clients", "hire marketer", "growth help",
+  "marketing help", "sales leads", "client acquisition",
+  "lead generation", "help with outreach", "cold email", 
+  "how to get clients", "find customers", "reddit growth"
 ];
-
-
 
 // === Filters ===
 const sellerWords = [
@@ -65,16 +56,14 @@ const sellerWords = [
 ];
 
 const buyerWords = [
-  "need", "looking for", "hire", "hiring", "developer needed",
-  "can someone", "paid project", "budget", "commission", "create for me",
-  "build for me", "searching for", "any dev", "any coder", "build bot",
-  "automation help", "need automation", "automate", "workflow", "bot developer"
+  "need", "looking for", "hire", "hiring", "find", "get", "acquire", "generate",
+  "clients", "leads", "customers", "help with marketing", "growth help",
+  "sales help", "paid project", "commission", "create for me", "any marketer"
 ];
 
-
-const techWords = [
-  "automation", "bot", "script", "scraper", "python", "node", "api",
-  "discord", "telegram", "reddit", "web", "selenium", "data extraction"
+const contextWords = [
+  "marketing", "growth", "sales", "freelance", "agency", "business",
+  "startup", "automation", "saas", "promotion", "lead"
 ];
 
 // ---- Buyer Detector ----
@@ -83,10 +72,10 @@ function isBuyer(post) {
   if (sellerWords.some((w) => text.includes(w))) return false;
 
   const wantsWork = buyerWords.some((w) => text.includes(w));
-  const mentionsTech = techWords.some((w) => text.includes(w));
+  const mentionsContext = contextWords.some((w) => text.includes(w));
 
-  // Require both — clear buyer intent AND tech mention
-  if (!wantsWork || !mentionsTech) return false;
+  // Require both — buyer intent and business/marketing context
+  if (!wantsWork || !mentionsContext) return false;
 
   // Filter out spam/low-quality
   if (text.length < 40) return false;
@@ -117,7 +106,6 @@ async function runScrape() {
           limit: 50,
         });
 
-        // Fallback for low-activity subs
         if (!posts.length) {
           console.log(`↩️ Retrying r/${sub} (top of month)...`);
           posts = await reddit.getSubreddit(sub).search({
@@ -134,10 +122,11 @@ async function runScrape() {
           if (!isBuyer(p)) return;
 
           const text = (p.title + " " + (p.selftext || "")).toLowerCase();
-          const isRedditBotLead =
-            text.includes("reddit bot") ||
-            text.includes("dm bot") ||
-            text.includes("telegram bot");
+          const isLeadGen =
+            text.includes("find clients") ||
+            text.includes("get leads") ||
+            text.includes("lead generation") ||
+            text.includes("growth help");
 
           leads.push({
             username: p.author.name,
@@ -145,10 +134,10 @@ async function runScrape() {
             url: `https://reddit.com${p.permalink}`,
             subreddit: p.subreddit.display_name,
             time: new Date(p.created_utc * 1000).toISOString(),
-            leadType: isRedditBotLead ? "Reddit Bot Buyer" : "Automation Buyer",
+            leadType: isLeadGen ? "Lead Generation Buyer" : "Marketing Buyer",
           });
 
-          console.log(`🎯 Buyer Lead: ${p.title} (${p.subreddit.display_name})`);
+          console.log(`🎯 Lead Finder Buyer: ${p.title} (${p.subreddit.display_name})`);
         });
 
         await new Promise((r) => setTimeout(r, 2000));
@@ -174,18 +163,18 @@ async function runScrape() {
 // ---- Loop + Dependent DM Chain ----
 async function loopScraper() {
   while (true) {
-    console.log("\n🚀 Running Optimized Reddit Buyer-Focused Lead Scraper v3.4...");
+    console.log("\n🚀 Running Lead Finder Buyer Scraper v4.0...");
     try {
       const leads = await runScrape();
 
       if (!leads.length) {
         console.log("❌ No new buyer-type leads found this run.");
       } else {
-        console.log(`✅ Added ${leads.length} verified automation leads to CSV.`);
+        console.log(`✅ Added ${leads.length} verified lead-gen buyers to CSV.`);
         console.log("📨 Launching DM sequence (agency_bot.cjs)...");
 
         const agencyBotPath = path.resolve(__dirname, "agency_bot.cjs");
-        exec(`node ${agencyBotPath} automation_clients`, (err, stdout, stderr) => {
+        exec(`node ${agencyBotPath} lead_finder_clients`, (err, stdout, stderr) => {
           if (err) console.error("⚠️ Failed to run agency_bot:", err);
           if (stdout) console.log(stdout);
           if (stderr) console.error(stderr);

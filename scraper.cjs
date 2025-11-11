@@ -38,7 +38,9 @@ const writer = createObjectCsvWriter({
 const subs = [
   "Entrepreneur", "smallbusiness", "freelance", "forhire", "SideProject",
   "marketing", "EntrepreneurRideAlong", "SaaS", "Startups", "growthhacking",
-  "marketingautomation", "business", "sales", "agency", "indiehackers"
+  "marketingautomation", "business", "sales", "agency", "indiehackers", "digitalmarketing", "Upwork", "Consulting", "contentmarketing", 
+"freelancers", "copywriting", "webdev", "Advertising"
+
 ];
 
 // === Search Terms (refined for lead-gen + client acquisition buyers) ===

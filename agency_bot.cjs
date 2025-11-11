@@ -1,4 +1,4 @@
-// agency_bot.cjs — Lead Finder DM Outreach (v4.0, Safe + Rotating Templates)
+// agency_bot.cjs — Lead Finder DM Outreach (v4.1, Safe + Accurate Counter)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -18,7 +18,7 @@ const reddit = new snoowrap({
 // ---- Mode ----
 const mode = process.argv[2] || "lead_finder_clients";
 
-// ---- Absolute File Paths ----
+// ---- Paths ----
 const baseDir = path.resolve(__dirname, "logs");
 const leadsPath = path.join(baseDir, `${mode}.csv`);
 const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
@@ -26,7 +26,7 @@ const sentCachePath = path.join(baseDir, `${mode}_sentCache.json`);
 
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-// ---- Persistent Sent Cache (prevents duplicate DMs even after restart) ----
+// ---- Cache ----
 let sentCache = new Set();
 if (fs.existsSync(sentCachePath)) {
   try {
@@ -61,7 +61,7 @@ const sentWriter = createObjectCsvWriter({
   append: true,
 });
 
-// ---- Helper: Load Already Messaged ----
+// ---- Helper Functions ----
 function getMessagedUsernames() {
   if (!fs.existsSync(sentPath)) return new Set();
   const data = fs.readFileSync(sentPath, "utf8");
@@ -74,7 +74,6 @@ function getMessagedUsernames() {
   return names;
 }
 
-// ---- Helper: Load Leads ----
 function loadLeads() {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(leadsPath)) return resolve([]);
@@ -87,7 +86,7 @@ function loadLeads() {
   });
 }
 
-// ---- Randomized Message Templates ----
+// ---- Templates (All Linktree only) ----
 const templates = [
   (post) => ({
     subject: "Saw your post — quick idea for you",
@@ -99,7 +98,7 @@ I actually run a service called **Lead Finder** — I personally find real Reddi
 Most clients start real convos within 48 hours.  
 Here’s the page: https://linktr.ee/jtxcode  
 
-If you want, I can run your first batch within 24 hours.`
+If you want, I can run your first batch within 24 hours.`,
   }),
 
   (post) => ({
@@ -110,9 +109,9 @@ I noticed your post about “${post.title}.”
 If you’re trying to get more clients, I can help — I use **Lead Finder**, a system that scrapes Reddit for people *already* asking for what you offer.  
 
 You get a CSV of 50–100 qualified leads ready to DM.  
-Details: https://jtxcode.gumroad.com/l/leadfinder  
+More info here: https://linktr.ee/jtxcode  
 
-It’s a simple way to get inbound convos without ads.`
+It’s a simple way to get inbound convos without ads.`,
   }),
 
   (post) => ({
@@ -123,10 +122,10 @@ Noticed your post on r/${post.subreddit}.
 I run **Lead Finder**, a done-for-you Reddit lead sourcing system — it finds posts where people literally say they need help with what you do.
 
 You just choose your niche, and I deliver verified leads in 24 hours.  
-More info here: https://jtxcode.gumroad.com/l/leadfinder  
+Learn more: https://linktr.ee/jtxcode  
 
-Might save you time doing outreach manually.`
-  })
+Might save you time doing outreach manually.`,
+  }),
 ];
 
 // ---- Sleep ----
@@ -134,13 +133,11 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// ---- Pick Random Template ----
 function getRandomTemplate(post) {
-  const random = Math.floor(Math.random() * templates.length);
-  return templates[random](post);
+  return templates[Math.floor(Math.random() * templates.length)](post);
 }
 
-// ---- One Outreach Cycle ----
+// ---- Main Loop ----
 async function runCycle() {
   if (!fs.existsSync(leadsPath)) {
     console.log(`❌ No leads file found at ${leadsPath}`);
@@ -155,20 +152,13 @@ async function runCycle() {
     `📬 Loaded ${leads.length} leads (${alreadySent.size} already in CSV, ${sentCache.size} cached globally)`
   );
 
-  const MAX_MESSAGES = 8; // keep under Reddit's limits
+  const MAX_MESSAGES = 8;
   let sentCount = 0;
 
   for (const post of leads) {
     if (sentCount >= MAX_MESSAGES) break;
-
     const username = post.username?.trim();
-    if (
-      !username ||
-      alreadySent.has(username) ||
-      messagedNow.has(username) ||
-      sentCache.has(username)
-    )
-      continue;
+    if (!username || alreadySent.has(username) || messagedNow.has(username) || sentCache.has(username)) continue;
 
     messagedNow.add(username);
     const msg = getRandomTemplate(post);
@@ -179,9 +169,10 @@ async function runCycle() {
         subject: msg.subject,
         text: msg.text,
       });
-      console.log(`✅ Sent message to u/${username}`);
-      await sentWriter.writeRecords([{ ...post, status: "SENT" }]);
+
       sentCount++;
+      console.log(`✅ [${sentCount}/${MAX_MESSAGES}] Sent message to u/${username}`);
+      await sentWriter.writeRecords([{ ...post, status: "SENT" }]);
 
       sentCache.add(username);
       fs.writeFileSync(sentCachePath, JSON.stringify([...sentCache], null, 2));
@@ -190,13 +181,13 @@ async function runCycle() {
       await sentWriter.writeRecords([{ ...post, status: `ERROR: ${err.message}` }]);
     }
 
-    // Delay between messages (60–120s randomized)
     const delay = 60000 + Math.random() * 60000;
     console.log(`⏳ Waiting ${(delay / 1000).toFixed(0)}s...`);
     await sleep(delay);
   }
 
-  console.log(`✅ Cycle complete. Sent ${sentCount} messages this round.`);
+  const timestamp = new Date().toLocaleString();
+  console.log(`✅ Cycle complete (${timestamp}). Total messages sent this round: ${sentCount}\n`);
 }
 
 // ---- Continuous Loop ----

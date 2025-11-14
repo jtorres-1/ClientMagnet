@@ -6,7 +6,7 @@ const path = require("path");
 const csv = require("csv-parser");
 const { createObjectCsvWriter } = require("csv-writer");
 
-// ---- Reddit Client ----
+// Reddit Client
 const reddit = new snoowrap({
   userAgent: process.env.REDDIT_USER_AGENT,
   clientId: process.env.REDDIT_CLIENT_ID,
@@ -15,10 +15,10 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// ---- Mode ----
+// Mode
 const mode = process.argv[2] || "lead_finder_clients";
 
-// ---- Paths ----
+// Paths
 const baseDir = path.resolve(__dirname, "logs");
 const leadsPath = path.join(baseDir, `${mode}.csv`);
 const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
@@ -26,7 +26,7 @@ const sentCachePath = path.join(baseDir, `${mode}_sentCache.json`);
 
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-// ---- Cache ----
+// Cache
 let sentCache = new Set();
 if (fs.existsSync(sentCachePath)) {
   try {
@@ -37,7 +37,7 @@ if (fs.existsSync(sentCachePath)) {
   }
 }
 
-// ---- CSV Header Check ----
+// CSV Header Check
 if (fs.existsSync(leadsPath)) {
   const firstLine = fs.readFileSync(leadsPath, "utf8").split("\n")[0].trim();
   if (!firstLine.toLowerCase().startsWith("username")) {
@@ -47,7 +47,7 @@ if (fs.existsSync(leadsPath)) {
   }
 }
 
-// ---- Sent Log Writer ----
+// Sent Log Writer
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
   header: [
@@ -61,7 +61,7 @@ const sentWriter = createObjectCsvWriter({
   append: true,
 });
 
-// ---- Helper Functions ----
+// Helper Functions
 function getMessagedUsernames() {
   if (!fs.existsSync(sentPath)) return new Set();
   const data = fs.readFileSync(sentPath, "utf8");
@@ -86,49 +86,41 @@ function loadLeads() {
   });
 }
 
-// ---- Templates (All Linktree only) ----
+// Templates (Linktree Included)
 const templates = [
   (post) => ({
-    subject: "Saw your post — quick idea for you",
+    subject: "Quick idea for you",
     text: `Hey u/${post.username},
 
-I saw your post in r/${post.subreddit} about “${post.title}.”  
-I actually run a service called **Lead Finder** — I personally find real Reddit users asking for help in your niche and deliver them to you as ready-to-contact leads.
+Saw your post in r/${post.subreddit} about “${post.title}.”  
+I run a small service called Lead Finder that finds real Reddit users asking for help in your niche.
 
-Most clients start real convos within 48 hours.  
-Here’s the page: https://linktr.ee/jtxcode  
-
-If you want, I can run your first batch within 24 hours.`,
+Most people get replies within a day.  
+Here’s the page: https://linktr.ee/jtxcode`
   }),
 
   (post) => ({
-    subject: "Quick lead gen tip from Reddit 👀",
+    subject: "Saw your post",
     text: `Hey u/${post.username},
 
 I noticed your post about “${post.title}.”  
-If you’re trying to get more clients, I can help — I use **Lead Finder**, a system that scrapes Reddit for people *already* asking for what you offer.  
+I help people get clients by pulling Reddit users who are already looking for what they offer.
 
-You get a CSV of 50–100 qualified leads ready to DM.  
-More info here: https://linktr.ee/jtxcode  
-
-It’s a simple way to get inbound convos without ads.`,
+If you want to check it out, here’s the page: https://linktr.ee/jtxcode`
   }),
 
   (post) => ({
-    subject: "Got something that might help you find clients fast",
+    subject: "This might help you",
     text: `Hey u/${post.username},
 
-Noticed your post on r/${post.subreddit}.  
-I run **Lead Finder**, a done-for-you Reddit lead sourcing system — it finds posts where people literally say they need help with what you do.
+Saw your post in r/${post.subreddit}.  
+I run Lead Finder, a done for you system that finds Reddit posts where people literally say they need help.
 
-You just choose your niche, and I deliver verified leads in 24 hours.  
-Learn more: https://linktr.ee/jtxcode  
-
-Might save you time doing outreach manually.`,
+If you want to see how it works: https://linktr.ee/jtxcode`
   }),
 ];
 
-// ---- Sleep ----
+// Sleep
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -137,7 +129,7 @@ function getRandomTemplate(post) {
   return templates[Math.floor(Math.random() * templates.length)](post);
 }
 
-// ---- Main Loop ----
+// Main Loop
 async function runCycle() {
   if (!fs.existsSync(leadsPath)) {
     console.log(`❌ No leads file found at ${leadsPath}`);
@@ -190,7 +182,7 @@ async function runCycle() {
   console.log(`✅ Cycle complete (${timestamp}). Total messages sent this round: ${sentCount}\n`);
 }
 
-// ---- Continuous Loop ----
+// Continuous Loop
 (async () => {
   while (true) {
     console.log("🕒 Starting new Lead Finder outreach cycle...");

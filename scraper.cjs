@@ -38,18 +38,48 @@ const writer = createObjectCsvWriter({
 const subs = [
   "Entrepreneur", "smallbusiness", "freelance", "forhire", "SideProject",
   "marketing", "EntrepreneurRideAlong", "SaaS", "Startups", "growthhacking",
-  "marketingautomation", "business", "sales", "agency", "indiehackers", "digitalmarketing", "Upwork", "Consulting", "contentmarketing", 
-"freelancers", "copywriting", "webdev", "Advertising"
-
+  "marketingautomation", "business", "sales", "agency", "indiehackers",
+  "digitalmarketing", "Upwork", "Consulting", "contentmarketing",
+  "freelancers", "copywriting", "webdev", "Advertising",
+  
+  // New high quality ones
+  "shopify", "shopifydev", "woocommerce",
+  "web_design", "webdevelopers", "programmingrequests",
+  "learnprogramming", "python", "coding",
+  "Ecommerce", "Dropship", "AmazonSeller",
+  "etsy", "EtsySellers", "YoutubeCreators",
+  "SocialMediaMarketing", "FacebookAdsBuySell",
+  "PPC", "SEO", "bigseo"
 ];
+
 
 // === Search Terms (refined for lead-gen + client acquisition buyers) ===
 const searchTerms = [
+  "need help",
+  "need developer",
+  "need automation",
+  "help with code",
+  "build this",
+  "fix my site",
+  "fix my code",
+  "hire developer",
+  "looking for developer",
+  "looking for automation",
+  "python help",
+  "web scraping",
+  "bot developer",
+  "website fix",
+  "coding help",
+  "programmer needed",
+  "automation request",
+
+  // keep your originals too
   "need leads", "find clients", "hire marketer", "growth help",
   "marketing help", "sales leads", "client acquisition",
   "lead generation", "help with outreach", "cold email", 
   "how to get clients", "find customers", "reddit growth"
 ];
+
 
 // === Filters ===
 const sellerWords = [

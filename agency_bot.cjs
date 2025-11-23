@@ -1,4 +1,4 @@
-// agency_bot.cjs Lead Finder DM Outreach v6 buyers plus sellers
+// agency_bot.cjs — Lead Finder DM Outreach v7 (Buyers + Sellers)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -15,8 +15,7 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// Mode maps to CSV
-// use lead_finder_buyers or lead_finder_sellers
+// MODE — lead_finder_buyers or lead_finder_sellers
 const mode = process.argv[2] || "lead_finder_buyers";
 
 // Paths
@@ -25,16 +24,14 @@ const leadsPath = path.join(baseDir, `${mode}.csv`);
 const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
 const sentStatePath = path.join(baseDir, `${mode}_sentState.json`);
 
-if (!fs.existsSync(baseDir)) {
-  fs.mkdirSync(baseDir, { recursive: true });
-}
+if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-// Global state
+// Global memory
 let sentUrlSet = new Set();
 let sentUserSet = new Set();
 let initialized = false;
 
-// Sent log writer
+// Writer
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
   header: [
@@ -48,38 +45,37 @@ const sentWriter = createObjectCsvWriter({
   append: true,
 });
 
-// Sleep
+// Sleep helper
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Load sent state from JSON
-function loadSentStateFromJson() {
+// Load JSON sent-state
+function loadJsonState() {
   if (!fs.existsSync(sentStatePath)) return;
 
   try {
     const raw = fs.readFileSync(sentStatePath, "utf8");
-    const parsed = JSON.parse(raw);
+    const data = JSON.parse(raw);
 
-    if (Array.isArray(parsed)) {
-      parsed.forEach((u) => sentUrlSet.add(String(u).trim()));
-    } else if (parsed && typeof parsed === "object") {
-      if (Array.isArray(parsed.urls)) {
-        parsed.urls.forEach((u) => sentUrlSet.add(String(u).trim()));
-      }
-      if (Array.isArray(parsed.usernames)) {
-        parsed.usernames.forEach((u) =>
-          sentUserSet.add(String(u).trim().toLowerCase())
-        );
-      }
+    if (Array.isArray(data)) {
+      data.forEach((val) => sentUrlSet.add(val.trim()));
+      return;
     }
-  } catch (e) {
-    console.log("Failed to parse sentState JSON starting fresh", e.message);
+
+    if (data.urls) data.urls.forEach((u) => sentUrlSet.add(u.trim()));
+    if (data.usernames)
+      data.usernames.forEach((u) =>
+        sentUserSet.add(u.trim().toLowerCase())
+      );
+
+  } catch (err) {
+    console.log("Error loading JSON state:", err.message);
   }
 }
 
-// Save sent state to JSON
-function saveSentStateToJson() {
+// Save JSON state
+function saveJsonState() {
   const data = {
     urls: [...sentUrlSet],
     usernames: [...sentUserSet],
@@ -88,170 +84,162 @@ function saveSentStateToJson() {
   fs.writeFileSync(sentStatePath, JSON.stringify(data, null, 2));
 }
 
-// Load sent state from CSV
-function loadSentStateFromCsv() {
+// Load CSV sent-state
+function loadCsvState() {
   return new Promise((resolve) => {
     if (!fs.existsSync(sentPath)) return resolve();
 
-    const stream = fs.createReadStream(sentPath).pipe(csv());
-    stream
+    fs.createReadStream(sentPath)
+      .pipe(csv())
       .on("data", (row) => {
-        const username = (row.username || "").trim().toLowerCase();
+        const u = (row.username || "").trim().toLowerCase();
         const url = (row.url || "").trim();
-
-        if (username) sentUserSet.add(username);
+        if (u) sentUserSet.add(u);
         if (url) sentUrlSet.add(url);
       })
-      .on("end", () => resolve())
-      .on("error", () => resolve());
+      .on("end", resolve)
+      .on("error", resolve);
   });
 }
 
-// Load leads CSV
+// Load leads from CSV
 function loadLeads() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!fs.existsSync(leadsPath)) return resolve([]);
-
-    const leads = [];
+    const arr = [];
     fs.createReadStream(leadsPath)
       .pipe(csv())
-      .on("data", (row) => leads.push(row))
-      .on("end", () => resolve(leads))
-      .on("error", (err) => reject(err));
+      .on("data", (row) => arr.push(row))
+      .on("end", () => resolve(arr))
+      .on("error", () => resolve(arr));
   });
 }
 
-// Buyer templates
+// Buyer templates — Linktree included
 const buyerTemplates = [
   (post) => ({
     subject: "Quick idea for you",
     text: `Hey u/${post.username},
 
 Saw your post in r/${post.subreddit} about “${post.title}.”
-I run a small service called Lead Finder that finds real Reddit users asking for help in your niche.
+I run a small tool called Lead Finder that finds real Reddit users asking for exactly what you need.
 
 Most people get replies within a day.
-Here is the page: https://linktr.ee/jtxcode`,
+Here is the page:
+https://linktr.ee/jtxcode`,
   }),
   (post) => ({
     subject: "Saw your post",
     text: `Hey u/${post.username},
 
 I noticed your post about “${post.title}.”
-I help people get clients by pulling Reddit users who are already looking for what they offer.
+I help people get clients by finding Reddit users who already want those services.
 
-If you want to check it out here is the page:
+If you want to check it out:
 https://linktr.ee/jtxcode`,
   }),
   (post) => ({
-    subject: "This might help you",
+    subject: "This might help",
     text: `Hey u/${post.username},
 
 Saw your post in r/${post.subreddit}.
-I run Lead Finder, a done for you system that finds Reddit posts where people literally say they need help.
+Lead Finder pulls Reddit posts where buyers literally ask for help.
 
-If you want to see how it works:
+Here is the page:
 https://linktr.ee/jtxcode`,
   }),
 ];
 
-// Seller templates authority tone
+// Seller templates — Linktree included
 const sellerTemplates = [
   (post) => ({
-    subject: "More clients from Reddit",
+    subject: "More clients for your services",
     text: `Hey u/${post.username},
 
-Saw your post in r/${post.subreddit} about “${post.title}.”
-I help freelancers and agencies get more clients using Reddit buyer intent scraping.
+Saw your post about “${post.title}.”
+I help agencies and freelancers get clients through Reddit buyer-intent scraping.
 
-Lead Finder pulls posts from people already asking for the services you offer.
-You can see it here: https://linktr.ee/jtxcode`,
+Lead Finder pulls posts from users already asking for services like yours:
+https://linktr.ee/jtxcode`,
   }),
   (post) => ({
-    subject: "Client idea for your services",
+    subject: "Potential client boost",
     text: `Hey u/${post.username},
 
-I noticed your post offering services in r/${post.subreddit}.
-I run Lead Finder, which tracks Reddit threads where people say they need marketing dev or automation help.
+Your post in r/${post.subreddit} caught my eye.
+My tool Lead Finder scans Reddit for people who need marketing dev or automation help.
 
-Most users plug it in to fill their pipeline faster.
-Here is the page: https://linktr.ee/jtxcode`,
+You can check it here:
+https://linktr.ee/jtxcode`,
   }),
   (post) => ({
-    subject: "Way to fill your pipeline",
+    subject: "Fill your pipeline faster",
     text: `Hey u/${post.username},
 
-You are clearly offering services with that “${post.title}” post.
-My tool Lead Finder finds Reddit users who are already asking for what you sell so you are not chasing cold leads.
+Your “${post.title}” post shows you offer services.
+I run Lead Finder which finds Reddit buyers who are already asking for those services.
 
-If you want to see how it works:
+Here is the page:
 https://linktr.ee/jtxcode`,
   }),
 ];
 
-function getRandomTemplate(post) {
-  const isBuyerMode = mode === "lead_finder_buyers";
-  const isSellerMode = mode === "lead_finder_sellers";
-
-  let pool = buyerTemplates;
-  if (isSellerMode) pool = sellerTemplates;
-  if (!isBuyerMode && !isSellerMode) pool = buyerTemplates;
-
-  return pool[Math.floor(Math.random() * pool.length)](post);
+function getTemplate(post) {
+  if (mode === "lead_finder_sellers") return sellerTemplates[Math.floor(Math.random() * sellerTemplates.length)](post);
+  return buyerTemplates[Math.floor(Math.random() * buyerTemplates.length)](post);
 }
 
-// Init sent state
+// Initialize global state
 async function initState() {
   if (initialized) return;
 
-  console.log("Initializing sent state");
-  loadSentStateFromJson();
-  await loadSentStateFromCsv();
+  console.log("Initializing state...");
+
+  loadJsonState();
+  await loadCsvState();
 
   console.log(
-    `Loaded ${sentUrlSet.size} sent URLs and ${sentUserSet.size} sent usernames for mode ${mode}`
+    `Loaded state — ${sentUserSet.size} users and ${sentUrlSet.size} URLs skipped`
   );
+
   initialized = true;
 }
 
-// One DM cycle
+// DM Cycle
 async function runCycle() {
   if (!fs.existsSync(leadsPath)) {
-    console.log(`No leads file found at ${leadsPath}`);
+    console.log("No leads file found, skipping...");
     return;
   }
 
   const leads = await loadLeads();
   if (!leads.length) {
-    console.log("No leads found in CSV");
+    console.log("Leads CSV empty");
     return;
   }
 
-  const cycleUrlSet = new Set();
-  const cycleUserSet = new Set();
+  console.log(`Loaded ${leads.length} leads from CSV`);
 
-  console.log(
-    `Loaded ${leads.length} leads global sent ${sentUrlSet.size} urls ${sentUserSet.size} users`
-  );
-
-  const MAX_MESSAGES = 8;
-  let sentCount = 0;
+  let sent = 0;
+  const MAX = 8;
+  let cycleUserSet = new Set();
+  let cycleUrlSet = new Set();
 
   for (const post of leads) {
-    if (sentCount >= MAX_MESSAGES) break;
+    if (sent >= MAX) break;
 
     const usernameRaw = (post.username || "").trim();
     const username = usernameRaw.toLowerCase();
-    const urlKey = (post.url || "").trim();
+    const url = (post.url || "").trim();
 
-    if (!username || !urlKey) continue;
+    if (!username || !url) continue;
 
     if (sentUserSet.has(username)) continue;
-    if (sentUrlSet.has(urlKey)) continue;
+    if (sentUrlSet.has(url)) continue;
     if (cycleUserSet.has(username)) continue;
-    if (cycleUrlSet.has(urlKey)) continue;
+    if (cycleUrlSet.has(url)) continue;
 
-    const msg = getRandomTemplate(post);
+    const msg = getTemplate(post);
 
     try {
       await reddit.composeMessage({
@@ -260,64 +248,60 @@ async function runCycle() {
         text: msg.text,
       });
 
-      sentCount++;
-      cycleUserSet.add(username);
-      cycleUrlSet.add(urlKey);
-      sentUserSet.add(username);
-      sentUrlSet.add(urlKey);
-      saveSentStateToJson();
+      sent++;
+      console.log(`Sent DM to u/${usernameRaw} [${sent}/${MAX}]`);
 
-      console.log(`Sent message to u/${usernameRaw} [${sentCount}/${MAX_MESSAGES}]`);
+      sentUserSet.add(username);
+      sentUrlSet.add(url);
+      cycleUserSet.add(username);
+      cycleUrlSet.add(url);
 
       await sentWriter.writeRecords([
         {
           username: usernameRaw,
-          title: post.title || "",
-          url: urlKey,
-          subreddit: post.subreddit || "",
+          title: post.title,
+          url: url,
+          subreddit: post.subreddit,
           time: post.time || new Date().toISOString(),
           status: "SENT",
         },
       ]);
+
+      saveJsonState();
+
     } catch (err) {
-      console.log(`Failed to message u/${usernameRaw}: ${err.message}`);
+      console.log(`Failed to DM u/${usernameRaw}: ${err.message}`);
+
       await sentWriter.writeRecords([
         {
           username: usernameRaw,
-          title: post.title || "",
-          url: urlKey,
-          subreddit: post.subreddit || "",
+          title: post.title,
+          url: url,
+          subreddit: post.subreddit,
           time: post.time || new Date().toISOString(),
           status: `ERROR: ${err.message}`,
         },
       ]);
     }
 
-    const delay = 60000 + Math.random() * 60000;
-    console.log(`Waiting ${(delay / 1000).toFixed(0)} seconds`);
+    const delay = 45000 + Math.random() * 60000;
+    console.log(`Waiting ${(delay / 1000).toFixed(0)} sec...`);
     await sleep(delay);
   }
 
-  const timestamp = new Date().toLocaleString();
-  console.log(
-    `Cycle complete ${timestamp} mode ${mode} total messages this round ${sentCount}\n`
-  );
+  console.log(`Cycle complete — sent ${sent} messages`);
 }
 
-// Continuous loop
+// Loop forever
 (async () => {
   await initState();
 
   while (true) {
-    console.log(`Starting new Lead Finder outreach cycle mode ${mode}`);
-    try {
-      await runCycle();
-    } catch (err) {
-      console.error("Cycle crashed", err);
-    }
+    console.log(`\n=== New DM cycle: ${mode} ===`);
+    await runCycle();
 
-    const waitMins = 25 + Math.floor(Math.random() * 15);
-    console.log(`Sleeping ${waitMins} minutes before next cycle\n`);
-    await sleep(waitMins * 60 * 1000);
+    const mins = 30 + Math.floor(Math.random() * 20);
+    console.log(`Sleeping ${mins} minutes...\n`);
+    await sleep(mins * 60 * 1000);
   }
 })();

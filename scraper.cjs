@@ -1,4 +1,4 @@
-// scraper.cjs — Lead Finder v7 Ultra Reliable Scraper
+// scraper.cjs — Lead Finder v8 (Synced With DM Bot)
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -13,94 +13,91 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
+// Output CSV (one file)
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 
-const buyersPath = path.join(baseDir, "lead_finder_buyers.csv");
-const sellersPath = path.join(baseDir, "lead_finder_sellers.csv");
+const leadsPath = path.join(baseDir, "lead_finder_buyers.csv");
 
-// Append CSV initialization
-function ensureCsv(path, headers) {
-  if (!fs.existsSync(path)) {
-    const headerRow = headers.join(",") + "\n";
-    fs.writeFileSync(path, headerRow);
+// Ensure CSV header exists
+if (!fs.existsSync(leadsPath)) {
+  fs.writeFileSync(
+    leadsPath,
+    "username,title,url,subreddit,time,leadType\n"
+  );
+}
+
+// Prepend lead to CSV
+function prependLead(file, rowObj) {
+  const row = Object.values(rowObj).join(",") + "\n";
+  const existing = fs.readFileSync(file, "utf8");
+  fs.writeFileSync(file, row + existing);
+}
+
+// Load existing URLs for dedupe
+function loadExistingUrls() {
+  if (!fs.existsSync(leadsPath)) return new Set();
+  const data = fs.readFileSync(leadsPath, "utf8").split("\n");
+  const urls = new Set();
+  for (let line of data) {
+    const parts = line.split(",");
+    const url = parts[2];
+    if (url && url.includes("reddit.com")) urls.add(url.trim());
   }
+  return urls;
 }
 
-ensureCsv(buyersPath, ["username", "title", "url", "subreddit", "time", "leadType"]);
-ensureCsv(sellersPath, ["username", "title", "url", "subreddit", "time", "leadType"]);
-
-// Write rows
-function appendCsv(path, row) {
-  fs.appendFileSync(path, Object.values(row).join(",") + "\n");
-}
-
-// Expanded business-relevant subreddits
+// Subreddits
 const subs = [
-  "Entrepreneur", "smallbusiness", "business", "Startups",
-  "marketing", "digitalmarketing", "growthhacking", "SocialMediaMarketing",
-  "SEO", "bigseo", "PPC", "Advertising", "copywriting",
-  "agency", "Consulting", "freelancers", "freelance", "forhire",
-  "webdev", "web_design", "webdevelopers", "programmingrequests",
-  "learnprogramming", "coding", "python",
-  "shopify", "EntrepreneurRideAlong", "SideProject",
-  "Ecommerce", "Dropship", "AmazonSeller",
-  "legaladvice", "lawfirm", "medspa", "Chiropractic",
-  "Dentistry", "Therapists", "privatepractice",
-  "SaaS", "software", "indiehackers", "contentmarketing",
+  "Entrepreneur","smallbusiness","business","Startups",
+  "marketing","digitalmarketing","growthhacking","SocialMediaMarketing",
+  "SEO","bigseo","PPC","Advertising","copywriting",
+  "agency","Consulting","freelancers","freelance","forhire",
+  "webdev","web_design","webdevelopers","programmingrequests",
+  "learnprogramming","coding","python",
+  "EntrepreneurRideAlong","SideProject",
+  "Ecommerce","Dropship","AmazonSeller",
+  "SaaS","software","indiehackers","contentmarketing",
+  "shopify","privatepractice","Dentistry","Therapists",
 ];
 
-// Ultra-broad buyer wording
+// Phrases
 const buyerPhrases = [
-  "need help", "need advice",
-  "looking for", "hire", "hiring",
-  "anyone know", "recommendations",
-  "fix my", "build this", "developer needed",
-  "need marketer", "automation help",
-  "client acquisition", "lead generation",
-  "get clients", "find clients",
-  "growth help", "sales help",
-  "help with marketing", "build my website",
-  "seo help", "ppc help",
-  "email marketing help", "crm help",
-  "business help", "social media help",
+  "need help","looking for","hire","developer needed","growth help",
+  "sales help","lead generation","find clients","get clients",
+  "automation help","marketing help","seo help","ppc help",
+  "build my website","fix my","recommendations",
 ];
 
-// Seller wording
 const sellerPhrases = [
-  "for hire", "available", "taking clients",
-  "offering services", "portfolio", "dm me",
-  "we build", "i build", "agency", "book a call",
-  "open for projects", "service provider",
+  "for hire","available","offering services","taking clients","portfolio",
+  "we build","i build","open for projects","agency","service provider",
 ];
 
-// timing
-function wait(ms) {
-  return new Promise(res => setTimeout(res, ms));
-}
-
-// Freshness 72 hours (increased from 48)
+// Freshness (72h max)
 function isRecent(post) {
   const hours = (Date.now() - post.created_utc * 1000) / 36e5;
   return hours <= 72;
 }
 
-// Lead classification
 function classify(post) {
   const text = (post.title + " " + post.selftext).toLowerCase();
-
-  if (buyerPhrases.some(w => text.includes(w))) return "buyer";
-  if (sellerPhrases.some(w => text.includes(w))) return "seller";
-
+  if (buyerPhrases.some((x) => text.includes(x))) return "Buyer";
+  if (sellerPhrases.some((x) => text.includes(x))) return "Seller";
   return null;
 }
 
-// Main scraping logic
-async function scrape() {
-  let buyerCount = 0;
-  let sellerCount = 0;
+// Delay
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  console.log("Starting v7 scrape...");
+// Scraper
+async function scrape() {
+  console.log("Starting Lead Finder v8 scrape…");
+
+  const existingUrls = loadExistingUrls();
+
+  let buyers = 0;
+  let sellers = 0;
 
   for (const sub of subs) {
     console.log(`\nSearching r/${sub}`);
@@ -114,40 +111,42 @@ async function scrape() {
         const type = classify(p);
         if (!type) continue;
 
+        const url = `https://reddit.com${p.permalink}`;
+        if (existingUrls.has(url)) continue;
+
         const row = {
           username: p.author.name,
           title: `"${p.title.replace(/"/g, "'")}"`,
-          url: `https://reddit.com${p.permalink}`,
+          url,
           subreddit: sub,
           time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: type === "buyer" ? "Buyer" : "Seller",
+          leadType: type,
         };
 
-        if (type === "buyer") {
-          appendCsv(buyersPath, row);
-          buyerCount++;
-        } else {
-          appendCsv(sellersPath, row);
-          sellerCount++;
-        }
+        prependLead(leadsPath, row);
+        existingUrls.add(url);
+
+        if (type === "Buyer") buyers++;
+        else sellers++;
       }
 
-      await wait(2500); // slow down to prevent 503 errors
+      await wait(2500);
     } catch (err) {
       console.log(`Error in r/${sub}: ${err.message}`);
-      console.log("Cooling down for 45 seconds...");
+      console.log("Cooldown 45 sec…");
       await wait(45000);
     }
   }
 
-  console.log(`\nScrape finished — New Buyers: ${buyerCount}, Sellers: ${sellerCount}`);
-  console.log("Sleeping 2 hours before next cycle...\n");
+  console.log(
+    `\nScrape done — New Buyers: ${buyers}, Sellers: ${sellers}\nSleeping 2 hours…\n`
+  );
 }
 
-// Loop forever
+// Loop
 (async () => {
   while (true) {
     await scrape();
-    await wait(2 * 60 * 60 * 1000); // 2 hours
+    await wait(2 * 60 * 60 * 1000);
   }
 })();

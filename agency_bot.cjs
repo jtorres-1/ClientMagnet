@@ -1,4 +1,4 @@
-// agency_bot.cjs — Lead Finder DM Outreach v8 (Single Mode: Buyers)
+// agency_bot.cjs — Lead Finder DM Outreach v9 (Clean Leads Only)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -15,8 +15,8 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// FORCE MODE to one only
-const mode = "lead_finder_buyers";
+// FORCE MODE TO CLEAN LEADS ONLY
+const mode = "clean_leads";
 
 // Paths
 const baseDir = path.resolve(__dirname, "logs");
@@ -66,7 +66,6 @@ function loadJsonState() {
       data.usernames.forEach((u) =>
         sentUserSet.add(u.trim().toLowerCase())
       );
-
   } catch (err) {
     console.log("Error loading JSON state:", err.message);
   }
@@ -170,17 +169,17 @@ async function initState() {
 // DM cycle
 async function runCycle() {
   if (!fs.existsSync(leadsPath)) {
-    console.log("No leads CSV found.");
+    console.log("No clean_leads.csv found.");
     return;
   }
 
   const leads = await loadLeads();
   if (!leads.length) {
-    console.log("Leads CSV is empty.");
+    console.log("Clean leads CSV is empty.");
     return;
   }
 
-  console.log(`Loaded ${leads.length} leads.`);
+  console.log(`Loaded ${leads.length} clean leads.`);
 
   let sent = 0;
   const MAX = 8;
@@ -197,6 +196,7 @@ async function runCycle() {
 
     if (!username || !url) continue;
 
+    // HARD skip rules — NEVER DM someone twice
     if (sentUserSet.has(username)) continue;
     if (sentUrlSet.has(url)) continue;
     if (cycleUserSet.has(username)) continue;
@@ -259,7 +259,7 @@ async function runCycle() {
   await initState();
 
   while (true) {
-    console.log(`\n=== New DM cycle: buyers ===`);
+    console.log(`\n=== New DM cycle: CLEAN LEADS ===`);
     await runCycle();
 
     const mins = 30 + Math.floor(Math.random() * 20);

@@ -1,4 +1,3 @@
-// scraper.cjs — Lead Finder v8 (Synced With DM Bot)
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -13,11 +12,16 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// Output CSV (one file)
+// Output CSV
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 
 const leadsPath = path.join(baseDir, "lead_finder_buyers.csv");
+const dmedFiles = [
+  "lead_finder_buyers_dmed.csv",
+  "lead_finder_sellers_dmed.csv",
+  "all_dmed.csv"
+];
 
 // Ensure CSV header exists
 if (!fs.existsSync(leadsPath)) {
@@ -27,24 +31,27 @@ if (!fs.existsSync(leadsPath)) {
   );
 }
 
-// Prepend lead to CSV
+// Prepend row
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
   const existing = fs.readFileSync(file, "utf8");
   fs.writeFileSync(file, row + existing);
 }
 
-// Load existing URLs for dedupe
-function loadExistingUrls() {
-  if (!fs.existsSync(leadsPath)) return new Set();
-  const data = fs.readFileSync(leadsPath, "utf8").split("\n");
-  const urls = new Set();
-  for (let line of data) {
-    const parts = line.split(",");
-    const url = parts[2];
-    if (url && url.includes("reddit.com")) urls.add(url.trim());
+// Load previously messaged usernames
+function loadDMedUsers() {
+  const set = new Set();
+  for (const file of dmedFiles) {
+    const full = path.join(baseDir, file);
+    if (!fs.existsSync(full)) continue;
+
+    const lines = fs.readFileSync(full, "utf8").split("\n");
+    for (let line of lines) {
+      const user = line.split(",")[0];
+      if (user) set.add(user.trim().toLowerCase());
+    }
   }
-  return urls;
+  return set;
 }
 
 // Subreddits
@@ -66,35 +73,39 @@ const buyerPhrases = [
   "need help","looking for","hire","developer needed","growth help",
   "sales help","lead generation","find clients","get clients",
   "automation help","marketing help","seo help","ppc help",
-  "build my website","fix my","recommendations",
+  "build my website","fix my","recommendations"
 ];
 
 const sellerPhrases = [
   "for hire","available","offering services","taking clients","portfolio",
-  "we build","i build","open for projects","agency","service provider",
+  "we build","i build","open for projects","agency","service provider"
 ];
 
-// Freshness (72h max)
-function isRecent(post) {
-  const hours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return hours <= 72;
+// Strict 48h filter
+function isFresh(post) {
+  const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
+  return ageHours <= 48;
 }
 
 function classify(post) {
-  const text = (post.title + " " + post.selftext).toLowerCase();
+  const text = (post.title + " " + (post.selftext || "")).toLowerCase();
   if (buyerPhrases.some((x) => text.includes(x))) return "Buyer";
   if (sellerPhrases.some((x) => text.includes(x))) return "Seller";
   return null;
 }
 
-// Delay
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Scraper
 async function scrape() {
-  console.log("Starting Lead Finder v8 scrape…");
+  console.log("Starting Lead Finder — strict fresh mode…");
 
-  const existingUrls = loadExistingUrls();
+  const dmedUsers = loadDMedUsers();
+  const existingUrls = new Set(
+    fs.readFileSync(leadsPath, "utf8")
+      .split("\n")
+      .map((l) => l.split(",")[2])
+  );
 
   let buyers = 0;
   let sellers = 0;
@@ -103,11 +114,16 @@ async function scrape() {
     console.log(`\nSearching r/${sub}`);
 
     try {
-      const posts = await reddit.getSubreddit(sub).getNew({ limit: 80 });
+      let posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
+
+      // FILTER STRICT
+      posts = posts.filter(p =>
+        p.author &&
+        isFresh(p) &&
+        !dmedUsers.has(p.author.name.toLowerCase())
+      );
 
       for (const p of posts) {
-        if (!p.author || !isRecent(p)) continue;
-
         const type = classify(p);
         if (!type) continue;
 
@@ -130,20 +146,18 @@ async function scrape() {
         else sellers++;
       }
 
-      await wait(2500);
+      await wait(2000);
     } catch (err) {
       console.log(`Error in r/${sub}: ${err.message}`);
-      console.log("Cooldown 45 sec…");
       await wait(45000);
     }
   }
 
   console.log(
-    `\nScrape done — New Buyers: ${buyers}, Sellers: ${sellers}\nSleeping 2 hours…\n`
+    `\nScrape done — Fresh Buyers: ${buyers}, Fresh Sellers: ${sellers}\nSleeping 2 hours…\n`
   );
 }
 
-// Loop
 (async () => {
   while (true) {
     await scrape();

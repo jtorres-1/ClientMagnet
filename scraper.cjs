@@ -114,7 +114,11 @@ async function scrape() {
     console.log(`\nSearching r/${sub}`);
 
     try {
-      let posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
+      // PRE-FETCH DELAY TO AVOID RATE LIMITING
+      await wait(3000);
+
+      // Reduced limit from 100 to 50 for safer scraping
+      let posts = await reddit.getSubreddit(sub).getNew({ limit: 50 });
 
       // FILTER STRICT + ONLY DM-ABLE USERS
       posts = posts.filter(p =>
@@ -147,7 +151,9 @@ async function scrape() {
         else sellers++;
       }
 
+      // Existing post-processing delay stays
       await wait(2000);
+
     } catch (err) {
       console.log(`Error in r/${sub}: ${err.message}`);
       await wait(45000);

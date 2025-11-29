@@ -116,11 +116,12 @@ async function scrape() {
     try {
       let posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
 
-      // FILTER STRICT
+      // FILTER STRICT + ONLY DM-ABLE USERS
       posts = posts.filter(p =>
         p.author &&
         isFresh(p) &&
-        !dmedUsers.has(p.author.name.toLowerCase())
+        !dmedUsers.has(p.author.name.toLowerCase()) &&
+        p.author.accepts_direct_messages === true
       );
 
       for (const p of posts) {

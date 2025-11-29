@@ -1,4 +1,4 @@
-// agency_bot.cjs — Lead Finder DM Outreach v9 (Clean Leads Only)
+// agency_bot.cjs — Lead Finder DM Outreach v10 (DM-Skip Safe Edition)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -121,7 +121,6 @@ const buyerTemplates = [
 Saw your post in r/${p.subreddit} about “${p.title}.”
 I run a tool called Lead Finder that finds Reddit users already asking for what you offer.
 
-Most people get replies in a day.
 Here’s the page:
 https://linktr.ee/jtxcode`,
   }),
@@ -233,6 +232,33 @@ async function runCycle() {
       saveJsonState();
     } catch (err) {
       console.log(`Failed to DM u/${usernameRaw}: ${err.message}`);
+
+      // NEW LOGIC — SKIP USERS WHO CANNOT BE DMED
+      if (
+        err.message.includes("NOT_WHITELISTED_BY_USER_MESSAGE") ||
+        err.message.includes("USER_DOESNT_ALLOW_DMS") ||
+        err.message.includes("RATELIMIT") ||
+        err.message.includes("403")
+      ) {
+        console.log(`Skipping u/${usernameRaw} forever — cannot be DMed`);
+
+        sentUserSet.add(username);
+        sentUrlSet.add(url);
+        saveJsonState();
+
+        await sentWriter.writeRecords([
+          {
+            username: usernameRaw,
+            title: post.title,
+            url: url,
+            subreddit: post.subreddit,
+            time: post.time || new Date().toISOString(),
+            status: `SKIPPED: ${err.message}`,
+          },
+        ]);
+
+        continue;
+      }
 
       await sentWriter.writeRecords([
         {

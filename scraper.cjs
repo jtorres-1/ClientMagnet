@@ -12,13 +12,16 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// Output CSV
+// Output directory
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 
-const leadsPath = path.join(baseDir, "lead_finder_buyers.csv");
+// Target file for the DM bot
+const leadsPath = path.join(baseDir, "clean_leads.csv");
+
+// DMed users
 const dmedFiles = [
-  "lead_finder_buyers_dmed.csv",
+  "clean_leads_dmed.csv",
   "all_dmed.csv"
 ];
 
@@ -37,11 +40,11 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, row + existing);
 }
 
-// Load previously messaged usernames
+// Load users previously DM'ed
 function loadDMedUsers() {
   const set = new Set();
-  for (const file of dmedFiles) {
-    const full = path.join(baseDir, file);
+  for (const f of dmedFiles) {
+    const full = path.join(baseDir, f);
     if (!fs.existsSync(full)) continue;
 
     const lines = fs.readFileSync(full, "utf8").split("\n");
@@ -53,7 +56,7 @@ function loadDMedUsers() {
   return set;
 }
 
-// Subreddits (buyer-rich subs)
+// Subreddits with real buyer activity
 const subs = [
   "Entrepreneur","smallbusiness","business","Startups",
   "marketing","digitalmarketing","growthhacking","SocialMediaMarketing",
@@ -67,7 +70,7 @@ const subs = [
   "shopify","privatepractice","Dentistry","Therapists",
 ];
 
-// Phrases (buyer only)
+// Buyer-only phrases
 const buyerPhrases = [
   "need help",
   "looking for",
@@ -92,17 +95,16 @@ const buyerPhrases = [
   "who can do",
 ];
 
-// Strict 4 day filter
+// Post must be within the last 4 days (96 hours)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 96; // 4 days only
+  return ageHours <= 96;
 }
 
+// Classify: Buyer only
 function classify(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
-
   if (buyerPhrases.some((x) => text.includes(x))) return "Buyer";
-
   return null;
 }
 
@@ -110,7 +112,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Scraper
 async function scrape() {
-  console.log("Starting Lead Finder — buyer-only mode…");
+  console.log("Starting Lead Finder — BUYER ONLY mode…");
 
   const dmedUsers = loadDMedUsers();
   const existingUrls = new Set(
@@ -125,12 +127,12 @@ async function scrape() {
     console.log(`\nSearching r/${sub}`);
 
     try {
-      // critical delay BEFORE reddit API call
+      // MUST slow down BEFORE the API call
       await wait(3000);
 
       let posts = await reddit.getSubreddit(sub).getNew({ limit: 50 });
 
-      // FILTER STRICT 4 days + skip already messaged users
+      // Apply filters
       posts = posts.filter(p =>
         p.author &&
         isFresh(p) &&
@@ -155,7 +157,6 @@ async function scrape() {
 
         prependLead(leadsPath, row);
         existingUrls.add(url);
-
         buyers++;
       }
 

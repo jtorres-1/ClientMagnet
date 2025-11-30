@@ -16,10 +16,10 @@ const reddit = new snoowrap({
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 
-// Output file for DM bot
+// Output CSV
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 
-// DMed + blocked usernames
+// DMed history
 const dmedFiles = [
   "clean_leads_dmed.csv",
   "all_dmed.csv",
@@ -42,7 +42,7 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, row + existing);
 }
 
-// Load ALL previously DM'ed users (global blocklist)
+// Load all previously contacted users
 function loadDMedUsers() {
   const set = new Set();
 
@@ -53,11 +53,11 @@ function loadDMedUsers() {
     const lines = fs.readFileSync(full, "utf8").split("\n");
     for (let line of lines) {
       const user = line.split(",")[0];
-      if (user) set.add(user.trim().toLowerCase());
+      if (user) set.add(user.toLowerCase());
     }
   }
 
-  // Also load from JSON sentState
+  // JSON sentState
   const jsonPath = path.join(baseDir, "clean_leads_sentState.json");
   if (fs.existsSync(jsonPath)) {
     try {
@@ -65,81 +65,108 @@ function loadDMedUsers() {
       if (json.usernames) {
         json.usernames.forEach(u => set.add(u.toLowerCase()));
       }
-    } catch (err) {}
+    } catch {}
   }
 
   return set;
 }
 
-// Subreddits
+/* ============================================
+   UFC / MMA / BETTING SUBREDDITS
+============================================ */
 const subs = [
-  "Entrepreneur","smallbusiness","business","Startups",
-  "marketing","digitalmarketing","growthhacking","SocialMediaMarketing",
-  "SEO","bigseo","PPC","Advertising","copywriting",
-  "agency","Consulting","freelancers","freelance","forhire",
-  "webdev","web_design","webdevelopers","programmingrequests",
-  "learnprogramming","coding","python",
-  "EntrepreneurRideAlong","SideProject",
-  "Ecommerce","Dropship","AmazonSeller",
-  "SaaS","software","indiehackers","contentmarketing",
-  "shopify","privatepractice","Dentistry","Therapists",
+  "ufc",
+  "mma",
+  "mmabetting",
+  "sportsbetting",
+  "MMApropbets",
+  "MMAPicks",
+  "MMA_Talk",
+  "MMAoddsmath",
+  "Sportsbook",
+  "DraftKingsDiscussion",
+  "betting",
+  "ParlayPurgatory",
+  "Gambling",
 ];
 
-// Buyer only keywords
-const buyerPhrases = [
-  "need help",
-  "looking for",
-  "hire",
-  "developer needed",
-  "growth help",
-  "sales help",
-  "lead generation",
-  "find clients",
-  "get clients",
-  "automation help",
-  "marketing help",
-  "seo help",
-  "ppc help",
-  "build my website",
-  "fix my",
-  "recommendations",
-  "consultant",
-  "freelancer needed",
-  "help me with",
-  "anyone available",
-  "who can do",
+/* ============================================
+   CombatIQ TARGET PHRASES
+   (find people asking for predictions)
+============================================ */
+const combatIQTriggers = [
+  "who wins",
+  "prediction",
+  "predictions",
+  "picks",
+  "pick",
+  "parlay",
+  "bets",
+  "betting",
+  "underdog",
+  "favorite",
+  "odds",
+  "who you got",
+  "thoughts on",
+  "fight breakdown",
+  "breakdown",
+  "prop",
+  "over under",
+  "o/u",
+  "lock",
+  "slip",
+  "wager",
+  "fight iq",
+  "ai prediction",
+  "topuria",
+  "volkanovski",
+  "holloway",
+  "mcgregor",
+  "ufc",
+  "mma",
+  "card",
+  "main event",
+  "co main",
 ];
 
-// 4 day window
+/* ============================================
+   4 DAY WINDOW
+============================================ */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
   return ageHours <= 96;
 }
 
-// Classify buyer
+/* ============================================
+   CLASSIFY USER AS UFC / BETTING LEAD
+============================================ */
 function classify(post) {
   const text =
     (post.title + " " + (post.selftext || "")).toLowerCase();
-  if (buyerPhrases.some((x) => text.includes(x))) return "Buyer";
+
+  if (combatIQTriggers.some((x) => text.includes(x))) {
+    return "UFC-BETTOR";
+  }
   return null;
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Scraper
+/* ============================================
+   SCRAPER
+============================================ */
 async function scrape() {
-  console.log("Starting Lead Finder — BUYER ONLY mode w/ blacklist check…");
+  console.log("Starting CombatIQ Scraper — UFC & Bettor Mode…");
 
   const dmedUsers = loadDMedUsers();
 
-  // Load existing URLs to avoid duplicates
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
       .split("\n")
       .map((l) => l.split(",")[2])
   );
 
-  let buyers = 0;
+  let leads = 0;
 
   for (const sub of subs) {
     console.log(`\nSearching r/${sub}`);
@@ -149,7 +176,7 @@ async function scrape() {
 
       let posts = await reddit
         .getSubreddit(sub)
-        .getNew({ limit: 50 });
+        .getNew({ limit: 60 });
 
       posts = posts.filter(
         (p) =>
@@ -160,11 +187,9 @@ async function scrape() {
 
       for (const p of posts) {
         const type = classify(p);
-        if (type !== "Buyer") continue;
+        if (!type) continue;
 
         const username = p.author.name.toLowerCase();
-
-        // SKIP IF USER WAS EVER DMED
         if (dmedUsers.has(username)) continue;
 
         const url = `https://reddit.com${p.permalink}`;
@@ -181,7 +206,7 @@ async function scrape() {
 
         prependLead(leadsPath, row);
         existingUrls.add(url);
-        buyers++;
+        leads++;
       }
 
       await wait(2000);
@@ -192,7 +217,7 @@ async function scrape() {
   }
 
   console.log(
-    `\nScrape done — Fresh Buyers: ${buyers}\nSleeping 2 hours…\n`
+    `\nScrape done — UFC Betting Leads Found: ${leads}\nSleeping 2 hours…\n`
   );
 }
 

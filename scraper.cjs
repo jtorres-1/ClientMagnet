@@ -19,7 +19,7 @@ if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 // Output CSV
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 
-// DMed history
+// DMed history files
 const dmedFiles = [
   "clean_leads_dmed.csv",
   "all_dmed.csv",
@@ -27,22 +27,37 @@ const dmedFiles = [
   "lead_finder_sellers_dmed.csv"
 ];
 
-// Create header if needed
+// Ensure header exists
+const HEADER = "username,title,url,subreddit,time,leadType";
+
 if (!fs.existsSync(leadsPath)) {
-  fs.writeFileSync(
-    leadsPath,
-    "username,title,url,subreddit,time,leadType\n"
-  );
+  fs.writeFileSync(leadsPath, HEADER + "\n");
+} else {
+  let content = fs.readFileSync(leadsPath, "utf8").trim().split("\n");
+  if (!content[0].startsWith("username")) {
+    // Fix corrupted file
+    content.unshift(HEADER);
+    fs.writeFileSync(leadsPath, content.join("\n"));
+  }
 }
 
-// Prepend row
+// PREPEND LEAD SAFELY (header stays on top forever)
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
-  const existing = fs.readFileSync(file, "utf8");
-  fs.writeFileSync(file, row + existing);
+  let lines = fs.readFileSync(file, "utf8").split("\n");
+
+  // Ensure header is ALWAYS line 0
+  if (!lines[0].startsWith("username")) {
+    lines.unshift(HEADER);
+  }
+
+  // Insert new lead UNDER the header
+  lines.splice(1, 0, row.trim());
+
+  fs.writeFileSync(file, lines.join("\n"));
 }
 
-// Load all previously contacted users
+// Load DMed users from all dmed files + sentState JSON
 function loadDMedUsers() {
   const set = new Set();
 
@@ -57,14 +72,11 @@ function loadDMedUsers() {
     }
   }
 
-  // JSON sentState
   const jsonPath = path.join(baseDir, "clean_leads_sentState.json");
   if (fs.existsSync(jsonPath)) {
     try {
       const json = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-      if (json.usernames) {
-        json.usernames.forEach(u => set.add(u.toLowerCase()));
-      }
+      if (json.usernames) json.usernames.forEach(u => set.add(u.toLowerCase()));
     } catch {}
   }
 
@@ -72,7 +84,7 @@ function loadDMedUsers() {
 }
 
 /* ============================================
-   UFC / MMA / BETTING SUBREDDITS
+   TARGET SUBREDDITS
 ============================================ */
 const subs = [
   "ufc",
@@ -91,79 +103,43 @@ const subs = [
 ];
 
 /* ============================================
-   CombatIQ TARGET PHRASES
-   (find people asking for predictions)
+   CombatIQ Keywords
 ============================================ */
 const combatIQTriggers = [
-  "who wins",
-  "prediction",
-  "predictions",
-  "picks",
-  "pick",
-  "parlay",
-  "bets",
-  "betting",
-  "underdog",
-  "favorite",
-  "odds",
-  "who you got",
-  "thoughts on",
-  "fight breakdown",
-  "breakdown",
-  "prop",
-  "over under",
-  "o/u",
-  "lock",
-  "slip",
-  "wager",
-  "fight iq",
-  "ai prediction",
-  "topuria",
-  "volkanovski",
-  "holloway",
-  "mcgregor",
-  "ufc",
-  "mma",
-  "card",
-  "main event",
-  "co main",
+  "who wins", "prediction", "predictions", "picks", "pick", "parlay",
+  "bets", "betting", "underdog", "favorite", "odds", "who you got",
+  "thoughts on", "fight breakdown", "breakdown", "prop", "over under",
+  "o/u", "lock", "slip", "wager", "fight iq", "ai prediction",
+  "topuria", "volkanovski", "holloway", "mcgregor", "ufc", "mma",
+  "card", "main event", "co main"
 ];
 
-/* ============================================
-   4 DAY WINDOW
-============================================ */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 96;
+  return ageHours <= 96; // 4 days
 }
 
-/* ============================================
-   CLASSIFY USER AS UFC / BETTING LEAD
-============================================ */
 function classify(post) {
-  const text =
-    (post.title + " " + (post.selftext || "")).toLowerCase();
-
-  if (combatIQTriggers.some((x) => text.includes(x))) {
-    return "UFC-BETTOR";
-  }
+  const text = (post.title + " " + (post.selftext || "")).toLowerCase();
+  if (combatIQTriggers.some(x => text.includes(x))) return "UFC-BETTOR";
   return null;
 }
 
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const wait = ms => new Promise(res => setTimeout(res, ms));
 
 /* ============================================
-   SCRAPER
+   SCRAPER LOOP
 ============================================ */
 async function scrape() {
   console.log("Starting CombatIQ Scraper — UFC & Bettor Mode…");
 
   const dmedUsers = loadDMedUsers();
 
+  // Read existing URLs to avoid duplicates
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
       .split("\n")
-      .map((l) => l.split(",")[2])
+      .map(l => l.split(",")[2])
   );
 
   let leads = 0;
@@ -174,12 +150,10 @@ async function scrape() {
     try {
       await wait(3000);
 
-      let posts = await reddit
-        .getSubreddit(sub)
-        .getNew({ limit: 60 });
+      let posts = await reddit.getSubreddit(sub).getNew({ limit: 60 });
 
       posts = posts.filter(
-        (p) =>
+        p =>
           p.author &&
           isFresh(p) &&
           !dmedUsers.has(p.author.name.toLowerCase())
@@ -216,11 +190,10 @@ async function scrape() {
     }
   }
 
-  console.log(
-    `\nScrape done — UFC Betting Leads Found: ${leads}\nSleeping 2 hours…\n`
-  );
+  console.log(`\nScrape done — UFC Leads Found: ${leads}\nSleeping 2 hours…\n`);
 }
 
+// LOOP FOREVER
 (async () => {
   while (true) {
     await scrape();

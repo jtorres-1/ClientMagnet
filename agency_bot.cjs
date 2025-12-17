@@ -1,4 +1,4 @@
-// agency_bot.cjs — CombatIQ DM Outreach Edition (DM-Skip Safe Edition)
+// agency_bot.cjs — Reddit Keyword Sniper DM Outreach Edition
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -15,7 +15,7 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// FORCE MODE TO CLEAN LEADS ONLY
+// MODE
 const mode = "clean_leads";
 
 // Paths
@@ -26,7 +26,7 @@ const sentStatePath = path.join(baseDir, `${mode}_sentState.json`);
 
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-// Memory tracking
+// Memory
 let sentUrlSet = new Set();
 let sentUserSet = new Set();
 let initialized = false;
@@ -40,155 +40,131 @@ const sentWriter = createObjectCsvWriter({
     { id: "url", title: "Post URL" },
     { id: "subreddit", title: "Subreddit" },
     { id: "time", title: "Timestamp" },
-    { id: "status", title: "Status" },
+    { id: "status", title: "Status" }
   ],
-  append: true,
+  append: true
 });
 
-// Sleep helper
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Load JSON memory for sent users + URLs
+// Load sent state
 function loadJsonState() {
   if (!fs.existsSync(sentStatePath)) return;
 
   try {
     const data = JSON.parse(fs.readFileSync(sentStatePath, "utf8"));
-
-    if (Array.isArray(data)) {
-      data.forEach((v) => sentUrlSet.add(v.trim()));
-      return;
-    }
-
-    if (data.urls) data.urls.forEach((u) => sentUrlSet.add(u.trim()));
-    if (data.usernames)
-      data.usernames.forEach((u) =>
-        sentUserSet.add(u.trim().toLowerCase())
-      );
-  } catch (err) {
-    console.log("Error loading JSON state:", err.message);
-  }
+    if (data.urls) data.urls.forEach(u => sentUrlSet.add(u));
+    if (data.usernames) data.usernames.forEach(u => sentUserSet.add(u.toLowerCase()));
+  } catch {}
 }
 
-// Save JSON memory
 function saveJsonState() {
-  const data = {
-    urls: [...sentUrlSet],
-    usernames: [...sentUserSet],
-  };
-  fs.writeFileSync(sentStatePath, JSON.stringify(data, null, 2));
+  fs.writeFileSync(
+    sentStatePath,
+    JSON.stringify({ urls: [...sentUrlSet], usernames: [...sentUserSet] }, null, 2)
+  );
 }
 
-// Load CSV "sent" state
 function loadCsvState() {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (!fs.existsSync(sentPath)) return resolve();
 
     fs.createReadStream(sentPath)
       .pipe(csv())
-      .on("data", (row) => {
-        const u = (row.username || "").trim().toLowerCase();
-        const url = (row.url || "").trim();
-        if (u) sentUserSet.add(u);
-        if (url) sentUrlSet.add(url);
+      .on("data", row => {
+        if (row.username) sentUserSet.add(row.username.toLowerCase());
+        if (row.url) sentUrlSet.add(row.url);
       })
       .on("end", resolve)
       .on("error", resolve);
   });
 }
 
-// Load leads from CSV
 function loadLeads() {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (!fs.existsSync(leadsPath)) return resolve([]);
-
     const arr = [];
     fs.createReadStream(leadsPath)
       .pipe(csv())
-      .on("data", (row) => arr.push(row))
+      .on("data", row => arr.push(row))
       .on("end", () => resolve(arr))
       .on("error", () => resolve(arr));
   });
 }
 
-// ===============================
-// CombatIQ Promotion Templates
-// ===============================
-const buyerTemplates = [
+/* ============================================
+   REDDIT KEYWORD SNIPER DM TEMPLATES
+============================================ */
+const sniperTemplates = [
   (p) => ({
-    subject: "Quick UFC prediction tool",
+    subject: "Quick heads up — this might help",
     text: `Hey u/${p.username},
 
-Saw your post in r/${p.subreddit} about “${p.title}.”
-I built an AI UFC predictor that gives full breakdowns, stat comparisons, and over/under analysis.
+Saw your post in r/${p.subreddit} about "${p.title}".
 
-It’s free to use here:
-https://combatiq.app`,
+I built a small tool that watches subreddits and pings you instantly when posts matching your keywords go live — so you don’t miss opportunities.
+
+It’s been useful for catching leads early.
+
+Here’s the link:
+https://linktr.ee/jtxcode`
   }),
 
   (p) => ({
-    subject: "Free AI fight predictor",
-    text: `Hey u/${p.username},
-
-Saw your post about “${p.title}.”
-If you make picks or parlays, this might help — Combat IQ gives AI scoring and full matchup breakdowns.
-
-Try it here:
-https://combatiq.app`,
-  }),
-
-  (p) => ({
-    subject: "This might help with your picks",
+    subject: "This could save you a lot of refresh time",
     text: `Hey u/${p.username},
 
 Noticed your post in r/${p.subreddit}.
-I made a tool called Combat IQ — you type any matchup and it gives a full AI breakdown + confidence score.
+If timing matters for what you’re doing, I made a Reddit keyword alert tool that notifies you as soon as matching posts are created.
 
-Free link:
-https://combatiq.app`,
+No scraping setup, just run it.
+
+Link:
+https://linktr.ee/jtxcode`
   }),
+
+  (p) => ({
+    subject: "Catching posts faster",
+    text: `Hey u/${p.username},
+
+I saw your post and thought this might help.
+I built a Reddit Keyword Sniper that monitors subreddits and alerts you within seconds when new posts match your keywords.
+
+Might be useful if you rely on speed.
+
+Here’s the link:
+https://linktr.ee/jtxcode`
+  })
 ];
 
-// Pick random template
 const getTemplate = (post) =>
-  buyerTemplates[Math.floor(Math.random() * buyerTemplates.length)](post);
+  sniperTemplates[Math.floor(Math.random() * sniperTemplates.length)](post);
 
-// Initialize full bot memory
+// Init
 async function initState() {
   if (initialized) return;
-
-  console.log("Initializing state...");
 
   loadJsonState();
   await loadCsvState();
 
-  console.log(
-    `Loaded state — ${sentUserSet.size} users, ${sentUrlSet.size} URLs`
-  );
-
+  console.log(`Loaded state — ${sentUserSet.size} users, ${sentUrlSet.size} URLs`);
   initialized = true;
 }
 
 // DM cycle
 async function runCycle() {
-  if (!fs.existsSync(leadsPath)) {
-    console.log("No clean_leads.csv found.");
-    return;
-  }
-
   const leads = await loadLeads();
   if (!leads.length) {
-    console.log("Clean leads CSV is empty.");
+    console.log("No leads available.");
     return;
   }
 
-  console.log(`Loaded ${leads.length} clean leads.`);
+  console.log(`Loaded ${leads.length} leads.`);
 
   let sent = 0;
   const MAX = 8;
-
-  const cycleUserSet = new Set();
-  const cycleUrlSet = new Set();
+  const cycleUsers = new Set();
+  const cycleUrls = new Set();
 
   for (const post of leads) {
     if (sent >= MAX) break;
@@ -197,13 +173,11 @@ async function runCycle() {
     const username = rawUser.toLowerCase();
     const url = (post.url || "").trim();
 
-    if (!username || !url) continue;
-
-    // HARD skip rules (never DM same user twice)
+    if (!rawUser || !url) continue;
     if (sentUserSet.has(username)) continue;
     if (sentUrlSet.has(url)) continue;
-    if (cycleUserSet.has(username)) continue;
-    if (cycleUrlSet.has(url)) continue;
+    if (cycleUsers.has(username)) continue;
+    if (cycleUrls.has(url)) continue;
 
     const msg = getTemplate(post);
 
@@ -211,89 +185,49 @@ async function runCycle() {
       await reddit.composeMessage({
         to: rawUser,
         subject: msg.subject,
-        text: msg.text,
+        text: msg.text
       });
 
+      console.log(`Sent DM to u/${rawUser}`);
       sent++;
-      console.log(`Sent DM to u/${rawUser} [${sent}/${MAX}]`);
 
       sentUserSet.add(username);
       sentUrlSet.add(url);
-      cycleUserSet.add(username);
-      cycleUrlSet.add(url);
+      cycleUsers.add(username);
+      cycleUrls.add(url);
 
-      await sentWriter.writeRecords([
-        {
-          username: rawUser,
-          title: post.title,
-          url: url,
-          subreddit: post.subreddit,
-          time: post.time || new Date().toISOString(),
-          status: "SENT",
-        },
-      ]);
+      await sentWriter.writeRecords([{
+        username: rawUser,
+        title: post.title,
+        url,
+        subreddit: post.subreddit,
+        time: post.time || new Date().toISOString(),
+        status: "SENT"
+      }]);
 
       saveJsonState();
     } catch (err) {
-      console.log(`Failed to DM u/${rawUser}: ${err.message}`);
-
-      // Skip users who cannot receive DMs
-      if (
-        err.message.includes("NOT_WHITELISTED_BY_USER_MESSAGE") ||
-        err.message.includes("USER_DOESNT_ALLOW_DMS") ||
-        err.message.includes("RATELIMIT") ||
-        err.message.includes("403")
-      ) {
-        console.log(`Skipping u/${rawUser} forever — cannot be DMed`);
-
-        sentUserSet.add(username);
-        sentUrlSet.add(url);
-        saveJsonState();
-
-        await sentWriter.writeRecords([
-          {
-            username: rawUser,
-            title: post.title,
-            url: url,
-            subreddit: post.subreddit,
-            time: post.time || new Date().toISOString(),
-            status: `SKIPPED: ${err.message}`,
-          },
-        ]);
-
-        continue;
-      }
-
-      await sentWriter.writeRecords([
-        {
-          username: rawUser,
-          title: post.title,
-          url: url,
-          subreddit: post.subreddit,
-          time: post.time || new Date().toISOString(),
-          status: `ERROR: ${err.message}`,
-        },
-      ]);
+      console.log(`Failed DM to u/${rawUser}: ${err.message}`);
+      sentUserSet.add(username);
+      sentUrlSet.add(url);
+      saveJsonState();
     }
 
     const delay = 45000 + Math.random() * 60000;
-    console.log(`Waiting ${(delay / 1000).toFixed(0)} sec...`);
     await sleep(delay);
   }
 
   console.log(`Cycle complete — sent ${sent} messages.`);
 }
 
-// Loop forever
+// Loop
 (async () => {
   await initState();
 
   while (true) {
-    console.log(`\n=== New DM cycle: CLEAN LEADS (Combat IQ) ===`);
+    console.log("\n=== New DM cycle: Reddit Keyword Sniper ===");
     await runCycle();
-
     const mins = 30 + Math.floor(Math.random() * 20);
-    console.log(`Sleeping ${mins} minutes...\n`);
     await sleep(mins * 60 * 1000);
   }
 })();

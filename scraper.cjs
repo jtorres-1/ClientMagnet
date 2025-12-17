@@ -27,37 +27,34 @@ const dmedFiles = [
   "lead_finder_sellers_dmed.csv"
 ];
 
-// Ensure header exists
+// CSV Header
 const HEADER = "username,title,url,subreddit,time,leadType";
 
+// Ensure CSV exists and header is clean
 if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
 } else {
-  let content = fs.readFileSync(leadsPath, "utf8").trim().split("\n");
+  const content = fs.readFileSync(leadsPath, "utf8").split("\n");
   if (!content[0].startsWith("username")) {
-    // Fix corrupted file
     content.unshift(HEADER);
     fs.writeFileSync(leadsPath, content.join("\n"));
   }
 }
 
-// PREPEND LEAD SAFELY (header stays on top forever)
+// Insert lead under header
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
   let lines = fs.readFileSync(file, "utf8").split("\n");
 
-  // Ensure header is ALWAYS line 0
   if (!lines[0].startsWith("username")) {
     lines.unshift(HEADER);
   }
 
-  // Insert new lead UNDER the header
   lines.splice(1, 0, row.trim());
-
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// Load DMed users from all dmed files + sentState JSON
+// Load users already DMed
 function loadDMedUsers() {
   const set = new Set();
 
@@ -66,7 +63,7 @@ function loadDMedUsers() {
     if (!fs.existsSync(full)) continue;
 
     const lines = fs.readFileSync(full, "utf8").split("\n");
-    for (let line of lines) {
+    for (const line of lines) {
       const user = line.split(",")[0];
       if (user) set.add(user.toLowerCase());
     }
@@ -76,7 +73,9 @@ function loadDMedUsers() {
   if (fs.existsSync(jsonPath)) {
     try {
       const json = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-      if (json.usernames) json.usernames.forEach(u => set.add(u.toLowerCase()));
+      if (json.usernames) {
+        json.usernames.forEach(u => set.add(u.toLowerCase()));
+      }
     } catch {}
   }
 
@@ -84,44 +83,56 @@ function loadDMedUsers() {
 }
 
 /* ============================================
-   TARGET SUBREDDITS
+   TARGET SUBREDDITS — BUYER INTENT
 ============================================ */
 const subs = [
-  "ufc",
-  "mma",
-  "mmabetting",
-  "sportsbetting",
-  "MMApropbets",
-  "MMAPicks",
-  "MMA_Talk",
-  "MMAoddsmath",
-  "Sportsbook",
-  "DraftKingsDiscussion",
-  "betting",
-  "ParlayPurgatory",
-  "Gambling",
+  "slavelabour",
+  "forhire",
+  "freelance",
+  "WorkOnline",
+  "SideProject",
+  "Entrepreneur",
+  "EntrepreneurRideAlong",
+  "SaaS",
+  "marketing",
+  "smallbusiness",
+  "startups"
 ];
 
 /* ============================================
-   CombatIQ Keywords
+   REDDIT KEYWORD SNIPER TRIGGERS
 ============================================ */
-const combatIQTriggers = [
-  "who wins", "prediction", "predictions", "picks", "pick", "parlay",
-  "bets", "betting", "underdog", "favorite", "odds", "who you got",
-  "thoughts on", "fight breakdown", "breakdown", "prop", "over under",
-  "o/u", "lock", "slip", "wager", "fight iq", "ai prediction",
-  "topuria", "volkanovski", "holloway", "mcgregor", "ufc", "mma",
-  "card", "main event", "co main"
+const sniperTriggers = [
+  "looking for",
+  "need",
+  "need a",
+  "hiring",
+  "anyone know",
+  "recommend",
+  "is there a tool",
+  "alert",
+  "monitor",
+  "track",
+  "watch",
+  "scrape",
+  "bot",
+  "automation",
+  "script",
+  "api",
+  "leads",
+  "clients"
 ];
 
+// Fresh posts only (speed matters)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 96; // 4 days
+  return ageHours <= 24;
 }
 
+// Classify buyer intent
 function classify(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
-  if (combatIQTriggers.some(x => text.includes(x))) return "UFC-BETTOR";
+  if (sniperTriggers.some(t => text.includes(t))) return "SNIPER-BUYER";
   return null;
 }
 
@@ -131,11 +142,10 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ============================================ */
 async function scrape() {
-  console.log("Starting CombatIQ Scraper — UFC & Bettor Mode…");
+  console.log("Starting Reddit Keyword Sniper Scraper…");
 
   const dmedUsers = loadDMedUsers();
 
-  // Read existing URLs to avoid duplicates
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
       .split("\n")
@@ -145,7 +155,7 @@ async function scrape() {
   let leads = 0;
 
   for (const sub of subs) {
-    console.log(`\nSearching r/${sub}`);
+    console.log(`\nScanning r/${sub}`);
 
     try {
       await wait(3000);
@@ -175,7 +185,7 @@ async function scrape() {
           url,
           subreddit: sub,
           time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: type,
+          leadType: type
         };
 
         prependLead(leadsPath, row);
@@ -190,10 +200,11 @@ async function scrape() {
     }
   }
 
-  console.log(`\nScrape done — UFC Leads Found: ${leads}\nSleeping 2 hours…\n`);
+  console.log(`\nScrape complete — Leads found: ${leads}`);
+  console.log("Sleeping 2 hours…\n");
 }
 
-// LOOP FOREVER
+// Loop forever
 (async () => {
   while (true) {
     await scrape();

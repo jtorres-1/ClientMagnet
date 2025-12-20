@@ -40,7 +40,10 @@ function prependLead(file, rowObj) {
 const subs = [
   "forhire",
   "jobbit",
-  "slavelabour"
+  "slavelabour",
+  "webdev",
+  "remotejs",
+  "remotedev"
 ];
 
 /* ============================================
@@ -135,7 +138,7 @@ const sellerPhrases = [
 // Fresh window: 3 DAYS (volume without junk)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 72;
+  return ageHours <= 168;
 }
 
 // FINAL classification logic

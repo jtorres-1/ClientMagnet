@@ -20,9 +20,9 @@ if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 
 // CSV Header
-const HEADER = "username,title,url,subreddit,time,leadType";
+const HEADER = "username,title,url,subreddit,time,leadType,matchedTrigger";
 
-// Reset CSV ONCE when switching modes
+// Init CSV once
 if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
 }
@@ -37,51 +37,66 @@ function prependLead(file, rowObj) {
 }
 
 /* ============================================
-   ONLY PAID-GIG SUBREDDITS
+   HIGH INTENT SUBREDDITS ONLY
 ============================================ */
 const subs = [
   "forhire",
-  "slavelabour",
-  "freelance",
-  "WorkOnline",
-  "jobbit"
+  "jobbit",
+  "slavelabour"
 ];
 
 /* ============================================
-   HARD BUYER INTENT KEYWORDS
+   REAL BUYER PHRASES
 ============================================ */
 const hireTriggers = [
-  "hiring",
-  "for hire",
-  "looking for developer",
-  "need developer",
+  "looking for a developer",
   "need a developer",
-  "need freelancer",
-  "paid",
-  "budget",
-  "$",
+  "need dev",
+  "hiring a developer",
+  "hire a developer",
+  "developer wanted",
+  "freelancer wanted",
+  "looking for freelancer",
+  "need a freelancer",
+  "need someone to build",
+  "can someone build",
   "build me",
-  "can someone build"
+  "need automation",
+  "need a script",
+  "need bot",
+  "need scraper"
+];
+
+/* ============================================
+   EXCLUDE SELLERS
+============================================ */
+const sellerPhrases = [
+  "i am a developer",
+  "i am a freelancer",
+  "for hire",
+  "hire me",
+  "offering services",
+  "my services",
+  "available for work"
 ];
 
 // Fresh posts only
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 12;
+  return ageHours <= 10;
 }
 
-// Classify REAL buyers only
+// Classify ONLY real dev gigs
 function classify(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
 
-  const hasHireIntent = hireTriggers.some(t => text.includes(t));
-  const mentionsMoney =
-    text.includes("$") ||
-    text.includes("paid") ||
-    text.includes("budget");
+  if (text.length < 40) return null;
+  if (sellerPhrases.some(p => text.includes(p))) return null;
 
-  if (hasHireIntent && mentionsMoney) return "DEV-GIG";
-  return null;
+  const matchedTrigger = hireTriggers.find(t => text.includes(t));
+  if (!matchedTrigger) return null;
+
+  return matchedTrigger;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
@@ -90,7 +105,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ============================================ */
 async function scrape() {
-  console.log("Starting PAID DEV GIG Scraper…");
+  console.log("Starting DEV GIG SCRAPER…");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -110,8 +125,8 @@ async function scrape() {
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
 
-        const type = classify(p);
-        if (!type) continue;
+        const matchedTrigger = classify(p);
+        if (!matchedTrigger) continue;
 
         const url = `https://reddit.com${p.permalink}`;
         if (existingUrls.has(url)) continue;
@@ -122,7 +137,8 @@ async function scrape() {
           url,
           subreddit: sub,
           time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: type
+          leadType: "DEV-GIG",
+          matchedTrigger
         };
 
         prependLead(leadsPath, row);
@@ -136,10 +152,10 @@ async function scrape() {
     }
   }
 
-  console.log(`Scrape complete — REAL gigs found: ${leads}`);
+  console.log(`Scrape complete — REAL dev gigs found: ${leads}`);
 }
 
-// Loop
+// Loop hourly
 (async () => {
   while (true) {
     await scrape();

@@ -12,22 +12,20 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// Output directory
+// Output
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
-
-// Output CSV
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 
 // CSV Header
 const HEADER = "username,title,url,subreddit,time,leadType,matchedTrigger";
 
-// Init CSV once
+// Init CSV
 if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
 }
 
-// Insert lead under header
+// Insert row
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
   let lines = fs.readFileSync(file, "utf8").split("\n");
@@ -36,41 +34,64 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-/* ============================================
-   HIGH INTENT SUBREDDITS
-============================================ */
+/* ================================
+   SUBREDDITS THAT ACTUALLY PAY
+================================ */
 const subs = [
   "jobbit",
+  "forhire",
   "slavelabour",
-  "forhire"
+  "freelance",
+  "WorkOnline"
 ];
 
-/* ============================================
-   REAL WORLD BUYER PHRASES
-============================================ */
+/* ================================
+   BUYER INTENT PHRASES
+================================ */
 const hireTriggers = [
   "[hiring]",
   "hiring",
   "looking for",
   "need help",
   "need someone",
-  "need a script",
-  "need a bot",
-  "need automation",
-  "need scraper",
-  "build this",
-  "build me",
+  "need a",
+  "build",
   "can someone",
   "freelancer needed",
-  "developer needed",
-  "web dev",
-  "python dev",
-  "javascript dev"
+  "developer needed"
 ];
 
-/* ============================================
-   EXCLUDE SELLERS
-============================================ */
+/* ================================
+   DEV-ONLY SIGNALS (MANDATORY)
+================================ */
+const devSignals = [
+  "developer",
+  "dev",
+  "python",
+  "javascript",
+  "js",
+  "node",
+  "react",
+  "next",
+  "api",
+  "automation",
+  "script",
+  "bot",
+  "scraper",
+  "backend",
+  "frontend",
+  "full stack",
+  "web app",
+  "software",
+  "flask",
+  "django",
+  "fastapi",
+  "express"
+];
+
+/* ================================
+   HARD EXCLUSIONS (NO SELLERS)
+================================ */
 const sellerPhrases = [
   "i am a developer",
   "i am a freelancer",
@@ -78,36 +99,40 @@ const sellerPhrases = [
   "hire me",
   "offering services",
   "my services",
-  "available for work"
+  "available for work",
+  "[offer]"
 ];
 
-// Fresh posts only
+// Fresh window — 3 DAYS
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 12;
+  return ageHours <= 72;
 }
 
-// Classify dev gigs
+// Classification
 function classify(post) {
   const text =
     ((post.title || "") + " " + (post.selftext || "")).toLowerCase();
 
-  if (text.length < 25) return null;
+  if (text.length < 30) return null;
   if (sellerPhrases.some(p => text.includes(p))) return null;
 
-  const matchedTrigger = hireTriggers.find(t => text.includes(t));
-  if (!matchedTrigger) return null;
+  const hireMatch = hireTriggers.find(t => text.includes(t));
+  if (!hireMatch) return null;
 
-  return matchedTrigger;
+  const devMatch = devSignals.find(d => text.includes(d));
+  if (!devMatch) return null;
+
+  return `${hireMatch} + ${devMatch}`;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
 
-/* ============================================
+/* ================================
    SCRAPER LOOP
-============================================ */
+================================ */
 async function scrape() {
-  console.log("Starting DEV GIG SCRAPER…");
+  console.log("Starting DEV-ONLY GIG SCRAPER…");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -122,13 +147,13 @@ async function scrape() {
 
     try {
       await wait(3000);
-      const posts = await reddit.getSubreddit(sub).getNew({ limit: 50 });
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
 
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
 
-        const matchedTrigger = classify(p);
-        if (!matchedTrigger) continue;
+        const match = classify(p);
+        if (!match) continue;
 
         const url = `https://reddit.com${p.permalink}`;
         if (existingUrls.has(url)) continue;
@@ -140,7 +165,7 @@ async function scrape() {
           subreddit: sub,
           time: new Date(p.created_utc * 1000).toISOString(),
           leadType: "DEV-GIG",
-          matchedTrigger
+          matchedTrigger: match
         };
 
         prependLead(leadsPath, row);
@@ -154,7 +179,7 @@ async function scrape() {
     }
   }
 
-  console.log(`Scrape complete — REAL dev gigs found: ${leads}`);
+  console.log(`Scrape complete — REAL DEV gigs found: ${leads}`);
 }
 
 // Loop hourly

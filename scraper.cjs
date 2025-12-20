@@ -30,15 +30,9 @@ const dmedFiles = [
 // CSV Header
 const HEADER = "username,title,url,subreddit,time,leadType";
 
-// Ensure CSV exists and header is clean
+// Ensure CSV exists
 if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
-} else {
-  const content = fs.readFileSync(leadsPath, "utf8").split("\n");
-  if (!content[0].startsWith("username")) {
-    content.unshift(HEADER);
-    fs.writeFileSync(leadsPath, content.join("\n"));
-  }
 }
 
 // Insert lead under header
@@ -83,59 +77,55 @@ function loadDMedUsers() {
 }
 
 /* ============================================
-   TARGET SUBREDDITS — PAID DEV GIGS ONLY
+   TARGET SUBREDDITS — DEV GIG INTENT
 ============================================ */
 const subs = [
   "forhire",
   "freelance",
-  "SideProject",
-  "SaaS",
-  "Entrepreneur",
-  "EntrepreneurRideAlong",
-  "Startup_Ideas", 
-  "forhire",
   "jobbit",
   "remotejs",
   "remotedev",
   "webdev",
+  "SideProject",
+  "SaaS",
+  "Entrepreneur",
+  "EntrepreneurRideAlong",
+  "Startup_Ideas",
   "learnprogramming",
   "cscareerquestions"
-
 ];
 
 /* ============================================
-   HIGH-INTENT DEV GIG KEYWORDS
+   DEV GIG KEYWORDS (LOOSENED)
 ============================================ */
 const sniperTriggers = [
-  "looking for a developer",
-  "looking for dev",
+  "hire",
+  "hiring",
+  "looking for",
   "need a developer",
   "need a dev",
-  "hire a developer",
-  "hire developer",
-  "hire freelancer",
-  "developer needed",
-  "script needed",
-  "need a script",
-  "build a bot",
-  "automation help",
-  "scraper needed",
-  "api help",
-  "mvp help",
-  "mvp developer"
+  "freelancer",
+  "contract",
+  "build",
+  "help with",
+  "automation",
+  "script",
+  "bot",
+  "scraper",
+  "api",
+  "mvp"
 ];
 
-// Fresh posts only (speed matters)
+// Fresh posts (volume > perfection)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 10;
+  return ageHours <= 48;
 }
 
-// Classify dev gig intent
+// Classify dev gig
 function classify(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
-  if (sniperTriggers.some(t => text.includes(t))) return "DEV-GIG";
-  return null;
+  return sniperTriggers.some(t => text.includes(t)) ? "DEV-GIG" : null;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
@@ -160,14 +150,14 @@ async function scrape() {
     console.log(`\nScanning r/${sub}`);
 
     try {
-      await wait(3000);
+      await wait(2500);
 
-      let posts = await reddit.getSubreddit(sub).getNew({ limit: 60 });
+      let posts = await reddit.getSubreddit(sub).getNew({ limit: 150 });
 
       posts = posts.filter(
         p =>
-          p.author &&
           isFresh(p) &&
+          p.author &&
           !dmedUsers.has(p.author.name.toLowerCase())
       );
 
@@ -195,7 +185,6 @@ async function scrape() {
         leads++;
       }
 
-      await wait(2000);
     } catch (err) {
       console.log(`Error in r/${sub}: ${err.message}`);
       await wait(45000);

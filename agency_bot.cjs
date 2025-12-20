@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Dev Gig Outreach Edition
+// agency_bot.cjs — ClientMagnet Dev Gig Outreach (STRICT BUYERS)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -50,7 +50,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Load sent state
 function loadJsonState() {
   if (!fs.existsSync(sentStatePath)) return;
-
   try {
     const data = JSON.parse(fs.readFileSync(sentStatePath, "utf8"));
     if (data.urls) data.urls.forEach(u => sentUrlSet.add(u));
@@ -68,7 +67,6 @@ function saveJsonState() {
 function loadCsvState() {
   return new Promise(resolve => {
     if (!fs.existsSync(sentPath)) return resolve();
-
     fs.createReadStream(sentPath)
       .pipe(csv())
       .on("data", row => {
@@ -93,27 +91,25 @@ function loadLeads() {
 }
 
 /* ============================================
-   DEV GIG DM TEMPLATE (NO LINKS)
+   HIGH INTENT DEV DM TEMPLATE
 ============================================ */
 const getTemplate = (p) => ({
-  subject: "Quick question",
+  subject: "Quick dev question",
   text: `Hey u/${p.username},
 
-Saw your post in r/${p.subreddit} about "${p.title}".
+Saw your post about ${p.matchedTrigger || "needing a developer"} in r/${p.subreddit}.
 
-I’m a developer and this looks like something I could help with.
-If you want, I can take a quick look and tell you scope + cost.
+I do this type of work and can usually scope it fast.
+If you want, tell me what you're trying to build and timeline and I’ll let you know cost.
 
-No pressure.`
+Jesse`
 });
 
 // Init
 async function initState() {
   if (initialized) return;
-
   loadJsonState();
   await loadCsvState();
-
   console.log(`Loaded state — ${sentUserSet.size} users, ${sentUrlSet.size} URLs`);
   initialized = true;
 }
@@ -129,7 +125,7 @@ async function runCycle() {
   console.log(`Loaded ${leads.length} leads.`);
 
   let sent = 0;
-  const MAX = 5; // reduced for safety
+  const MAX = 5;
   const cycleUsers = new Set();
   const cycleUrls = new Set();
 
@@ -145,6 +141,7 @@ async function runCycle() {
     if (sentUrlSet.has(url)) continue;
     if (cycleUsers.has(username)) continue;
     if (cycleUrls.has(url)) continue;
+    if (post.leadType !== "DEV-GIG") continue;
 
     const msg = getTemplate(post);
 
@@ -180,8 +177,7 @@ async function runCycle() {
       saveJsonState();
     }
 
-    const delay = 60000 + Math.random() * 60000;
-    await sleep(delay);
+    await sleep(60000 + Math.random() * 60000);
   }
 
   console.log(`Cycle complete — sent ${sent} messages.`);
@@ -190,11 +186,9 @@ async function runCycle() {
 // Loop
 (async () => {
   await initState();
-
   while (true) {
     console.log("\n=== New DM cycle: ClientMagnet Dev Outreach ===");
     await runCycle();
-    const mins = 45 + Math.floor(Math.random() * 30);
-    await sleep(mins * 60 * 1000);
+    await sleep((45 + Math.floor(Math.random() * 30)) * 60 * 1000);
   }
 })();

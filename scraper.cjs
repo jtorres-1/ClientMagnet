@@ -83,56 +83,50 @@ function loadDMedUsers() {
 }
 
 /* ============================================
-   TARGET SUBREDDITS — BUYER INTENT
+   TARGET SUBREDDITS — PAID DEV GIGS ONLY
 ============================================ */
 const subs = [
-  "slavelabour",
   "forhire",
   "freelance",
-  "WorkOnline",
   "SideProject",
+  "SaaS",
   "Entrepreneur",
   "EntrepreneurRideAlong",
-  "SaaS",
-  "marketing",
-  "smallbusiness",
-  "startups"
+  "Startup_Ideas"
 ];
 
 /* ============================================
-   REDDIT KEYWORD SNIPER TRIGGERS
+   HIGH-INTENT DEV GIG KEYWORDS
 ============================================ */
 const sniperTriggers = [
-  "looking for",
-  "need",
-  "need a",
-  "hiring",
-  "anyone know",
-  "recommend",
-  "is there a tool",
-  "alert",
-  "monitor",
-  "track",
-  "watch",
-  "scrape",
-  "bot",
-  "automation",
-  "script",
-  "api",
-  "leads",
-  "clients"
+  "looking for a developer",
+  "looking for dev",
+  "need a developer",
+  "need a dev",
+  "hire a developer",
+  "hire developer",
+  "hire freelancer",
+  "developer needed",
+  "script needed",
+  "need a script",
+  "build a bot",
+  "automation help",
+  "scraper needed",
+  "api help",
+  "mvp help",
+  "mvp developer"
 ];
 
 // Fresh posts only (speed matters)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 24;
+  return ageHours <= 6;
 }
 
-// Classify buyer intent
+// Classify dev gig intent
 function classify(post) {
   const text = (post.title + " " + (post.selftext || "")).toLowerCase();
-  if (sniperTriggers.some(t => text.includes(t))) return "SNIPER-BUYER";
+  if (sniperTriggers.some(t => text.includes(t))) return "DEV-GIG";
   return null;
 }
 
@@ -142,7 +136,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ============================================ */
 async function scrape() {
-  console.log("Starting Reddit Keyword Sniper Scraper…");
+  console.log("Starting Dev Gig Scraper…");
 
   const dmedUsers = loadDMedUsers();
 
@@ -200,7 +194,7 @@ async function scrape() {
     }
   }
 
-  console.log(`\nScrape complete — Leads found: ${leads}`);
+  console.log(`\nScrape complete — Dev gigs found: ${leads}`);
   console.log("Sleeping 2 hours…\n");
 }
 

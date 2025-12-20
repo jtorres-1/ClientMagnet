@@ -1,4 +1,4 @@
-// agency_bot.cjs — Reddit Keyword Sniper DM Outreach Edition
+// agency_bot.cjs — ClientMagnet Dev Gig Outreach Edition
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -93,52 +93,19 @@ function loadLeads() {
 }
 
 /* ============================================
-   REDDIT KEYWORD SNIPER DM TEMPLATES
+   DEV GIG DM TEMPLATE (NO LINKS)
 ============================================ */
-const sniperTemplates = [
-  (p) => ({
-    subject: "Quick heads up — this might help",
-    text: `Hey u/${p.username},
+const getTemplate = (p) => ({
+  subject: "Quick question",
+  text: `Hey u/${p.username},
 
 Saw your post in r/${p.subreddit} about "${p.title}".
 
-I built a small tool that watches subreddits and pings you instantly when posts matching your keywords go live — so you don’t miss opportunities.
+I’m a developer and this looks like something I could help with.
+If you want, I can take a quick look and tell you scope + cost.
 
-It’s been useful for catching leads early.
-
-Here’s the link:
-https://linktr.ee/jtxcode`
-  }),
-
-  (p) => ({
-    subject: "This could save you a lot of refresh time",
-    text: `Hey u/${p.username},
-
-Noticed your post in r/${p.subreddit}.
-If timing matters for what you’re doing, I made a Reddit keyword alert tool that notifies you as soon as matching posts are created.
-
-No scraping setup, just run it.
-
-Link:
-https://linktr.ee/jtxcode`
-  }),
-
-  (p) => ({
-    subject: "Catching posts faster",
-    text: `Hey u/${p.username},
-
-I saw your post and thought this might help.
-I built a Reddit Keyword Sniper that monitors subreddits and alerts you within seconds when new posts match your keywords.
-
-Might be useful if you rely on speed.
-
-Here’s the link:
-https://linktr.ee/jtxcode`
-  })
-];
-
-const getTemplate = (post) =>
-  sniperTemplates[Math.floor(Math.random() * sniperTemplates.length)](post);
+No pressure.`
+});
 
 // Init
 async function initState() {
@@ -162,7 +129,7 @@ async function runCycle() {
   console.log(`Loaded ${leads.length} leads.`);
 
   let sent = 0;
-  const MAX = 8;
+  const MAX = 5; // reduced for safety
   const cycleUsers = new Set();
   const cycleUrls = new Set();
 
@@ -202,7 +169,7 @@ async function runCycle() {
         url,
         subreddit: post.subreddit,
         time: post.time || new Date().toISOString(),
-        status: "SENT"
+        status: "OUTREACH"
       }]);
 
       saveJsonState();
@@ -213,7 +180,7 @@ async function runCycle() {
       saveJsonState();
     }
 
-    const delay = 45000 + Math.random() * 60000;
+    const delay = 60000 + Math.random() * 60000;
     await sleep(delay);
   }
 
@@ -225,9 +192,9 @@ async function runCycle() {
   await initState();
 
   while (true) {
-    console.log("\n=== New DM cycle: Reddit Keyword Sniper ===");
+    console.log("\n=== New DM cycle: ClientMagnet Dev Outreach ===");
     await runCycle();
-    const mins = 30 + Math.floor(Math.random() * 20);
+    const mins = 45 + Math.floor(Math.random() * 30);
     await sleep(mins * 60 * 1000);
   }
 })();

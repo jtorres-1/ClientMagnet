@@ -37,34 +37,35 @@ function prependLead(file, rowObj) {
 }
 
 /* ============================================
-   HIGH INTENT SUBREDDITS ONLY
+   HIGH INTENT SUBREDDITS
 ============================================ */
 const subs = [
-  "forhire",
   "jobbit",
-  "slavelabour"
+  "slavelabour",
+  "forhire"
 ];
 
 /* ============================================
-   REAL BUYER PHRASES
+   REAL WORLD BUYER PHRASES
 ============================================ */
 const hireTriggers = [
-  "looking for a developer",
-  "need a developer",
-  "need dev",
-  "hiring a developer",
-  "hire a developer",
-  "developer wanted",
-  "freelancer wanted",
-  "looking for freelancer",
-  "need a freelancer",
-  "need someone to build",
-  "can someone build",
-  "build me",
-  "need automation",
+  "[hiring]",
+  "hiring",
+  "looking for",
+  "need help",
+  "need someone",
   "need a script",
-  "need bot",
-  "need scraper"
+  "need a bot",
+  "need automation",
+  "need scraper",
+  "build this",
+  "build me",
+  "can someone",
+  "freelancer needed",
+  "developer needed",
+  "web dev",
+  "python dev",
+  "javascript dev"
 ];
 
 /* ============================================
@@ -83,14 +84,15 @@ const sellerPhrases = [
 // Fresh posts only
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 10;
+  return ageHours <= 12;
 }
 
-// Classify ONLY real dev gigs
+// Classify dev gigs
 function classify(post) {
-  const text = (post.title + " " + (post.selftext || "")).toLowerCase();
+  const text =
+    ((post.title || "") + " " + (post.selftext || "")).toLowerCase();
 
-  if (text.length < 40) return null;
+  if (text.length < 25) return null;
   if (sellerPhrases.some(p => text.includes(p))) return null;
 
   const matchedTrigger = hireTriggers.find(t => text.includes(t));

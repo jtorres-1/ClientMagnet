@@ -92,7 +92,15 @@ const subs = [
   "SaaS",
   "Entrepreneur",
   "EntrepreneurRideAlong",
-  "Startup_Ideas"
+  "Startup_Ideas", 
+  "forhire",
+  "jobbit",
+  "remotejs",
+  "remotedev",
+  "webdev",
+  "learnprogramming",
+  "cscareerquestions"
+
 ];
 
 /* ============================================
@@ -120,7 +128,7 @@ const sniperTriggers = [
 // Fresh posts only (speed matters)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 6;
+  return ageHours <= 10;
 }
 
 // Classify dev gig intent

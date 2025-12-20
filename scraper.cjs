@@ -12,7 +12,7 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// Output
+// Paths
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 const leadsPath = path.join(baseDir, "clean_leads.csv");
@@ -25,29 +25,27 @@ if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
 }
 
-// Insert row
+// Insert row under header
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
-  let lines = fs.readFileSync(file, "utf8").split("\n");
+  const lines = fs.readFileSync(file, "utf8").split("\n");
   if (!lines[0].startsWith("username")) lines.unshift(HEADER);
   lines.splice(1, 0, row.trim());
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-/* ================================
-   SUBREDDITS THAT ACTUALLY PAY
-================================ */
+/* ============================================
+   SUBREDDITS THAT ACTUALLY CONVERT
+============================================ */
 const subs = [
-  "jobbit",
   "forhire",
-  "slavelabour",
-  "freelance",
-  "WorkOnline"
+  "jobbit",
+  "slavelabour"
 ];
 
-/* ================================
-   BUYER INTENT PHRASES
-================================ */
+/* ============================================
+   BUYER INTENT ONLY
+============================================ */
 const hireTriggers = [
   "[hiring]",
   "hiring",
@@ -57,41 +55,72 @@ const hireTriggers = [
   "need a",
   "build",
   "can someone",
-  "freelancer needed",
-  "developer needed"
+  "developer needed",
+  "freelancer needed"
 ];
 
-/* ================================
-   DEV-ONLY SIGNALS (MANDATORY)
-================================ */
+/* ============================================
+   REAL CODING SIGNALS ONLY
+============================================ */
 const devSignals = [
-  "developer",
-  "dev",
   "python",
   "javascript",
-  "js",
+  "typescript",
   "node",
   "react",
-  "next",
-  "api",
-  "automation",
-  "script",
-  "bot",
-  "scraper",
-  "backend",
-  "frontend",
-  "full stack",
-  "web app",
-  "software",
+  "next.js",
+  "express",
   "flask",
   "django",
   "fastapi",
-  "express"
+  "api",
+  "backend",
+  "frontend",
+  "full stack",
+  "database",
+  "sql",
+  "postgres",
+  "mysql",
+  "automation",
+  "scraper",
+  "web app",
+  "saas"
 ];
 
-/* ================================
-   HARD EXCLUSIONS (NO SELLERS)
-================================ */
+/* ============================================
+   HARD EXCLUSIONS (NON-DEV WORK)
+============================================ */
+const nonDevExclusions = [
+  "video",
+  "videos",
+  "youtube",
+  "tiktok",
+  "roblox",
+  "minecraft",
+  "vtuber",
+  "graphics",
+  "graphic",
+  "design",
+  "designer",
+  "logo",
+  "editing",
+  "editor",
+  "resume",
+  "pdf",
+  "content",
+  "writer",
+  "writing",
+  "social media",
+  "marketing",
+  "lead setter",
+  "commission",
+  "salary",
+  "discussion"
+];
+
+/* ============================================
+   EXCLUDE SELLERS
+============================================ */
 const sellerPhrases = [
   "i am a developer",
   "i am a freelancer",
@@ -103,19 +132,20 @@ const sellerPhrases = [
   "[offer]"
 ];
 
-// Fresh window — 3 DAYS
+// Fresh window: 3 DAYS (volume without junk)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
   return ageHours <= 72;
 }
 
-// Classification
+// FINAL classification logic
 function classify(post) {
   const text =
     ((post.title || "") + " " + (post.selftext || "")).toLowerCase();
 
-  if (text.length < 30) return null;
+  if (text.length < 40) return null;
   if (sellerPhrases.some(p => text.includes(p))) return null;
+  if (nonDevExclusions.some(x => text.includes(x))) return null;
 
   const hireMatch = hireTriggers.find(t => text.includes(t));
   if (!hireMatch) return null;
@@ -128,9 +158,9 @@ function classify(post) {
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
 
-/* ================================
+/* ============================================
    SCRAPER LOOP
-================================ */
+============================================ */
 async function scrape() {
   console.log("Starting DEV-ONLY GIG SCRAPER…");
 
@@ -182,7 +212,7 @@ async function scrape() {
   console.log(`Scrape complete — REAL DEV gigs found: ${leads}`);
 }
 
-// Loop hourly
+// Run hourly
 (async () => {
   while (true) {
     await scrape();

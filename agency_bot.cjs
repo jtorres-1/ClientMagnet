@@ -91,16 +91,16 @@ function loadLeads() {
 }
 
 /* ============================================
-   HIGH INTENT DEV DM TEMPLATE
+   HIGH INTENT DEV DM TEMPLATE (SHORT)
 ============================================ */
 const getTemplate = (p) => ({
-  subject: "Quick dev question",
+  subject: "Quick dev help",
   text: `Hey u/${p.username},
 
-Saw your post about ${p.matchedTrigger || "needing a developer"} in r/${p.subreddit}.
+Saw your post in r/${p.subreddit}.
+I build this type of thing and can start today.
 
-I do this type of work and can usually scope it fast.
-If you want, tell me what you're trying to build and timeline and I’ll let you know cost.
+If you want, tell me scope + timeline and I’ll confirm price fast.
 
 Jesse`
 });
@@ -125,7 +125,7 @@ async function runCycle() {
   console.log(`Loaded ${leads.length} leads.`);
 
   let sent = 0;
-  const MAX = 5;
+  const MAX = 8; // increased safely
   const cycleUsers = new Set();
   const cycleUrls = new Set();
 
@@ -172,12 +172,12 @@ async function runCycle() {
       saveJsonState();
     } catch (err) {
       console.log(`Failed DM to u/${rawUser}: ${err.message}`);
-      sentUserSet.add(username);
+      // IMPORTANT: do NOT burn the user on failure
       sentUrlSet.add(url);
       saveJsonState();
     }
 
-    await sleep(60000 + Math.random() * 60000);
+    await sleep(45 * 1000 + Math.random() * 30 * 1000); // 45–75s
   }
 
   console.log(`Cycle complete — sent ${sent} messages.`);
@@ -189,6 +189,6 @@ async function runCycle() {
   while (true) {
     console.log("\n=== New DM cycle: ClientMagnet Dev Outreach ===");
     await runCycle();
-    await sleep((45 + Math.floor(Math.random() * 30)) * 60 * 1000);
+    await sleep((25 + Math.floor(Math.random() * 20)) * 60 * 1000); // 25–45 min
   }
 })();

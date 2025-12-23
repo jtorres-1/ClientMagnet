@@ -35,7 +35,7 @@ function prependLead(file, rowObj) {
 }
 
 /* ============================================
-   SUBREDDITS THAT ACTUALLY CONVERT
+   HIGH INTENT SUBREDDITS ONLY
 ============================================ */
 const subs = [
   "forhire",
@@ -47,116 +47,51 @@ const subs = [
 ];
 
 /* ============================================
-   BUYER INTENT ONLY
+   BUYER LANGUAGE (EXPLICIT + IMPLIED)
 ============================================ */
-const hireTriggers = [
-  "[hiring]",
-  "hiring",
-  "looking for",
-  "need help",
-  "need someone",
-  "need a",
-  "build",
-  "can someone",
-  "developer needed",
-  "freelancer needed"
-];
+const hireRegex = /(hiring|looking for|need help|need someone|need a|can someone|help building|looking to build|developer needed|freelancer needed|automation needed|bot needed|scraper needed|mvp help|api help)/i;
 
 /* ============================================
-   REAL CODING SIGNALS ONLY
+   TECHNICAL SCOPE SIGNALS
 ============================================ */
-const devSignals = [
-  "python",
-  "javascript",
-  "typescript",
-  "node",
-  "react",
-  "next.js",
-  "express",
-  "flask",
-  "django",
-  "fastapi",
-  "api",
-  "backend",
-  "frontend",
-  "full stack",
-  "database",
-  "sql",
-  "postgres",
-  "mysql",
-  "automation",
-  "scraper",
-  "web app",
-  "saas"
-];
+const devRegex = /(python|javascript|typescript|node|react|next\.js|express|flask|django|fastapi|api|backend|frontend|full stack|database|sql|postgres|mysql|automation|scraper|web app|saas|bot)/i;
 
 /* ============================================
-   HARD EXCLUSIONS (NON-DEV WORK)
+   HARD EXCLUSIONS (NON BUYERS)
 ============================================ */
-const nonDevExclusions = [
-  "video",
-  "videos",
-  "youtube",
-  "tiktok",
-  "roblox",
-  "minecraft",
-  "vtuber",
-  "graphics",
-  "graphic",
-  "design",
-  "designer",
-  "logo",
-  "editing",
-  "editor",
-  "resume",
-  "pdf",
-  "content",
-  "writer",
-  "writing",
-  "social media",
-  "marketing",
-  "lead setter",
-  "commission",
-  "salary",
-  "discussion"
-];
+const nonDevRegex = /(video|youtube|tiktok|roblox|minecraft|vtuber|graphic|design|logo|editing|resume|pdf|content|writer|writing|social media|marketing|commission|salary|discussion)/i;
 
 /* ============================================
-   EXCLUDE SELLERS
+   SELLER PHRASES (ONLY BLOCK IF NO BUYER INTENT)
 ============================================ */
-const sellerPhrases = [
-  "i am a developer",
-  "i am a freelancer",
-  "for hire",
-  "hire me",
-  "offering services",
-  "my services",
-  "available for work",
-  "[offer]"
-];
+const sellerRegex = /(i am a developer|i am a freelancer|hire me|offering services|my services|available for work|\[offer\])/i;
 
-// Fresh window: 3 DAYS (volume without junk)
+// Fresh window: 48 HOURS
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 168;
+  return ageHours <= 48;
 }
 
-// FINAL classification logic
+// FINAL classification
 function classify(post) {
-  const text =
-    ((post.title || "") + " " + (post.selftext || "")).toLowerCase();
+  const title = (post.title || "").toLowerCase();
+  const body = (post.selftext || "").toLowerCase();
 
-  if (text.length < 40) return null;
-  if (sellerPhrases.some(p => text.includes(p))) return null;
-  if (nonDevExclusions.some(x => text.includes(x))) return null;
+  if (title.length < 10) return null;
+  if (nonDevRegex.test(title + body)) return null;
 
-  const hireMatch = hireTriggers.find(t => text.includes(t));
-  if (!hireMatch) return null;
+  const hasHireIntent = hireRegex.test(title) || hireRegex.test(body);
+  if (!hasHireIntent) return null;
 
-  const devMatch = devSignals.find(d => text.includes(d));
-  if (!devMatch) return null;
+  if (sellerRegex.test(title + body) && !hireRegex.test(title)) return null;
 
-  return `${hireMatch} + ${devMatch}`;
+  const hasDevSignal = devRegex.test(title) || devRegex.test(body);
+  if (!hasDevSignal) return null;
+
+  const hireMatch = title.match(hireRegex) || body.match(hireRegex);
+  const devMatch = title.match(devRegex) || body.match(devRegex);
+
+  return `${hireMatch[0]} + ${devMatch[0]}`;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
@@ -165,7 +100,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ============================================ */
 async function scrape() {
-  console.log("Starting DEV-ONLY GIG SCRAPER…");
+  console.log("Starting DEV-GIG scraper…");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -179,8 +114,8 @@ async function scrape() {
     console.log(`Scanning r/${sub}`);
 
     try {
-      await wait(3000);
-      const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
+      await wait(900);
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 40 });
 
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
@@ -208,11 +143,11 @@ async function scrape() {
 
     } catch (err) {
       console.log(`Error r/${sub}: ${err.message}`);
-      await wait(45000);
+      await wait(20000);
     }
   }
 
-  console.log(`Scrape complete — REAL DEV gigs found: ${leads}`);
+  console.log(`Scrape complete — DEV gigs found: ${leads}`);
 }
 
 // Run hourly

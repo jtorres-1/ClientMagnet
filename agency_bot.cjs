@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Dev Gig Outreach (STRICT BUYERS)
+// agency_bot.cjs — ClientMagnet Dev Gig Outreach (STRICT BUYERS, FIXED)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -125,7 +125,7 @@ async function runCycle() {
   console.log(`Loaded ${leads.length} leads.`);
 
   let sent = 0;
-  const MAX = 8; // increased safely
+  const MAX = 8;
   const cycleUsers = new Set();
   const cycleUrls = new Set();
 
@@ -136,12 +136,19 @@ async function runCycle() {
     const username = rawUser.toLowerCase();
     const url = (post.url || "").trim();
 
-    if (!rawUser || !url) continue;
-    if (sentUserSet.has(username)) continue;
-    if (sentUrlSet.has(url)) continue;
-    if (cycleUsers.has(username)) continue;
-    if (cycleUrls.has(url)) continue;
-    if (post.leadType !== "DEV-GIG") continue;
+    let skippedReason = null;
+
+    if (!rawUser || !url) skippedReason = "missing user/url";
+    else if (sentUserSet.has(username)) skippedReason = "user already messaged";
+    else if (sentUrlSet.has(url)) skippedReason = "url already messaged";
+    else if (cycleUsers.has(username)) skippedReason = "cycle user duplicate";
+    else if (cycleUrls.has(url)) skippedReason = "cycle url duplicate";
+    else if (post.leadType && post.leadType !== "DEV-GIG") skippedReason = "leadType filtered";
+
+    if (skippedReason) {
+      console.log(`Skipped u/${rawUser || "?"}: ${skippedReason}`);
+      continue;
+    }
 
     const msg = getTemplate(post);
 
@@ -172,12 +179,16 @@ async function runCycle() {
       saveJsonState();
     } catch (err) {
       console.log(`Failed DM to u/${rawUser}: ${err.message}`);
-      // IMPORTANT: do NOT burn the user on failure
-      sentUrlSet.add(url);
-      saveJsonState();
+
+      // ONLY burn user if DMs are closed
+      if (err.message.includes("NOT_WHITELISTED")) {
+        sentUserSet.add(username);
+        saveJsonState();
+      }
     }
 
-    await sleep(45 * 1000 + Math.random() * 30 * 1000); // 45–75s
+    // Faster but still safe
+    await sleep(25 * 1000 + Math.random() * 20 * 1000); // 25–45s
   }
 
   console.log(`Cycle complete — sent ${sent} messages.`);
@@ -189,6 +200,6 @@ async function runCycle() {
   while (true) {
     console.log("\n=== New DM cycle: ClientMagnet Dev Outreach ===");
     await runCycle();
-    await sleep((25 + Math.floor(Math.random() * 20)) * 60 * 1000); // 25–45 min
+    await sleep((12 + Math.floor(Math.random() * 8)) * 60 * 1000); // 12–20 min
   }
 })();

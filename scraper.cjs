@@ -35,7 +35,7 @@ function prependLead(file, rowObj) {
 }
 
 /* ============================================
-   HIGH INTENT SUBREDDITS ONLY
+   HIGH INTENT SUBREDDITS
 ============================================ */
 const subs = [
   "forhire",
@@ -43,55 +43,58 @@ const subs = [
   "slavelabour",
   "webdev",
   "remotejs",
-  "remotedev"
+  "remotedev",
+  "freelance",
+  "WorkOnline"
 ];
 
 /* ============================================
-   BUYER LANGUAGE (EXPLICIT + IMPLIED)
+   BUYER LANGUAGE (EXPANDED)
 ============================================ */
-const hireRegex = /(hiring|looking for|need help|need someone|need a|can someone|help building|looking to build|developer needed|freelancer needed|automation needed|bot needed|scraper needed|mvp help|api help)/i;
+const hireRegex = /(hiring|looking for|looking to|need help|need someone|need a|need an|anyone who can|can someone|is there a|developer needed|freelancer needed|automation|script needed|scraper|bot|mvp|backend help|frontend help|api help|build this|build me|help automate)/i;
 
 /* ============================================
-   TECHNICAL SCOPE SIGNALS
+   DEV / TECH SIGNALS
 ============================================ */
-const devRegex = /(python|javascript|typescript|node|react|next\.js|express|flask|django|fastapi|api|backend|frontend|full stack|database|sql|postgres|mysql|automation|scraper|web app|saas|bot)/i;
+const devRegex = /(python|javascript|typescript|node|react|next\.js|express|flask|django|fastapi|api|backend|frontend|full stack|database|sql|postgres|mysql|automation|scraper|web app|bot|chrome extension|pdf|csv|excel)/i;
 
 /* ============================================
-   HARD EXCLUSIONS (NON BUYERS)
+   HARD NON-BUYERS ONLY
 ============================================ */
-const nonDevRegex = /(video|youtube|tiktok|roblox|minecraft|vtuber|graphic|design|logo|editing|resume|pdf|content|writer|writing|social media|marketing|commission|salary|discussion)/i;
+const hardExcludeRegex = /(vtuber|minecraft|roblox|youtube channel|editing videos|logo design only|graphic design only|social media growth|instagram growth)/i;
 
 /* ============================================
-   SELLER PHRASES (ONLY BLOCK IF NO BUYER INTENT)
+   SELLER SELF-PROMO (BLOCK ONLY IF NO BUYER SIGNAL)
 ============================================ */
-const sellerRegex = /(i am a developer|i am a freelancer|hire me|offering services|my services|available for work|\[offer\])/i;
+const sellerRegex = /(i am a developer|i am a freelancer|hire me|available for work|\[offer\])/i;
 
-// Fresh window: 48 HOURS
+// Fresh window: 72 HOURS (buyers still respond)
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 48;
+  return ageHours <= 72;
 }
 
 // FINAL classification
 function classify(post) {
   const title = (post.title || "").toLowerCase();
   const body = (post.selftext || "").toLowerCase();
+  const combined = title + " " + body;
 
-  if (title.length < 10) return null;
-  if (nonDevRegex.test(title + body)) return null;
+  if (title.length < 8) return null;
+  if (hardExcludeRegex.test(combined)) return null;
 
-  const hasHireIntent = hireRegex.test(title) || hireRegex.test(body);
+  const hasHireIntent = hireRegex.test(combined);
   if (!hasHireIntent) return null;
 
-  if (sellerRegex.test(title + body) && !hireRegex.test(title)) return null;
-
-  const hasDevSignal = devRegex.test(title) || devRegex.test(body);
+  const hasDevSignal = devRegex.test(combined);
   if (!hasDevSignal) return null;
 
-  const hireMatch = title.match(hireRegex) || body.match(hireRegex);
-  const devMatch = title.match(devRegex) || body.match(devRegex);
+  if (sellerRegex.test(combined) && !hireRegex.test(title)) return null;
 
-  return `${hireMatch[0]} + ${devMatch[0]}`;
+  const hireMatch = combined.match(hireRegex);
+  const devMatch = combined.match(devRegex);
+
+  return `${hireMatch?.[0]} + ${devMatch?.[0]}`;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
@@ -114,8 +117,8 @@ async function scrape() {
     console.log(`Scanning r/${sub}`);
 
     try {
-      await wait(900);
-      const posts = await reddit.getSubreddit(sub).getNew({ limit: 40 });
+      await wait(1200);
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
 
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
@@ -143,17 +146,17 @@ async function scrape() {
 
     } catch (err) {
       console.log(`Error r/${sub}: ${err.message}`);
-      await wait(20000);
+      await wait(30000);
     }
   }
 
   console.log(`Scrape complete — DEV gigs found: ${leads}`);
 }
 
-// Run hourly
+// Run every 45 minutes
 (async () => {
   while (true) {
     await scrape();
-    await wait(60 * 60 * 1000);
+    await wait(45 * 60 * 1000);
   }
 })();

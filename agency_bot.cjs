@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Dev Gig Outreach (STRICT BUYERS, FIXED)
+// agency_bot.cjs — ClientMagnet Dev Gig Outreach (PATCHED)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -6,7 +6,9 @@ const path = require("path");
 const csv = require("csv-parser");
 const { createObjectCsvWriter } = require("csv-writer");
 
-// Reddit client
+/* =========================
+   REDDIT CLIENT
+========================= */
 const reddit = new snoowrap({
   userAgent: process.env.REDDIT_USER_AGENT,
   clientId: process.env.REDDIT_CLIENT_ID,
@@ -15,23 +17,26 @@ const reddit = new snoowrap({
   password: process.env.REDDIT_PASSWORD,
 });
 
-// MODE
+/* =========================
+   MODE + PATHS
+========================= */
 const mode = "clean_leads";
-
-// Paths
 const baseDir = path.resolve(__dirname, "logs");
 const leadsPath = path.join(baseDir, `${mode}.csv`);
 const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
 const sentStatePath = path.join(baseDir, `${mode}_sentState.json`);
-
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-// Memory
+/* =========================
+   MEMORY
+========================= */
 let sentUrlSet = new Set();
 let sentUserSet = new Set();
 let initialized = false;
 
-// CSV Writer
+/* =========================
+   CSV WRITER
+========================= */
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
   header: [
@@ -47,7 +52,9 @@ const sentWriter = createObjectCsvWriter({
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Load sent state
+/* =========================
+   STATE LOADERS
+========================= */
 function loadJsonState() {
   if (!fs.existsSync(sentStatePath)) return;
   try {
@@ -90,9 +97,21 @@ function loadLeads() {
   });
 }
 
-/* ============================================
-   HIGH INTENT DEV DM TEMPLATE (SHORT)
-============================================ */
+/* =========================
+   LEAD PRIORITIZATION
+========================= */
+function scoreLead(p) {
+  let score = 0;
+  const t = (p.title || "").toLowerCase();
+  if (t.includes("$") || t.includes("paid") || t.includes("budget")) score += 3;
+  if (p.subreddit === "jobbit" || p.subreddit === "forhire") score += 2;
+  if (t.includes("need") || t.includes("looking")) score += 1;
+  return score;
+}
+
+/* =========================
+   DM TEMPLATE
+========================= */
 const getTemplate = (p) => ({
   subject: "Quick dev help",
   text: `Hey u/${p.username},
@@ -105,7 +124,9 @@ If you want, tell me scope + timeline and I’ll confirm price fast.
 Jesse`
 });
 
-// Init
+/* =========================
+   INIT
+========================= */
 async function initState() {
   if (initialized) return;
   loadJsonState();
@@ -114,53 +135,55 @@ async function initState() {
   initialized = true;
 }
 
-// DM cycle
+/* =========================
+   DM CYCLE
+========================= */
 async function runCycle() {
-  const leads = await loadLeads();
+  let leads = await loadLeads();
   if (!leads.length) {
     console.log("No leads available.");
     return;
   }
 
+  // PRIORITIZE
+  leads = leads
+    .filter(l => l.username && l.url)
+    .sort((a, b) => scoreLead(b) - scoreLead(a));
+
   console.log(`Loaded ${leads.length} leads.`);
 
-  let sent = 0;
+  let attempted = 0;
+  let confirmed = 0;
   const MAX = 8;
+
   const cycleUsers = new Set();
   const cycleUrls = new Set();
 
   for (const post of leads) {
-    if (sent >= MAX) break;
+    if (attempted >= MAX) break;
 
-    const rawUser = (post.username || "").trim();
+    const rawUser = post.username.trim();
     const username = rawUser.toLowerCase();
-    const url = (post.url || "").trim();
+    const url = post.url.trim();
 
-    let skippedReason = null;
+    if (
+      sentUserSet.has(username) ||
+      sentUrlSet.has(url) ||
+      cycleUsers.has(username) ||
+      cycleUrls.has(url)
+    ) continue;
 
-    if (!rawUser || !url) skippedReason = "missing user/url";
-    else if (sentUserSet.has(username)) skippedReason = "user already messaged";
-    else if (sentUrlSet.has(url)) skippedReason = "url already messaged";
-    else if (cycleUsers.has(username)) skippedReason = "cycle user duplicate";
-    else if (cycleUrls.has(url)) skippedReason = "cycle url duplicate";
-    else if (post.leadType && post.leadType !== "DEV-GIG") skippedReason = "leadType filtered";
-
-    if (skippedReason) {
-      console.log(`Skipped u/${rawUser || "?"}: ${skippedReason}`);
-      continue;
-    }
-
-    const msg = getTemplate(post);
+    attempted++;
 
     try {
       await reddit.composeMessage({
         to: rawUser,
-        subject: msg.subject,
-        text: msg.text
+        subject: getTemplate(post).subject,
+        text: getTemplate(post).text
       });
 
+      confirmed++;
       console.log(`Sent DM to u/${rawUser}`);
-      sent++;
 
       sentUserSet.add(username);
       sentUrlSet.add(url);
@@ -177,29 +200,31 @@ async function runCycle() {
       }]);
 
       saveJsonState();
+
     } catch (err) {
       console.log(`Failed DM to u/${rawUser}: ${err.message}`);
-
-      // ONLY burn user if DMs are closed
       if (err.message.includes("NOT_WHITELISTED")) {
         sentUserSet.add(username);
         saveJsonState();
       }
     }
 
-    // Faster but still safe
-    await sleep(25 * 1000 + Math.random() * 20 * 1000); // 25–45s
+    await sleep(25 * 1000 + Math.random() * 20 * 1000);
   }
 
-  console.log(`Cycle complete — sent ${sent} messages.`);
+  console.log(
+    `Cycle complete — attempted ${attempted}, confirmed ${confirmed} messages.`
+  );
 }
 
-// Loop
+/* =========================
+   LOOP
+========================= */
 (async () => {
   await initState();
   while (true) {
     console.log("\n=== New DM cycle: ClientMagnet Dev Outreach ===");
     await runCycle();
-    await sleep((12 + Math.floor(Math.random() * 8)) * 60 * 1000); // 12–20 min
+    await sleep((12 + Math.floor(Math.random() * 8)) * 60 * 1000);
   }
 })();

@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Dev Gig Outreach (PATCHED)
+// agency_bot.cjs — ClientMagnet Outreach (PAIN primary, HIRING secondary)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -18,14 +18,14 @@ const reddit = new snoowrap({
 });
 
 /* =========================
-   MODE + PATHS
+   PATHS
 ========================= */
-const mode = "clean_leads";
 const baseDir = path.resolve(__dirname, "logs");
-const leadsPath = path.join(baseDir, `${mode}.csv`);
-const sentPath = path.join(baseDir, `${mode}_dmed.csv`);
-const sentStatePath = path.join(baseDir, `${mode}_sentState.json`);
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+
+const leadsPath = path.join(baseDir, "clean_leads.csv");
+const sentPath = path.join(baseDir, "clean_leads_dmed.csv");
+const sentStatePath = path.join(baseDir, "clean_leads_sentState.json");
 
 /* =========================
    MEMORY
@@ -44,6 +44,7 @@ const sentWriter = createObjectCsvWriter({
     { id: "title", title: "Post Title" },
     { id: "url", title: "Post URL" },
     { id: "subreddit", title: "Subreddit" },
+    { id: "leadType", title: "Lead Type" },
     { id: "time", title: "Timestamp" },
     { id: "status", title: "Status" }
   ],
@@ -60,14 +61,17 @@ function loadJsonState() {
   try {
     const data = JSON.parse(fs.readFileSync(sentStatePath, "utf8"));
     if (data.urls) data.urls.forEach(u => sentUrlSet.add(u));
-    if (data.usernames) data.usernames.forEach(u => sentUserSet.add(u.toLowerCase()));
+    if (data.users) data.users.forEach(u => sentUserSet.add(u.toLowerCase()));
   } catch {}
 }
 
 function saveJsonState() {
   fs.writeFileSync(
     sentStatePath,
-    JSON.stringify({ urls: [...sentUrlSet], usernames: [...sentUserSet] }, null, 2)
+    JSON.stringify({
+      urls: [...sentUrlSet],
+      users: [...sentUserSet]
+    }, null, 2)
   );
 }
 
@@ -98,31 +102,56 @@ function loadLeads() {
 }
 
 /* =========================
-   LEAD PRIORITIZATION
+   LEAD SCORING
 ========================= */
 function scoreLead(p) {
   let score = 0;
-  const t = (p.title || "").toLowerCase();
-  if (t.includes("$") || t.includes("paid") || t.includes("budget")) score += 3;
-  if (p.subreddit === "jobbit" || p.subreddit === "forhire") score += 2;
-  if (t.includes("need") || t.includes("looking")) score += 1;
+  const title = (p.title || "").toLowerCase();
+
+  if (p.leadType === "PAIN") score += 5;
+  if (p.leadType === "HIRING") score += 3;
+
+  if (title.includes("manual") || title.includes("automation")) score += 1;
+  if (title.includes("stripe") || title.includes("email")) score += 1;
+  if (p.subreddit === "forhire" || p.subreddit === "jobbit") score += 1;
+
   return score;
 }
 
 /* =========================
-   DM TEMPLATE
+   DM TEMPLATES
 ========================= */
-const getTemplate = (p) => ({
-  subject: "Quick dev help",
-  text: `Hey u/${p.username},
+function getTemplate(post) {
+  const trigger = post.matchedTrigger || "that";
 
-Saw your post in r/${p.subreddit}.
-I build this type of thing and can start today.
+  if (post.leadType === "PAIN") {
+    return {
+      subject: "Quick question",
+      text: `Hey u/${post.username},
 
-If you want, tell me scope + timeline and I’ll confirm price fast.
+Saw your post about ${trigger} in r/${post.subreddit}.
+Quick question — are you still dealing with that, or did you find a fix?
 
-Jesse`
-});
+I’ve helped teams automate similar workflows before.
+Happy to share what usually works if it’s helpful.
+
+– Jesse`
+    };
+  }
+
+  // HIRING fallback
+  return {
+    subject: "Quick dev help",
+    text: `Hey u/${post.username},
+
+Saw your post in r/${post.subreddit}.
+I’ve built similar systems and can help quickly.
+
+If you want, share scope + timeline and I’ll confirm pricing.
+
+– Jesse`
+  };
+}
 
 /* =========================
    INIT
@@ -145,9 +174,8 @@ async function runCycle() {
     return;
   }
 
-  // PRIORITIZE
   leads = leads
-    .filter(l => l.username && l.url)
+    .filter(l => l.username && l.url && l.leadType)
     .sort((a, b) => scoreLead(b) - scoreLead(a));
 
   console.log(`Loaded ${leads.length} leads.`);
@@ -176,14 +204,16 @@ async function runCycle() {
     attempted++;
 
     try {
+      const tpl = getTemplate(post);
+
       await reddit.composeMessage({
         to: rawUser,
-        subject: getTemplate(post).subject,
-        text: getTemplate(post).text
+        subject: tpl.subject,
+        text: tpl.text
       });
 
       confirmed++;
-      console.log(`Sent DM to u/${rawUser}`);
+      console.log(`Sent ${post.leadType} DM → u/${rawUser}`);
 
       sentUserSet.add(username);
       sentUrlSet.add(url);
@@ -195,6 +225,7 @@ async function runCycle() {
         title: post.title,
         url,
         subreddit: post.subreddit,
+        leadType: post.leadType,
         time: post.time || new Date().toISOString(),
         status: "OUTREACH"
       }]);
@@ -213,7 +244,7 @@ async function runCycle() {
   }
 
   console.log(
-    `Cycle complete — attempted ${attempted}, confirmed ${confirmed} messages.`
+    `Cycle complete — attempted ${attempted}, confirmed ${confirmed}`
   );
 }
 
@@ -223,7 +254,7 @@ async function runCycle() {
 (async () => {
   await initState();
   while (true) {
-    console.log("\n=== New DM cycle: ClientMagnet Dev Outreach ===");
+    console.log("\n=== New DM cycle: ClientMagnet Outreach ===");
     await runCycle();
     await sleep((12 + Math.floor(Math.random() * 8)) * 60 * 1000);
   }

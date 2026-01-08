@@ -35,45 +35,69 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   HIGH-BUYER SUBREDDITS ONLY
+   SUBREDDITS (HIGH ROI)
 ========================= */
 const subs = [
-  "forhire",            // buyers still post here
-  "jobbit",             // legit paid gigs
-  "Entrepreneur",
+  // SaaS / founders
   "SaaS",
-  "SideProject",
   "startups",
-  "smallbusiness",
+  "Entrepreneur",
+  "SideProject",
   "EntrepreneurRideAlong",
+  "smallbusiness",
+
+  // Agencies / builders
+  "agency",
+  "webdev",
   "automation",
+  "nocode",
+
+  // Hiring (secondary)
+  "forhire",
+  "jobbit",
+
+   // local businesses
+  "dentistry",
+  "medicalpractice",
+  "healthcare",
+  "privatepractice",
+  "smallbusiness",
+  "entrepreneur",
+
+  "stripe",
+  "emailmarketing",
+  "CRM",
+  "marketingautomation",
+  "zapier",
   "nocode"
+
+
+
 ];
 
 /* =========================
-   BUYER INTENT (TITLE ONLY)
+   PIPELINE A — HIRING (SECONDARY)
 ========================= */
-const buyerTitleRegex = /(hiring|looking for|need someone|need a developer|need help|can someone build|who can build|seeking developer|developer needed)/i;
-
-/* =========================
-   MONEY LANGUAGE (REQUIRED)
-========================= */
+const hiringRegex = /(hiring|looking for|need a developer|developer needed|seeking developer|need someone to build|who can build)/i;
 const moneyRegex = /(paid|budget|rate|paying|compensation|usd|\$)/i;
 
 /* =========================
-   DEV SIGNALS
+   PIPELINE B — PAIN (PRIMARY)
 ========================= */
-const devRegex = /(python|javascript|node|react|next\.js|flask|django|fastapi|api|automation|scraper|bot|script|backend|frontend|database|sql|csv|excel)/i;
+const painRegex = /(how do i|is there a way|still doing|manually|any tool for|struggling with|pain point|workflow issue|not scaling|takes too long|inefficient|error|not working)/i;
+
+const painTechRegex = /(stripe|email|emails|automation|backend|auth|login|csv|spreadsheet|google sheets|database|supabase|webhook|crm|follow[- ]?up|onboarding|subscription)/i;
 
 /* =========================
-   HARD SELLER BLOCK (ALWAYS KILL)
+   DEV / BUSINESS CONTEXT
 ========================= */
-const sellerRegex = /(i am a developer|i am a freelancer|hire me|available for work|\[offer\]|portfolio|my services)/i;
+const devContextRegex = /(app|software|saas|client|customer|users|business|company|agency|startup|store|practice|clinic|office)/i;
 
 /* =========================
-   HARD NON-BUYERS
+   HARD BLOCKS
 ========================= */
-const hardExcludeRegex = /(vtuber|minecraft|roblox|youtube|logo design|graphic design|social media growth|instagram growth)/i;
+const sellerRegex = /(i am a developer|hire me|my services|portfolio|available for work|\[offer\])/i;
+const hardExcludeRegex = /(vtuber|minecraft|roblox|gaming|youtube channel|logo design|graphic design|instagram growth|social media growth)/i;
 
 /* =========================
    FRESH POSTS ONLY
@@ -84,37 +108,44 @@ function isFresh(post) {
 }
 
 /* =========================
-   INTENT SCORING
-========================= */
-function scorePost(title, body) {
-  let score = 0;
-  if (buyerTitleRegex.test(title)) score += 3;
-  if (moneyRegex.test(title + " " + body)) score += 2;
-  if (devRegex.test(body)) score += 1;
-  return score;
-}
-
-/* =========================
    CLASSIFIER
 ========================= */
 function classify(post) {
   const title = (post.title || "").toLowerCase();
   const body = (post.selftext || "").toLowerCase();
-  const combined = title + " " + body;
+  const combined = `${title} ${body}`;
 
   if (title.length < 10) return null;
-  if (hardExcludeRegex.test(combined)) return null;
   if (sellerRegex.test(combined)) return null;
-  if (!buyerTitleRegex.test(title)) return null;
+  if (hardExcludeRegex.test(combined)) return null;
 
-  const intentScore = scorePost(title, body);
-  if (intentScore < 5) return null;
+  /* ---------- HIRING PIPELINE ---------- */
+  if (hiringRegex.test(title) && moneyRegex.test(combined)) {
+    return {
+      type: "HIRING",
+      trigger: "HIRING + MONEY"
+    };
+  }
 
-  const buyerMatch = title.match(buyerTitleRegex)?.[0];
-  const moneyMatch = combined.match(moneyRegex)?.[0];
-  const devMatch = combined.match(devRegex)?.[0];
+  /* ---------- PAIN PIPELINE ---------- */
+  const painMatch =
+    painRegex.test(combined) &&
+    painTechRegex.test(combined) &&
+    devContextRegex.test(combined);
 
-  return `${buyerMatch} + ${moneyMatch} + ${devMatch}`;
+  if (painMatch) {
+    const matched =
+      combined.match(painTechRegex)?.[0] ||
+      combined.match(painRegex)?.[0] ||
+      "pain";
+
+    return {
+      type: "PAIN",
+      trigger: matched
+    };
+  }
+
+  return null;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
@@ -123,7 +154,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ========================= */
 async function scrape() {
-  console.log("Starting BUYER-ONLY DEV scraper…");
+  console.log("Starting Client Magnet scraper (PAIN primary, HIRING secondary)…");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -142,8 +173,8 @@ async function scrape() {
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
 
-        const match = classify(p);
-        if (!match) continue;
+        const result = classify(p);
+        if (!result) continue;
 
         const url = `https://reddit.com${p.permalink}`;
         if (existingUrls.has(url)) continue;
@@ -154,8 +185,8 @@ async function scrape() {
           url,
           subreddit: sub,
           time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: "DEV-GIG",
-          matchedTrigger: match
+          leadType: result.type,
+          matchedTrigger: result.trigger
         };
 
         prependLead(leadsPath, row);
@@ -169,7 +200,7 @@ async function scrape() {
     }
   }
 
-  console.log(`Scrape complete — BUYER gigs found: ${leads}`);
+  console.log(`Scrape complete — leads found: ${leads}`);
 }
 
 /* =========================

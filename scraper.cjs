@@ -41,39 +41,32 @@ const subs = [
   // SaaS / founders
   "SaaS",
   "startups",
-  "Entrepreneur",
   "SideProject",
   "EntrepreneurRideAlong",
-  "smallbusiness",
 
   // Agencies / builders
   "agency",
-  "webdev",
   "automation",
   "nocode",
 
-  // Hiring (secondary)
-  "forhire",
-  "jobbit",
-
-   // local businesses
+  // Local practice owners
   "dentistry",
   "medicalpractice",
-  "healthcare",
   "privatepractice",
+  "healthcare",
   "smallbusiness",
-  "entrepreneur",
 
+  // Tool pain (high ROI)
   "stripe",
   "emailmarketing",
-  "CRM",
   "marketingautomation",
   "zapier",
-  "nocode"
 
-
-
+  // Hiring (secondary)
+  "forhire",
+  "jobbit"
 ];
+
 
 /* =========================
    PIPELINE A — HIRING (SECONDARY)

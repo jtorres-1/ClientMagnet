@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Outreach (PAIN primary, HIRING secondary)
+// agency_bot.cjs — ClientMagnet Outreach (CombatIQ - UFC Betting)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -102,55 +102,105 @@ function loadLeads() {
 }
 
 /* =========================
-   LEAD SCORING
+   LEAD SCORING (CombatIQ)
+   
+   Priority:
+   1. BETTING_PICKS (highest intent)
+   2. PREDICTION_SEEKING (medium intent)
+   3. Betting-specific subs get bonus
 ========================= */
 function scoreLead(p) {
   let score = 0;
   const title = (p.title || "").toLowerCase();
 
-  if (p.leadType === "PAIN") score += 5;
-  if (p.leadType === "HIRING") score += 3;
+  if (p.leadType === "BETTING_PICKS") score += 5;
+  if (p.leadType === "PREDICTION_SEEKING") score += 3;
 
-  if (title.includes("manual") || title.includes("automation")) score += 1;
-  if (title.includes("stripe") || title.includes("email")) score += 1;
-  if (p.subreddit === "forhire" || p.subreddit === "jobbit") score += 1;
+  // Betting sub bonus
+  if (p.subreddit === "MMAbetting" || p.subreddit === "sportsbook") score += 2;
+  
+  // High-intent keywords
+  if (title.includes("parlay") || title.includes("lock")) score += 1;
+  if (title.includes("picks") || title.includes("betting on")) score += 1;
 
   return score;
 }
 
 /* =========================
-   DM TEMPLATES
+   DM TEMPLATES (CombatIQ)
+   
+   STRATEGY:
+   - Casual, non-salesy tone
+   - Frame as "testing a tool" not "buy my product"
+   - Lead with results/value
+   - Always include link: https://combatiq.app
+   - Keep it short (3-4 lines max)
+   
+   VARIANTS:
+   - Template A: AI angle (for betting picks seekers)
+   - Template B: Data angle (for prediction seekers)
+   - Template C: Free tool angle (general)
 ========================= */
 function getTemplate(post) {
-  const trigger = post.matchedTrigger || "that";
+  const trigger = post.matchedTrigger || "picks";
+  const templates = [];
 
-  if (post.leadType === "PAIN") {
-    return {
-      subject: "Quick question",
-      text: `Hey u/${post.username},
+  if (post.leadType === "BETTING_PICKS") {
+    // Template A: AI-powered picks
+    templates.push({
+      subject: "Re: your picks post",
+      text: `Hey, saw your post in r/${post.subreddit}.
 
-Saw your post about ${trigger} in r/${post.subreddit}.
-Quick question — are you still dealing with that, or did you find a fix?
+I've been testing an AI tool that breaks down UFC fights with stat comparisons and confidence scores. It's been solid for filtering out bad bets.
 
-I’ve helped teams automate similar workflows before.
-Happy to share what usually works if it’s helpful.
+Free prediction daily if you want to try it: https://combatiq.app
 
-– Jesse`
-    };
+Not trying to sell anything, just sharing what's been working.`
+    });
+
+    // Template B: Results-focused
+    templates.push({
+      subject: "UFC prediction tool",
+      text: `Noticed you're looking for ${trigger} on r/${post.subreddit}.
+
+Been using this AI breakdown tool for UFC cards — pulls fighter stats, gives confidence scores, helps spot value.
+
+1 free prediction per day: https://combatiq.app
+
+Worth checking out if you're tired of guessing.`
+    });
   }
 
-  // HIRING fallback
-  return {
-    subject: "Quick dev help",
-    text: `Hey u/${post.username},
+  if (post.leadType === "PREDICTION_SEEKING") {
+    // Template C: Data/analysis angle
+    templates.push({
+      subject: "Fight breakdown",
+      text: `Saw your question on r/${post.subreddit}.
 
-Saw your post in r/${post.subreddit}.
-I’ve built similar systems and can help quickly.
+There's a tool I've been using that does AI-powered fight breakdowns with actual stats (reach, striking %, takedown defense, etc).
 
-If you want, share scope + timeline and I’ll confirm pricing.
+Gives you confidence scores so you're not just going off vibes: https://combatiq.app
 
-– Jesse`
-  };
+Free daily prediction if you want to test it out.`
+    });
+  }
+
+  // Fallback (should not hit, but safety)
+  if (templates.length === 0) {
+    templates.push({
+      subject: "UFC prediction tool",
+      text: `Hey, saw your post about UFC betting.
+
+Been using this AI tool for fight predictions — it's actually been helpful for spotting value bets.
+
+Free daily prediction: https://combatiq.app
+
+Not affiliated, just thought it might help.`
+    });
+  }
+
+  // Randomly pick template to avoid pattern detection
+  return templates[Math.floor(Math.random() * templates.length)];
 }
 
 /* =========================
@@ -254,7 +304,7 @@ async function runCycle() {
 (async () => {
   await initState();
   while (true) {
-    console.log("\n=== New DM cycle: ClientMagnet Outreach ===");
+    console.log("\n=== New DM cycle: CombatIQ Outreach ===");
     await runCycle();
     await sleep((12 + Math.floor(Math.random() * 8)) * 60 * 1000);
   }

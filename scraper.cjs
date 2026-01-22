@@ -35,69 +35,89 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   SUBREDDITS (HIGH ROI)
+   SUBREDDITS - UFC BETTING FOCUS
+   
+   PRIMARY TARGETS (high betting intent):
+   - MMA_Betting: Pure betting discussions
+   - MMAbetting: Alternative betting community
+   - sportsbook: Crossover betting community
+   - sportsbetting: General betting with UFC traffic
+   
+   SECONDARY TARGETS (pick-seeking behavior):
+   - ufc: Main sub, filter for betting posts only
+   - MMAPredictions: Prediction-focused
+   
+   AVOIDED:
+   - r/mma (too large, meme-heavy, mod-aggressive)
+   - Fighter-specific subs (low ROI)
+   - Highlight/news subs (no intent)
 ========================= */
 const subs = [
-  // SaaS / founders
-  "SaaS",
-  "startups",
-  "SideProject",
-  "EntrepreneurRideAlong",
+  // Primary betting subs (highest ROI)
+  "MMAbetting",
+  "sportsbook",
+  "sportsbetting",
 
-  // Agencies / builders
-  "agency",
-  "automation",
-  "nocode",
-
-  // Local practice owners
-  "dentistry",
-  "medicalpractice",
-  "privatepractice",
-  "healthcare",
-  "smallbusiness",
-
-  // Tool pain (high ROI)
-  "stripe",
-  "emailmarketing",
-  "marketingautomation",
-  "zapier",
-
-  // Hiring (secondary)
-  "forhire",
-  "jobbit"
+  // Prediction-seeking
+  "MMAPredictions",
+  
+  // Main UFC (betting posts only)
+  "ufc"
 ];
 
+/* =========================
+   PIPELINE A — BETTING PICKS (PRIMARY)
+   
+   High intent signals:
+   - Asking for picks/predictions
+   - Posting their own picks seeking validation
+   - Discussing odds/lines
+   - Parlay building
+   - Lock seeking behavior
+========================= */
+const bettingIntentRegex = /(who.*got|who.*like|who.*taking|what.*pick|any.*pick|prediction|parlay|lock|best bet|value bet|confident|putting.*on|betting.*on|odds|line|favorites|underdogs|sleeper pick|your.*pick)/i;
+
+const bettingTermsRegex = /(ufc|fight night|ppv|main card|prelims|main event|co-main|parlay|odds|line|spread|\+\d{3}|\-\d{3}|moneyline|prop|over\/under|ko\/tko|decision|submission|round|finish)/i;
 
 /* =========================
-   PIPELINE A — HIRING (SECONDARY)
+   PIPELINE B — PREDICTION SEEKING (SECONDARY)
+   
+   Users asking questions about specific fighters or matchups
 ========================= */
-const hiringRegex = /(hiring|looking for|need a developer|developer needed|seeking developer|need someone to build|who can build)/i;
-const moneyRegex = /(paid|budget|rate|paying|compensation|usd|\$)/i;
+const predictionSeekingRegex = /(who wins|who takes it|thoughts on|break.*down|analyze|how do you see|what do you think|confident in|worth.*bet|value in|should i|betting on)/i;
 
 /* =========================
-   PIPELINE B — PAIN (PRIMARY)
+   CONTEXT VALIDATION
+   
+   Ensure it's about UFC/MMA, not other sports
 ========================= */
-const painRegex = /(how do i|is there a way|still doing|manually|any tool for|struggling with|pain point|workflow issue|not scaling|takes too long|inefficient|error|not working)/i;
-
-const painTechRegex = /(stripe|email|emails|automation|backend|auth|login|csv|spreadsheet|google sheets|database|supabase|webhook|crm|follow[- ]?up|onboarding|subscription)/i;
-
-/* =========================
-   DEV / BUSINESS CONTEXT
-========================= */
-const devContextRegex = /(app|software|saas|client|customer|users|business|company|agency|startup|store|practice|clinic|office)/i;
+const ufcContextRegex = /(ufc|mma|fight|fighter|cage|octagon|dana|contender series|bellator|pfl)/i;
 
 /* =========================
    HARD BLOCKS
+   
+   Exclude:
+   - Memes and highlights
+   - News/journalism
+   - Drama/gossip
+   - Technique discussion (no betting intent)
+   - Sellers/touts
 ========================= */
-const sellerRegex = /(i am a developer|hire me|my services|portfolio|available for work|\[offer\])/i;
-const hardExcludeRegex = /(vtuber|minecraft|roblox|gaming|youtube channel|logo design|graphic design|instagram growth|social media growth)/i;
+const memeRegex = /(🔥|💀|😂|lmao|lmfao|bruh|💯|🐐)/;
+const highlightRegex = /(highlight|clip|knockout|finish|submission)(?!.*bet)/i;
+const newsRegex = /(breaking|report|confirm|announce|sign|contract|interview|press conference)(?!.*(bet|pick|odds))/i;
+const dramaRegex = /(beef|trash talk|callout|twitter|instagram|drama)/i;
+const techniqueRegex = /(technique|training|coaching|gym|sparring|how to)/i;
+const sellerRegex = /(i sell|dm me|telegram|discord.*picks|join.*group|pay.*access|subscription|vip picks|guaranteed|units|roi|\d+\-\d+ record)/i;
 
 /* =========================
    FRESH POSTS ONLY
+   
+   48 hours for betting (faster cycle than dev leads)
 ========================= */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 72;
+  return ageHours <= 48;
 }
 
 /* =========================
@@ -108,32 +128,49 @@ function classify(post) {
   const body = (post.selftext || "").toLowerCase();
   const combined = `${title} ${body}`;
 
-  if (title.length < 10) return null;
+  // Minimum quality
+  if (title.length < 15) return null;
+  
+  // Hard blocks
   if (sellerRegex.test(combined)) return null;
-  if (hardExcludeRegex.test(combined)) return null;
+  if (memeRegex.test(title)) return null;
+  if (highlightRegex.test(title)) return null;
+  if (newsRegex.test(title)) return null;
+  if (dramaRegex.test(combined)) return null;
+  if (techniqueRegex.test(combined)) return null;
 
-  /* ---------- HIRING PIPELINE ---------- */
-  if (hiringRegex.test(title) && moneyRegex.test(combined)) {
+  // Must be UFC/MMA related
+  if (!ufcContextRegex.test(combined)) return null;
+
+  /* ---------- BETTING PICKS PIPELINE ---------- */
+  const isBettingIntent = 
+    bettingIntentRegex.test(combined) && 
+    bettingTermsRegex.test(combined);
+
+  if (isBettingIntent) {
+    const matched = 
+      combined.match(bettingIntentRegex)?.[0] ||
+      combined.match(bettingTermsRegex)?.[0] ||
+      "betting";
+
     return {
-      type: "HIRING",
-      trigger: "HIRING + MONEY"
+      type: "BETTING_PICKS",
+      trigger: matched
     };
   }
 
-  /* ---------- PAIN PIPELINE ---------- */
-  const painMatch =
-    painRegex.test(combined) &&
-    painTechRegex.test(combined) &&
-    devContextRegex.test(combined);
+  /* ---------- PREDICTION SEEKING PIPELINE ---------- */
+  const isPredictionSeeking =
+    predictionSeekingRegex.test(combined) &&
+    ufcContextRegex.test(combined);
 
-  if (painMatch) {
+  if (isPredictionSeeking) {
     const matched =
-      combined.match(painTechRegex)?.[0] ||
-      combined.match(painRegex)?.[0] ||
-      "pain";
+      combined.match(predictionSeekingRegex)?.[0] ||
+      "prediction";
 
     return {
-      type: "PAIN",
+      type: "PREDICTION_SEEKING",
       trigger: matched
     };
   }
@@ -147,7 +184,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ========================= */
 async function scrape() {
-  console.log("Starting Client Magnet scraper (PAIN primary, HIRING secondary)…");
+  console.log("Starting Client Magnet scraper (CombatIQ - UFC Betting Focus)…");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")

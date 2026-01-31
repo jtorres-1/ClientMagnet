@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Outreach (CombatIQ - UFC Betting)
+// agency_bot.cjs — ClientMagnet Outreach (Automation Services - Freelance)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -28,6 +28,18 @@ const sentPath = path.join(baseDir, "clean_leads_dmed.csv");
 const sentStatePath = path.join(baseDir, "clean_leads_sentState.json");
 
 /* =========================
+   RATE LIMITING CONFIG
+   
+   No daily limit - just speed control:
+   - 5-10 min delays between DMs (Reddit-safe)
+   - Max ~8-12 DMs per cycle
+   - Continuous cycles with breaks
+========================= */
+const MAX_DMS_PER_CYCLE = 12;
+const MIN_DELAY_MS = 5 * 60 * 1000;  // 5 minutes
+const MAX_DELAY_MS = 10 * 60 * 1000; // 10 minutes
+
+/* =========================
    MEMORY
 ========================= */
 let sentUrlSet = new Set();
@@ -45,7 +57,9 @@ const sentWriter = createObjectCsvWriter({
     { id: "url", title: "Post URL" },
     { id: "subreddit", title: "Subreddit" },
     { id: "leadType", title: "Lead Type" },
-    { id: "time", title: "Timestamp" },
+    { id: "matchedTrigger", title: "Matched Trigger" },
+    { id: "templateUsed", title: "Template Used" },
+    { id: "dmSentTime", title: "DM Sent Time" },
     { id: "status", title: "Status" }
   ],
   append: true
@@ -102,105 +116,94 @@ function loadLeads() {
 }
 
 /* =========================
-   LEAD SCORING (CombatIQ)
+   LEAD SCORING (AUTOMATION SERVICES)
    
    Priority:
-   1. BETTING_PICKS (highest intent)
-   2. PREDICTION_SEEKING (medium intent)
-   3. Betting-specific subs get bonus
+   1. TOOL_SEEKING (highest intent - actively looking for automation)
+   2. AUTOMATION_PAIN (medium-high intent - complaining about manual work)
+   3. WORKFLOW_PAIN (medium intent - general efficiency seeking)
 ========================= */
 function scoreLead(p) {
   let score = 0;
   const title = (p.title || "").toLowerCase();
+  const trigger = (p.matchedTrigger || "").toLowerCase();
 
-  if (p.leadType === "BETTING_PICKS") score += 5;
-  if (p.leadType === "PREDICTION_SEEKING") score += 3;
+  // Lead type scoring
+  if (p.leadType === "TOOL_SEEKING") score += 5;
+  if (p.leadType === "AUTOMATION_PAIN") score += 4;
+  if (p.leadType === "WORKFLOW_PAIN") score += 2;
 
-  // Betting sub bonus
-  if (p.subreddit === "MMAbetting" || p.subreddit === "sportsbook") score += 2;
+  // Subreddit bonus (business-focused subs)
+  if (["ecommerce", "shopify", "SaaS"].includes(p.subreddit)) score += 2;
+  if (["Entrepreneur", "startups"].includes(p.subreddit)) score += 1;
   
-  // High-intent keywords
-  if (title.includes("parlay") || title.includes("lock")) score += 1;
-  if (title.includes("picks") || title.includes("betting on")) score += 1;
+  // High-intent keyword bonus
+  if (trigger.includes("scraper") || trigger.includes("bot")) score += 2;
+  if (trigger.includes("automate")) score += 1;
+  if (trigger.includes("manual data entry") || trigger.includes("excel hell")) score += 1;
 
   return score;
 }
 
 /* =========================
-   DM TEMPLATES (CombatIQ)
+   DM TEMPLATES (AUTOMATION SERVICES)
    
    STRATEGY:
-   - Casual, non-salesy tone
-   - Frame as "testing a tool" not "buy my product"
-   - Lead with results/value
-   - Always include link: https://combatiq.app
-   - Keep it short (3-4 lines max)
+   - Direct, no-BS approach
+   - Lead with results/time savings
+   - Clear pricing ($750 fixed, 50% upfront)
+   - Yes/no close (low friction)
+   - Rotate 3 templates to avoid spam detection
    
-   VARIANTS:
-   - Template A: AI angle (for betting picks seekers)
-   - Template B: Data angle (for prediction seekers)
-   - Template C: Free tool angle (general)
+   TEMPLATES:
+   1. Time-saving angle (for automation pain)
+   2. Quick fix angle (for tool seekers)
+   3. Experience angle (general)
 ========================= */
 function getTemplate(post) {
-  const trigger = post.matchedTrigger || "picks";
+  const trigger = post.matchedTrigger || "manual task";
   const templates = [];
 
-  if (post.leadType === "BETTING_PICKS") {
-    // Template A: AI-powered picks
-    templates.push({
-      subject: "Re: your picks post",
-      text: `Hey, saw your post in r/${post.subreddit}.
+  // Template 1: Time-saving angle (best for AUTOMATION_PAIN)
+  templates.push({
+    id: "TEMPLATE_1",
+    subject: `Re: ${trigger}`,
+    text: `Hey, saw your post about ${trigger}.
 
-I've been testing an AI tool that breaks down UFC fights with stat comparisons and confidence scores. It's been solid for filtering out bad bets.
+I build custom bots/scrapers to automate that — saved a client 10+ hrs/week on similar manual work.
 
-Free prediction daily if you want to try it: https://combatiq.app
+$750 fixed, 50% upfront. Interested? Yes/no`
+  });
 
-Not trying to sell anything, just sharing what's been working.`
-    });
+  // Template 2: Quick fix angle (best for TOOL_SEEKING)
+  templates.push({
+    id: "TEMPLATE_2",
+    subject: "Quick automation fix",
+    text: `Quick: I can fix the ${trigger} you mentioned with automation.
 
-    // Template B: Results-focused
-    templates.push({
-      subject: "UFC prediction tool",
-      text: `Noticed you're looking for ${trigger} on r/${post.subreddit}.
+Custom scraper/bot, $750–$1,200, start this week. Yes/no?`
+  });
 
-Been using this AI breakdown tool for UFC cards — pulls fighter stats, gives confidence scores, helps spot value.
+  // Template 3: Experience angle (general)
+  templates.push({
+    id: "TEMPLATE_3",
+    subject: "Automation solution",
+    text: `I automate ${trigger} daily for clients.
 
-1 free prediction per day: https://combatiq.app
+Built similar bots — $750 fixed. DM if serious.`
+  });
 
-Worth checking out if you're tired of guessing.`
-    });
+  // Rotate based on lead type for optimal matching
+  if (post.leadType === "TOOL_SEEKING") {
+    // Prefer template 2 for tool seekers
+    return Math.random() < 0.5 ? templates[1] : templates[0];
+  } else if (post.leadType === "AUTOMATION_PAIN") {
+    // Prefer template 1 for pain complainers
+    return Math.random() < 0.5 ? templates[0] : templates[2];
+  } else {
+    // Random for workflow pain
+    return templates[Math.floor(Math.random() * templates.length)];
   }
-
-  if (post.leadType === "PREDICTION_SEEKING") {
-    // Template C: Data/analysis angle
-    templates.push({
-      subject: "Fight breakdown",
-      text: `Saw your question on r/${post.subreddit}.
-
-There's a tool I've been using that does AI-powered fight breakdowns with actual stats (reach, striking %, takedown defense, etc).
-
-Gives you confidence scores so you're not just going off vibes: https://combatiq.app
-
-Free daily prediction if you want to test it out.`
-    });
-  }
-
-  // Fallback (should not hit, but safety)
-  if (templates.length === 0) {
-    templates.push({
-      subject: "UFC prediction tool",
-      text: `Hey, saw your post about UFC betting.
-
-Been using this AI tool for fight predictions — it's actually been helpful for spotting value bets.
-
-Free daily prediction: https://combatiq.app
-
-Not affiliated, just thought it might help.`
-    });
-  }
-
-  // Randomly pick template to avoid pattern detection
-  return templates[Math.floor(Math.random() * templates.length)];
 }
 
 /* =========================
@@ -224,6 +227,7 @@ async function runCycle() {
     return;
   }
 
+  // Filter and sort leads
   leads = leads
     .filter(l => l.username && l.url && l.leadType)
     .sort((a, b) => scoreLead(b) - scoreLead(a));
@@ -232,18 +236,21 @@ async function runCycle() {
 
   let attempted = 0;
   let confirmed = 0;
-  const MAX = 8;
 
   const cycleUsers = new Set();
   const cycleUrls = new Set();
 
   for (const post of leads) {
-    if (attempted >= MAX) break;
+    if (attempted >= MAX_DMS_PER_CYCLE) {
+      console.log(`Reached cycle limit (${MAX_DMS_PER_CYCLE}). Moving to next cycle.`);
+      break;
+    }
 
     const rawUser = post.username.trim();
     const username = rawUser.toLowerCase();
     const url = post.url.trim();
 
+    // Skip if already contacted
     if (
       sentUserSet.has(username) ||
       sentUrlSet.has(url) ||
@@ -255,6 +262,7 @@ async function runCycle() {
 
     try {
       const tpl = getTemplate(post);
+      const dmSentTime = new Date().toISOString();
 
       await reddit.composeMessage({
         to: rawUser,
@@ -263,38 +271,56 @@ async function runCycle() {
       });
 
       confirmed++;
-      console.log(`Sent ${post.leadType} DM → u/${rawUser}`);
+      console.log(`\n✓ DM sent to u/${rawUser}`);
+      console.log(`  Lead Type: ${post.leadType}`);
+      console.log(`  Keyword: "${post.matchedTrigger}"`);
+      console.log(`  Template: ${tpl.id}`);
+      console.log(`  Post URL: ${url}`);
+      console.log(`  Time: ${dmSentTime}`);
 
+      // Update state
       sentUserSet.add(username);
       sentUrlSet.add(url);
       cycleUsers.add(username);
       cycleUrls.add(url);
 
+      // Log to CSV
       await sentWriter.writeRecords([{
         username: rawUser,
         title: post.title,
         url,
         subreddit: post.subreddit,
         leadType: post.leadType,
-        time: post.time || new Date().toISOString(),
+        matchedTrigger: post.matchedTrigger,
+        templateUsed: tpl.id,
+        dmSentTime: dmSentTime,
         status: "OUTREACH"
       }]);
 
       saveJsonState();
 
+      // Random delay between 5-10 minutes
+      const delayMs = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
+      const delayMins = Math.round(delayMs / 60000);
+      
+      if (attempted < MAX_DMS_PER_CYCLE) {
+        console.log(`  Waiting ${delayMins} minutes before next DM...`);
+        await sleep(delayMs);
+      }
+
     } catch (err) {
-      console.log(`Failed DM to u/${rawUser}: ${err.message}`);
-      if (err.message.includes("NOT_WHITELISTED")) {
+      console.log(`✗ Failed DM to u/${rawUser}: ${err.message}`);
+      
+      // If user doesn't accept DMs, mark as contacted to skip in future
+      if (err.message.includes("NOT_WHITELISTED") || err.message.includes("USER_DOESNT_EXIST")) {
         sentUserSet.add(username);
         saveJsonState();
       }
     }
-
-    await sleep(25 * 1000 + Math.random() * 20 * 1000);
   }
 
   console.log(
-    `Cycle complete — attempted ${attempted}, confirmed ${confirmed}`
+    `\nCycle complete — attempted ${attempted}, confirmed ${confirmed}`
   );
 }
 
@@ -303,9 +329,22 @@ async function runCycle() {
 ========================= */
 (async () => {
   await initState();
+  
+  console.log("=".repeat(60));
+  console.log("ClientMagnet Bot - Automation Services Outreach");
+  console.log("=".repeat(60));
+  console.log(`Max DMs per cycle: ${MAX_DMS_PER_CYCLE}`);
+  console.log(`Delay between DMs: ${MIN_DELAY_MS/60000}-${MAX_DELAY_MS/60000} minutes`);
+  console.log("No daily limit - runs continuously");
+  console.log("=".repeat(60));
+  
   while (true) {
-    console.log("\n=== New DM cycle: CombatIQ Outreach ===");
+    console.log(`\n[${ new Date().toLocaleString()}] Starting new DM cycle...`);
     await runCycle();
-    await sleep((12 + Math.floor(Math.random() * 8)) * 60 * 1000);
+    
+    // Wait 12-20 minutes between cycles
+    const cycleDelay = (12 + Math.floor(Math.random() * 8)) * 60 * 1000;
+    console.log(`Waiting ${Math.round(cycleDelay/60000)} minutes until next cycle...`);
+    await sleep(cycleDelay);
   }
 })();

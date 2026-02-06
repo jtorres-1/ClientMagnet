@@ -218,11 +218,13 @@ async function scrape() {
 }
 
 /* =========================
-   RUN LOOP
+   RUN LOOP - AGGRESSIVE MODE
+   
+   Scans every 30 minutes to maintain steady lead flow
 ========================= */
 (async () => {
   while (true) {
     await scrape();
-    await wait(45 * 60 * 1000); // Run every 45 minutes
+    await wait(30 * 60 * 1000); // Run every 30 minutes
   }
 })();

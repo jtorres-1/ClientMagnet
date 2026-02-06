@@ -35,71 +35,64 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   SUBREDDITS - HVAC & BLUE COLLAR CONTRACTORS ONLY
+   SUBREDDITS - HVAC & BLUE COLLAR CONTRACTORS
 ========================= */
 const subs = [
   "HVAC",
-  "HVACR",
   "contractors",
   "Construction",
   "Trades",
   "Handyman",
-  "smallbusiness"
+  "smallbusiness",
+  "Plumbing",
+  "electricians"
 ];
 
 /* =========================
-   PRIMARY REQUIRED KEYWORDS
+   PRIMARY KEYWORDS (LOOSER)
    
-   At least ONE must be present or SKIP entirely
+   Broadened to catch more contractor types
 ========================= */
-const primaryKeywordRegex = /\b(hvac|hvacr|heating|cooling|air conditioning|ac repair|furnace|contractor|trades business|service company|home services)\b/i;
+const primaryKeywordRegex = /\b(hvac|heating|cooling|air conditioning|a\/c|ac|furnace|contractor|contracting|trades|trade business|service business|service company|home service|plumb|electric|handyman|construction|remodel|renovation)\b/i;
 
 /* =========================
-   PAIN SIGNAL FILTERS
+   PAIN SIGNALS (EXPANDED)
    
-   At least ONE pain signal must be present alongside primary keyword
+   More variety to catch different ways people express pain
 ========================= */
-const painSignalRegex = /\b(leads?|calls?|scheduling|booking|dispatcher|missed calls?|marketing|growth|slow season|automation|answering phones?|customer intake|not enough work|need more clients?|phone system|lead gen|getting customers?|finding work|growing business|scale|overwhelmed|too busy|can't keep up|falling behind|booked out|wait time)\b/i;
+const painSignalRegex = /\b(lead|leads|call|calls|phone|schedule|scheduling|book|booking|appointments?|dispatcher|dispatch|miss|missed|marketing|advertis|seo|google|facebook|website|growth|grow|scale|scaling|busy|slow|season|dead|quiet|automat|software|crm|tool|app|answer|intake|customers?|clients?|jobs?|work|projects?|business|revenue|sales|profit|money|income|struggling|difficult|hard|challenge|problem|issue|help|advice|recommend|suggest|better way|improve|streamline|efficien|time|hours|waste|overwhelm|stress|burnout)\b/i;
 
 /* =========================
-   OWNER IDENTIFICATION SIGNALS
+   BUSINESS OWNER SIGNALS (OPTIONAL BOOST)
    
-   Prefer users who speak like business owners
+   If present, scores higher, but not required
 ========================= */
-const ownerSignalRegex = /\b(my business|my company|my shop|my crew|my team|my employees?|my techs?|my customers?|my clients?|hired|firing|payroll|we do|we handle|we service|i run|i own|i operate|our business|our company|running a|owning a|started my)\b/i;
+const ownerSignalRegex = /\b(my business|my company|my shop|my crew|my team|my employees?|my techs?|my customers?|my clients?|we do|we service|we install|we repair|i run|i own|i operate|i started|our business|our company)\b/i;
 
 /* =========================
-   HARD BLOCKS - EXCLUDE THESE
-   
-   Students, job seekers, technicians asking career advice, vendors
+   HARD BLOCKS - SKIP THESE
 ========================= */
-const studentRegex = /\b(student|studying|in school|hvac school|trade school|apprentice looking|how do i become|getting into hvac|starting out|first year|looking for a job|need a job|anyone hiring)\b/i;
+const studentRegex = /\b(student|studying|in school|trade school|apprentice program|how do i become|getting into|career change to|thinking about becoming)\b/i;
 
-const jobSeekerRegex = /\b(resume|cv|looking for work|need a job|job hunting|where to apply|hiring\?|anyone need|tech position|service tech opening|entry level|junior tech)\b/i;
+const jobSeekerRegex = /\b(resume|cv|looking for work|need a job|job hunt|where to apply|anyone hiring|apply|application)\b/i;
 
-const vendorRegex = /\b(i sell|we sell|our product|our software|our service|check out our|try our|we offer|book a demo|free trial|sign up|partner with us|affiliate|commission)\b/i;
-
-const careerAdviceRegex = /\b(should i become|worth it to|is hvac a good|thinking about switching|career change|leave my job|better career|advice on becoming|get into the trade)\b/i;
+const vendorRegex = /\b(we sell|our product|our software|check out our|try our|book a demo|free trial|discount code|affiliate)\b/i;
 
 /* =========================
-   CONTEXT VALIDATION
+   FRESH POSTS - 72 HOURS
    
-   Must be discussing business operations, not personal home issues
-========================= */
-const businessContextRegex = /\b(business|company|shop|customers?|clients?|jobs?|service calls?|techs?|technicians?|employees?|crew|team|invoices?|estimates?|bids?|contracts?|revenue|profit|overhead|marketing|advertising|website|scheduling|dispatch|calls?|leads?|bookings?)\b/i;
-
-const personalHomeRegex = /\b(my house|my home|my apartment|my condo|my unit|landlord|tenant|renting|homeowner|diy|doing it myself)\b/i;
-
-/* =========================
-   FRESH POSTS ONLY - 48 HOURS
+   Extended from 48 to catch more
 ========================= */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 48;
+  return ageHours <= 72;
 }
 
 /* =========================
-   CLASSIFIER - STRICT FILTERING
+   CLASSIFIER - BALANCED FILTERING
+   
+   CHANGED: Only requires primary keyword + pain signal
+   Business context is IMPLIED if both exist
 ========================= */
 function classify(post) {
   const title = (post.title || "").toLowerCase();
@@ -109,40 +102,29 @@ function classify(post) {
   // Minimum quality
   if (title.length < 10) return null;
   
-  /* ========== RULE 1: PRIMARY KEYWORD REQUIRED ========== */
-  if (!primaryKeywordRegex.test(combined)) {
-    return null; // SKIP - no primary keyword
-  }
-
-  /* ========== HARD BLOCKS ========== */
+  /* ========== HARD BLOCKS FIRST ========== */
   if (studentRegex.test(combined)) return null;
   if (jobSeekerRegex.test(combined)) return null;
   if (vendorRegex.test(combined)) return null;
-  if (careerAdviceRegex.test(combined)) return null;
   
-  // Block personal home issues
-  if (personalHomeRegex.test(combined) && !businessContextRegex.test(combined)) {
-    return null;
+  /* ========== RULE 1: PRIMARY KEYWORD REQUIRED ========== */
+  if (!primaryKeywordRegex.test(combined)) {
+    return null; // SKIP - not contractor/HVAC related
   }
 
   /* ========== RULE 2: PAIN SIGNAL REQUIRED ========== */
   const hasPainSignal = painSignalRegex.test(combined);
   
   if (!hasPainSignal) {
-    return null; // SKIP - has HVAC mention but no business pain
-  }
-
-  /* ========== RULE 3: BUSINESS CONTEXT REQUIRED ========== */
-  if (!businessContextRegex.test(combined)) {
-    return null; // SKIP - not clearly business-related
+    return null; // SKIP - no business pain mentioned
   }
 
   /* ========== CLASSIFICATION ========== */
   
-  // Extract matched pain signal for context
-  const painMatch = combined.match(painSignalRegex)?.[0] || "business pain";
+  // Extract matched pain signal
+  const painMatch = combined.match(painSignalRegex)?.[0] || "business challenge";
   
-  // Check if they're clearly an owner
+  // Check if they're clearly an owner (bonus, not required)
   const hasOwnerSignal = ownerSignalRegex.test(combined);
   
   if (hasOwnerSignal) {
@@ -152,9 +134,9 @@ function classify(post) {
     };
   }
   
-  // Could be owner but less certain - still worth messaging if pain is clear
+  // Default: likely relevant even without explicit owner signals
   return {
-    type: "LIKELY_OWNER",
+    type: "CONTRACTOR_PAIN",
     trigger: painMatch
   };
 }
@@ -219,8 +201,6 @@ async function scrape() {
 
 /* =========================
    RUN LOOP - AGGRESSIVE MODE
-   
-   Scans every 30 minutes to maintain steady lead flow
 ========================= */
 (async () => {
   while (true) {

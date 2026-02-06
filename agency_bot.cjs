@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Outreach (Automation Services - Freelance)
+// agency_bot.cjs — ClientMagnet Outreach (HVAC & Blue Collar Contractors)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -30,14 +30,18 @@ const sentStatePath = path.join(baseDir, "clean_leads_sentState.json");
 /* =========================
    RATE LIMITING CONFIG
    
-   No daily limit - just speed control:
-   - 5-10 min delays between DMs (Reddit-safe)
-   - Max ~8-12 DMs per cycle
-   - Continuous cycles with breaks
+   AGGRESSIVE MODE - High volume while staying under Reddit limits:
+   - Reddit API limit: 60 requests/minute, 1/second
+   - Safe DM rate: 3-5 min delays (well under limits)
+   - 15-25 DMs per cycle
+   - Shorter cycle delays for maximum daily throughput
+   
+   Daily capacity: ~150-200 DMs/day
 ========================= */
-const MAX_DMS_PER_CYCLE = 12;
-const MIN_DELAY_MS = 5 * 60 * 1000;  // 5 minutes
-const MAX_DELAY_MS = 10 * 60 * 1000; // 10 minutes
+const MIN_DMS_PER_CYCLE = 15;
+const MAX_DMS_PER_CYCLE = 25;
+const MIN_DELAY_MS = 3 * 60 * 1000;   // 3 minutes
+const MAX_DELAY_MS = 5 * 60 * 1000;   // 5 minutes
 
 /* =========================
    MEMORY
@@ -116,12 +120,11 @@ function loadLeads() {
 }
 
 /* =========================
-   LEAD SCORING (AUTOMATION SERVICES)
+   LEAD SCORING (HVAC/CONTRACTOR FOCUS)
    
    Priority:
-   1. TOOL_SEEKING (highest intent - actively looking for automation)
-   2. AUTOMATION_PAIN (medium-high intent - complaining about manual work)
-   3. WORKFLOW_PAIN (medium intent - general efficiency seeking)
+   1. OWNER_WITH_PAIN (highest - confirmed owner with clear pain)
+   2. LIKELY_OWNER (medium - probable owner with pain signal)
 ========================= */
 function scoreLead(p) {
   let score = 0;
@@ -129,81 +132,76 @@ function scoreLead(p) {
   const trigger = (p.matchedTrigger || "").toLowerCase();
 
   // Lead type scoring
-  if (p.leadType === "TOOL_SEEKING") score += 5;
-  if (p.leadType === "AUTOMATION_PAIN") score += 4;
-  if (p.leadType === "WORKFLOW_PAIN") score += 2;
+  if (p.leadType === "OWNER_WITH_PAIN") score += 5;
+  if (p.leadType === "LIKELY_OWNER") score += 3;
 
-  // Subreddit bonus (business-focused subs)
-  if (["ecommerce", "shopify", "SaaS"].includes(p.subreddit)) score += 2;
-  if (["Entrepreneur", "startups"].includes(p.subreddit)) score += 1;
+  // High-intent pain signals
+  if (trigger.includes("leads") || trigger.includes("lead gen")) score += 3;
+  if (trigger.includes("calls") || trigger.includes("missed calls")) score += 3;
+  if (trigger.includes("scheduling") || trigger.includes("booking")) score += 2;
+  if (trigger.includes("slow season") || trigger.includes("growth")) score += 2;
+  if (trigger.includes("answering phones")) score += 2;
   
-  // High-intent keyword bonus
-  if (trigger.includes("scraper") || trigger.includes("bot")) score += 2;
-  if (trigger.includes("automate")) score += 1;
-  if (trigger.includes("manual data entry") || trigger.includes("excel hell")) score += 1;
-
+  // HVAC-specific bonus (core niche)
+  if (["HVAC", "HVACR"].includes(p.subreddit)) score += 2;
+  
   return score;
 }
 
 /* =========================
-   DM TEMPLATES (AUTOMATION SERVICES)
+   DM TEMPLATES (HVAC/CONTRACTOR OUTREACH)
    
    STRATEGY:
-   - Direct, no-BS approach
-   - Lead with results/time savings
-   - Clear pricing ($750 fixed, 50% upfront)
-   - Yes/no close (low friction)
-   - Rotate 3 templates to avoid spam detection
+   - Human, conversational tone
+   - Short (3 sentences max)
+   - Curious, not salesy
+   - Reference their specific pain
+   - Soft question close
+   - No pricing, no links, no automation mentions
    
-   TEMPLATES:
-   1. Time-saving angle (for automation pain)
-   2. Quick fix angle (for tool seekers)
-   3. Experience angle (general)
+   ROTATION: 5 templates to avoid spam patterns
 ========================= */
 function getTemplate(post) {
-  const trigger = post.matchedTrigger || "manual task";
+  const trigger = post.matchedTrigger || "business challenge";
   const templates = [];
 
-  // Template 1: Time-saving angle (best for AUTOMATION_PAIN)
+  // Template 1: Empathy + Solution Hint
   templates.push({
     id: "TEMPLATE_1",
     subject: `Re: ${trigger}`,
-    text: `Hey, saw your post about ${trigger}.
-
-I build custom bots/scrapers to automate that — saved a client 10+ hrs/week on similar manual work.
-
-$750 fixed, 50% upfront. Interested? Yes/no`
+    text: `Hey, saw your post about ${trigger}. I've been helping contractors automate booking and missed call capture without hiring more staff. Open to a quick convo if that's useful?`
   });
 
-  // Template 2: Quick fix angle (best for TOOL_SEEKING)
+  // Template 2: Direct Problem-Solver
   templates.push({
     id: "TEMPLATE_2",
-    subject: "Quick automation fix",
-    text: `Quick: I can fix the ${trigger} you mentioned with automation.
-
-Custom scraper/bot, $750–$1,200, start this week. Yes/no?`
+    subject: "Quick question",
+    text: `Saw your post on ${trigger}. I work with HVAC guys on this exact issue—turning missed calls into booked jobs. Worth a chat?`
   });
 
-  // Template 3: Experience angle (general)
+  // Template 3: Case Study Approach
   templates.push({
     id: "TEMPLATE_3",
-    subject: "Automation solution",
-    text: `I automate ${trigger} daily for clients.
-
-Built similar bots — $750 fixed. DM if serious.`
+    subject: "Might be helpful",
+    text: `Hey, noticed you mentioned ${trigger}. Just helped an AC company capture 80% more inbound calls without adding staff. Happy to share what worked if it's relevant.`
   });
 
-  // Rotate based on lead type for optimal matching
-  if (post.leadType === "TOOL_SEEKING") {
-    // Prefer template 2 for tool seekers
-    return Math.random() < 0.5 ? templates[1] : templates[0];
-  } else if (post.leadType === "AUTOMATION_PAIN") {
-    // Prefer template 1 for pain complainers
-    return Math.random() < 0.5 ? templates[0] : templates[2];
-  } else {
-    // Random for workflow pain
-    return templates[Math.floor(Math.random() * templates.length)];
-  }
+  // Template 4: Curiosity Angle
+  templates.push({
+    id: "TEMPLATE_4",
+    subject: "Following up",
+    text: `Saw your comment about ${trigger}. Curious—are you handling scheduling in-house or using something? I've got a setup that could help.`
+  });
+
+  // Template 5: Peer Approach
+  templates.push({
+    id: "TEMPLATE_5",
+    subject: "Same boat",
+    text: `Your post on ${trigger} hit home. Most contractors I work with lose 30-40% of calls to voicemail. Fixed this for a few shops if you want to compare notes.`
+  });
+
+  // Randomize to avoid patterns
+  return templates[Math.floor(Math.random() * templates.length)];
 }
 
 /* =========================
@@ -227,13 +225,16 @@ async function runCycle() {
     return;
   }
 
-  // Filter and sort leads
+  // Filter and sort leads by score
   leads = leads
     .filter(l => l.username && l.url && l.leadType)
     .sort((a, b) => scoreLead(b) - scoreLead(a));
 
   console.log(`Loaded ${leads.length} leads.`);
 
+  // Randomize DM count per cycle (6-10)
+  const targetDMs = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
+  
   let attempted = 0;
   let confirmed = 0;
 
@@ -241,8 +242,8 @@ async function runCycle() {
   const cycleUrls = new Set();
 
   for (const post of leads) {
-    if (attempted >= MAX_DMS_PER_CYCLE) {
-      console.log(`Reached cycle limit (${MAX_DMS_PER_CYCLE}). Moving to next cycle.`);
+    if (attempted >= targetDMs) {
+      console.log(`Reached cycle target (${targetDMs} DMs). Moving to next cycle.`);
       break;
     }
 
@@ -273,7 +274,7 @@ async function runCycle() {
       confirmed++;
       console.log(`\n✓ DM sent to u/${rawUser}`);
       console.log(`  Lead Type: ${post.leadType}`);
-      console.log(`  Keyword: "${post.matchedTrigger}"`);
+      console.log(`  Pain Signal: "${post.matchedTrigger}"`);
       console.log(`  Template: ${tpl.id}`);
       console.log(`  Post URL: ${url}`);
       console.log(`  Time: ${dmSentTime}`);
@@ -299,11 +300,11 @@ async function runCycle() {
 
       saveJsonState();
 
-      // Random delay between 5-10 minutes
+      // Random delay between 6-12 minutes
       const delayMs = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
       const delayMins = Math.round(delayMs / 60000);
       
-      if (attempted < MAX_DMS_PER_CYCLE) {
+      if (attempted < targetDMs) {
         console.log(`  Waiting ${delayMins} minutes before next DM...`);
         await sleep(delayMs);
       }
@@ -331,19 +332,21 @@ async function runCycle() {
   await initState();
   
   console.log("=".repeat(60));
-  console.log("ClientMagnet Bot - Automation Services Outreach");
+  console.log("ClientMagnet Bot - HVAC & Blue Collar Contractor Outreach");
+  console.log("AGGRESSIVE MODE - High Volume");
   console.log("=".repeat(60));
-  console.log(`Max DMs per cycle: ${MAX_DMS_PER_CYCLE}`);
+  console.log(`DMs per cycle: ${MIN_DMS_PER_CYCLE}-${MAX_DMS_PER_CYCLE} (randomized)`);
   console.log(`Delay between DMs: ${MIN_DELAY_MS/60000}-${MAX_DELAY_MS/60000} minutes`);
-  console.log("No daily limit - runs continuously");
+  console.log(`Cycle delay: 8-12 minutes`);
+  console.log(`Daily capacity: ~150-200 DMs (Reddit-safe limits)`);
   console.log("=".repeat(60));
   
   while (true) {
-    console.log(`\n[${ new Date().toLocaleString()}] Starting new DM cycle...`);
+    console.log(`\n[${new Date().toLocaleString()}] Starting new DM cycle...`);
     await runCycle();
     
-    // Wait 12-20 minutes between cycles
-    const cycleDelay = (12 + Math.floor(Math.random() * 8)) * 60 * 1000;
+    // Wait 8-12 minutes between cycles (aggressive mode)
+    const cycleDelay = (8 + Math.floor(Math.random() * 4)) * 60 * 1000;
     console.log(`Waiting ${Math.round(cycleDelay/60000)} minutes until next cycle...`);
     await sleep(cycleDelay);
   }

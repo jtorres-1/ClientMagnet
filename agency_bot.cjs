@@ -28,15 +28,14 @@ const sentPath = path.join(baseDir, "clean_leads_dmed.csv");
 const sentStatePath = path.join(baseDir, "clean_leads_sentState.json");
 
 /* =========================
-   RATE LIMITING CONFIG
+   RATE LIMITING CONFIG - AGGRESSIVE MODE
    
-   AGGRESSIVE MODE - High volume while staying under Reddit limits:
-   - Reddit API limit: 60 requests/minute, 1/second
-   - Safe DM rate: 3-5 min delays (well under limits)
+   Reddit-safe high volume:
    - 15-25 DMs per cycle
-   - Shorter cycle delays for maximum daily throughput
+   - 3-5 min delays between DMs
+   - 8-12 min between cycles
    
-   Daily capacity: ~150-200 DMs/day
+   Daily capacity: ~150-200 DMs
 ========================= */
 const MIN_DMS_PER_CYCLE = 15;
 const MAX_DMS_PER_CYCLE = 25;
@@ -120,11 +119,9 @@ function loadLeads() {
 }
 
 /* =========================
-   LEAD SCORING (HVAC/CONTRACTOR FOCUS)
+   LEAD SCORING
    
-   Priority:
-   1. OWNER_WITH_PAIN (highest - confirmed owner with clear pain)
-   2. LIKELY_OWNER (medium - probable owner with pain signal)
+   Prioritize owners with high-intent pain signals
 ========================= */
 function scoreLead(p) {
   let score = 0;
@@ -133,71 +130,79 @@ function scoreLead(p) {
 
   // Lead type scoring
   if (p.leadType === "OWNER_WITH_PAIN") score += 5;
-  if (p.leadType === "LIKELY_OWNER") score += 3;
+  if (p.leadType === "CONTRACTOR_PAIN") score += 3;
 
   // High-intent pain signals
-  if (trigger.includes("leads") || trigger.includes("lead gen")) score += 3;
-  if (trigger.includes("calls") || trigger.includes("missed calls")) score += 3;
-  if (trigger.includes("scheduling") || trigger.includes("booking")) score += 2;
-  if (trigger.includes("slow season") || trigger.includes("growth")) score += 2;
-  if (trigger.includes("answering phones")) score += 2;
+  if (trigger.includes("lead") || trigger.includes("customer") || trigger.includes("client")) score += 3;
+  if (trigger.includes("call") || trigger.includes("phone") || trigger.includes("miss")) score += 3;
+  if (trigger.includes("schedule") || trigger.includes("book") || trigger.includes("appointment")) score += 2;
+  if (trigger.includes("slow") || trigger.includes("dead") || trigger.includes("quiet")) score += 2;
+  if (trigger.includes("busy") || trigger.includes("overwhelm") || trigger.includes("swamp")) score += 2;
+  if (trigger.includes("market") || trigger.includes("advertis") || trigger.includes("seo")) score += 2;
   
-  // HVAC-specific bonus (core niche)
-  if (["HVAC", "HVACR"].includes(p.subreddit)) score += 2;
+  // HVAC core niche bonus
+  if (["HVAC", "Plumbing", "electricians"].includes(p.subreddit)) score += 1;
   
   return score;
 }
 
 /* =========================
-   DM TEMPLATES (HVAC/CONTRACTOR OUTREACH)
+   DM TEMPLATES - CONVERSATIONAL & HUMAN
    
-   STRATEGY:
-   - Human, conversational tone
-   - Short (3 sentences max)
-   - Curious, not salesy
-   - Reference their specific pain
-   - Soft question close
-   - No pricing, no links, no automation mentions
-   
-   ROTATION: 5 templates to avoid spam patterns
+   7 rotating templates to avoid spam detection
+   All follow: reference pain + offer help + soft question
 ========================= */
 function getTemplate(post) {
   const trigger = post.matchedTrigger || "business challenge";
   const templates = [];
 
-  // Template 1: Empathy + Solution Hint
+  // Template 1: Direct help offer
   templates.push({
     id: "TEMPLATE_1",
     subject: `Re: ${trigger}`,
     text: `Hey, saw your post about ${trigger}. I've been helping contractors automate booking and missed call capture without hiring more staff. Open to a quick convo if that's useful?`
   });
 
-  // Template 2: Direct Problem-Solver
+  // Template 2: Case study approach
   templates.push({
     id: "TEMPLATE_2",
     subject: "Quick question",
-    text: `Saw your post on ${trigger}. I work with HVAC guys on this exact issue—turning missed calls into booked jobs. Worth a chat?`
+    text: `Saw your post on ${trigger}. I work with HVAC/trade guys on this exact issue—turning missed calls into booked jobs. Worth a chat?`
   });
 
-  // Template 3: Case Study Approach
+  // Template 3: Empathy angle
   templates.push({
     id: "TEMPLATE_3",
-    subject: "Might be helpful",
+    subject: "Might help",
     text: `Hey, noticed you mentioned ${trigger}. Just helped an AC company capture 80% more inbound calls without adding staff. Happy to share what worked if it's relevant.`
   });
 
-  // Template 4: Curiosity Angle
+  // Template 4: Curiosity approach
   templates.push({
     id: "TEMPLATE_4",
     subject: "Following up",
     text: `Saw your comment about ${trigger}. Curious—are you handling scheduling in-house or using something? I've got a setup that could help.`
   });
 
-  // Template 5: Peer Approach
+  // Template 5: Peer-to-peer
   templates.push({
     id: "TEMPLATE_5",
-    subject: "Same boat",
+    subject: "Same issue",
     text: `Your post on ${trigger} hit home. Most contractors I work with lose 30-40% of calls to voicemail. Fixed this for a few shops if you want to compare notes.`
+  });
+
+  // Template 6: Solution hint
+  templates.push({
+    id: "TEMPLATE_6",
+    subject: "Quick fix",
+    text: `Re: ${trigger}. There's a pretty simple way to automate that without complicated software. Been setting this up for trade businesses. Want details?`
+  });
+
+  // Template 7: Results-focused
+  templates.push({
+    id: "TEMPLATE_7",
+    subject: "Saw your post",
+    text: `Hey, about ${trigger}—I help contractors turn phone chaos into booked jobs. No fancy CRM needed. Interested in how?`
   });
 
   // Randomize to avoid patterns
@@ -221,7 +226,7 @@ async function initState() {
 async function runCycle() {
   let leads = await loadLeads();
   if (!leads.length) {
-    console.log("No leads available.");
+    console.log("No leads available. Waiting for scraper...");
     return;
   }
 
@@ -232,7 +237,7 @@ async function runCycle() {
 
   console.log(`Loaded ${leads.length} leads.`);
 
-  // Randomize DM count per cycle (6-10)
+  // Randomize DM count per cycle (15-25)
   const targetDMs = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
   
   let attempted = 0;
@@ -300,7 +305,7 @@ async function runCycle() {
 
       saveJsonState();
 
-      // Random delay between 6-12 minutes
+      // Random delay between 3-5 minutes
       const delayMs = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
       const delayMins = Math.round(delayMs / 60000);
       

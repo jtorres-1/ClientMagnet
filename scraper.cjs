@@ -35,25 +35,35 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   SUBREDDITS - HVAC & BLUE COLLAR CONTRACTORS
+   SUBREDDITS - SERVICE-BASED TRADES ONLY
+   
+   Focused on businesses that need call/lead automation
 ========================= */
 const subs = [
   "HVAC",
-  "contractors",
-  "Construction",
-  "Trades",
-  "Handyman",
-  "smallbusiness",
   "Plumbing",
-  "electricians"
+  "electricians",
+  "Handyman",
+  "Roofing",
+  "landscaping",
+  "contractors",
+  "smallbusiness"
 ];
 
 /* =========================
-   PRIMARY KEYWORDS (LOOSER)
+   PRIMARY KEYWORDS - ALL SERVICE TRADES
    
-   Broadened to catch more contractor types
+   Expanded to catch all phone-based service businesses
+   
+   Categories:
+   - HVAC: hvac, heating, cooling, air conditioning, furnace, ac
+   - Plumbing: plumb, plumber, plumbing, pipe, drain, leak, sewer, water heater
+   - Electrical: electric, electrician, electrical, wire, wiring, panel, breaker, outlet, generator
+   - Roofing: roof, roofing, roofer, shingle, gutter, leak
+   - Landscaping: landscape, landscaping, lawn, mowing, yard, irrigation, tree service
+   - General: contractor, handyman, home service, service business, trade
 ========================= */
-const primaryKeywordRegex = /\b(hvac|heating|cooling|air conditioning|a\/c|ac|furnace|contractor|contracting|trades|trade business|service business|service company|home service|plumb|electric|handyman|construction|remodel|renovation)\b/i;
+const primaryKeywordRegex = /\b(hvac|heating|cooling|air conditioning|a\/c|ac|furnace|heat pump|plumb|plumber|plumbing|pipe|drain|leak|sewer|water heater|septic|electric|electrician|electrical|wire|wiring|panel|breaker|outlet|generator|roof|roofing|roofer|shingle|gutter|landscape|landscaping|landscaper|lawn|mowing|yard|irrigation|tree service|contractor|contracting|handyman|home service|service business|service company|trade business|trades)\b/i;
 
 /* =========================
    PAIN SIGNALS (EXPANDED)
@@ -109,7 +119,7 @@ function classify(post) {
   
   /* ========== RULE 1: PRIMARY KEYWORD REQUIRED ========== */
   if (!primaryKeywordRegex.test(combined)) {
-    return null; // SKIP - not contractor/HVAC related
+    return null; // SKIP - not service trade related
   }
 
   /* ========== RULE 2: PAIN SIGNAL REQUIRED ========== */
@@ -147,7 +157,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ========================= */
 async function scrape() {
-  console.log("Starting ClientMagnet scraper (HVAC & Blue Collar Contractors)…");
+  console.log("Starting ClientMagnet scraper (Service-Based Trades)…");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")

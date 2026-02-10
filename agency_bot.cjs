@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Outreach (HVAC & Blue Collar Contractors)
+// agency_bot.cjs — ClientMagnet Outreach (Service-Based Trades)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -122,6 +122,7 @@ function loadLeads() {
    LEAD SCORING
    
    Prioritize owners with high-intent pain signals
+   Updated to include all service-based trade subreddits
 ========================= */
 function scoreLead(p) {
   let score = 0;
@@ -140,16 +141,17 @@ function scoreLead(p) {
   if (trigger.includes("busy") || trigger.includes("overwhelm") || trigger.includes("swamp")) score += 2;
   if (trigger.includes("market") || trigger.includes("advertis") || trigger.includes("seo")) score += 2;
   
-  // HVAC core niche bonus
-  if (["HVAC", "Plumbing", "electricians"].includes(p.subreddit)) score += 1;
+  // Service trade subreddit bonus (all phone-based businesses)
+  if (["HVAC", "Plumbing", "electricians", "Roofing", "landscaping", "Handyman"].includes(p.subreddit)) score += 1;
   
   return score;
 }
 
 /* =========================
-   DM TEMPLATES - CONVERSATIONAL & HUMAN
+   DM TEMPLATES - TRADE-AGNOSTIC & CONVERSATIONAL
    
    7 rotating templates to avoid spam detection
+   All templates work for ANY service-based trade
    All follow: reference pain + offer help + soft question
 ========================= */
 function getTemplate(post) {
@@ -160,21 +162,21 @@ function getTemplate(post) {
   templates.push({
     id: "TEMPLATE_1",
     subject: `Re: ${trigger}`,
-    text: `Hey, saw your post about ${trigger}. I've been helping contractors automate booking and missed call capture without hiring more staff. Open to a quick convo if that's useful?`
+    text: `Hey, saw your post about ${trigger}. I've been helping service business owners automate booking and missed call capture without hiring more staff. Open to a quick convo if that's useful?`
   });
 
   // Template 2: Case study approach
   templates.push({
     id: "TEMPLATE_2",
     subject: "Quick question",
-    text: `Saw your post on ${trigger}. I work with HVAC/trade guys on this exact issue—turning missed calls into booked jobs. Worth a chat?`
+    text: `Saw your post on ${trigger}. I work with trade contractors on this exact issue—turning missed calls into booked jobs. Worth a chat?`
   });
 
   // Template 3: Empathy angle
   templates.push({
     id: "TEMPLATE_3",
     subject: "Might help",
-    text: `Hey, noticed you mentioned ${trigger}. Just helped an AC company capture 80% more inbound calls without adding staff. Happy to share what worked if it's relevant.`
+    text: `Hey, noticed you mentioned ${trigger}. Just helped a service company capture 80% more inbound calls without adding staff. Happy to share what worked if it's relevant.`
   });
 
   // Template 4: Curiosity approach
@@ -188,7 +190,7 @@ function getTemplate(post) {
   templates.push({
     id: "TEMPLATE_5",
     subject: "Same issue",
-    text: `Your post on ${trigger} hit home. Most contractors I work with lose 30-40% of calls to voicemail. Fixed this for a few shops if you want to compare notes.`
+    text: `Your post on ${trigger} hit home. Most service businesses I work with lose 30-40% of calls to voicemail. Fixed this for a few shops if you want to compare notes.`
   });
 
   // Template 6: Solution hint
@@ -337,7 +339,7 @@ async function runCycle() {
   await initState();
   
   console.log("=".repeat(60));
-  console.log("ClientMagnet Bot - HVAC & Blue Collar Contractor Outreach");
+  console.log("ClientMagnet Bot - Service-Based Trades Outreach");
   console.log("AGGRESSIVE MODE - High Volume");
   console.log("=".repeat(60));
   console.log(`DMs per cycle: ${MIN_DMS_PER_CYCLE}-${MAX_DMS_PER_CYCLE} (randomized)`);

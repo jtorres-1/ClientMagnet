@@ -35,74 +35,79 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   SUBREDDITS - SERVICE-BASED TRADES ONLY
+   SUBREDDITS — FLIPIFY TARGETS
    
-   Focused on businesses that need call/lead automation
+   Car flipping, reselling, auction buying,
+   marketplace sellers, side hustle dealers
 ========================= */
 const subs = [
-  "HVAC",
-  "Plumbing",
-  "electricians",
-  "Handyman",
-  "Roofing",
-  "landscaping",
-  "contractors",
-  "smallbusiness"
+  "carflipping",
+  "usedcars",
+  "askcarsales",
+  "flipping",
+  "sidehustle",
+  "Entrepreneur",
+  "carbuying",
+  "auctions",
+  "Flipping",
+  "smallbusiness",
+  "MechanicAdvice",
+  "cardeals",
+  "whatcarshouldibuy"
 ];
 
 /* =========================
-   PRIMARY KEYWORDS - ALL SERVICE TRADES
+   PRIMARY KEYWORDS — CAR FLIPPING CONTEXT
    
-   Expanded to catch all phone-based service businesses
-   
+   Must match car/vehicle reselling activity.
    Categories:
-   - HVAC: hvac, heating, cooling, air conditioning, furnace, ac
-   - Plumbing: plumb, plumber, plumbing, pipe, drain, leak, sewer, water heater
-   - Electrical: electric, electrician, electrical, wire, wiring, panel, breaker, outlet, generator
-   - Roofing: roof, roofing, roofer, shingle, gutter, leak
-   - Landscaping: landscape, landscaping, lawn, mowing, yard, irrigation, tree service
-   - General: contractor, handyman, home service, service business, trade
+   - Vehicle types: car, vehicle, truck, suv, sedan, coupe, van
+   - Flip activity: flip, flipping, resell, reselling, wholesale, retail
+   - Auction platforms: copart, manheim, iaai, adesa, auction
+   - Marketplace: facebook marketplace, craigslist, autotrader, carvana, carmax
+   - Lot / dealer: lot, dealer, dealership, independent dealer, buy here pay here
 ========================= */
-const primaryKeywordRegex = /\b(hvac|heating|cooling|air conditioning|a\/c|ac|furnace|heat pump|plumb|plumber|plumbing|pipe|drain|leak|sewer|water heater|septic|electric|electrician|electrical|wire|wiring|panel|breaker|outlet|generator|roof|roofing|roofer|shingle|gutter|landscape|landscaping|landscaper|lawn|mowing|yard|irrigation|tree service|contractor|contracting|handyman|home service|service business|service company|trade business|trades)\b/i;
+const primaryKeywordRegex = /\b(car|cars|vehicle|vehicles|truck|trucks|suv|sedan|coupe|van|auto|autos|flip|flipping|flipped|resell|reselling|resale|wholesale|retail|copart|manheim|iaai|adesa|auction|auctions|facebook marketplace|craigslist|autotrader|carvana|carmax|lot|dealer|dealership|independent dealer|buy here pay here|bhph|salvage|rebuilt title|clean title|odometer)\b/i;
 
 /* =========================
-   PAIN SIGNALS (EXPANDED)
+   PAIN SIGNALS — FLIPIFY-SPECIFIC
    
-   More variety to catch different ways people express pain
+   Targets financial pain, miscalculation, thin margins,
+   repair surprises, pricing confusion, overpaying
 ========================= */
-const painSignalRegex = /\b(lead|leads|call|calls|phone|schedule|scheduling|book|booking|appointments?|dispatcher|dispatch|miss|missed|marketing|advertis|seo|google|facebook|website|growth|grow|scale|scaling|busy|slow|season|dead|quiet|automat|software|crm|tool|app|answer|intake|customers?|clients?|jobs?|work|projects?|business|revenue|sales|profit|money|income|struggling|difficult|hard|challenge|problem|issue|help|advice|recommend|suggest|better way|improve|streamline|efficien|time|hours|waste|overwhelm|stress|burnout)\b/i;
+const painSignalRegex = /\b(lost money|losing money|lost on|broke even|barely broke even|thin margin|margins|not profitable|not worth it|ate the cost|underwater|overpaid|overbid|bid too high|auction mistake|should have walked|shouldn't have bought|hidden damage|unexpected repair|didn't account|more than i thought|cost me more|mechanic said|body work|paint|transmission|engine|timing|cost to fix|repair cost|repair estimate|couldn't sell|no offers|sitting|dropped price|price drop|had to lower|kbb|kelly blue book|book value|market value|comp|comps|comparable|how do you price|how do you calculate|how do you know|profit formula|spreadsheet|track costs|figure out|roi|return|margin|break even|what did you pay|what did you sell|how much did you make|how much profit|gut feeling|guessing|estimate|miscalculate|underestimated)\b/i;
 
 /* =========================
-   BUSINESS OWNER SIGNALS (OPTIONAL BOOST)
+   FLIPPER / RESELLER SIGNALS (BONUS — NOT REQUIRED)
    
-   If present, scores higher, but not required
+   Confirms the poster is actively flipping, not just buying
 ========================= */
-const ownerSignalRegex = /\b(my business|my company|my shop|my crew|my team|my employees?|my techs?|my customers?|my clients?|we do|we service|we install|we repair|i run|i own|i operate|i started|our business|our company)\b/i;
+const flipperSignalRegex = /\b(i flip|i flipped|i resell|i buy and sell|i bought|i picked up|i got|i sold|i listed|my flip|my car|my truck|my vehicle|bought at auction|bought from copart|bought from manheim|bought at|picked up for|selling for|listed for|asking|profit on|made on|lost on|been flipping|side hustle|extra income|supplement|part time|full time flip)\b/i;
 
 /* =========================
-   HARD BLOCKS - SKIP THESE
+   HARD BLOCKS — SKIP THESE
 ========================= */
-const studentRegex = /\b(student|studying|in school|trade school|apprentice program|how do i become|getting into|career change to|thinking about becoming)\b/i;
+const studentRegex = /\b(student|studying|in school|how do i become|getting into|career advice|thinking about becoming|new to this|just starting)\b/i;
 
 const jobSeekerRegex = /\b(resume|cv|looking for work|need a job|job hunt|where to apply|anyone hiring|apply|application)\b/i;
 
-const vendorRegex = /\b(we sell|our product|our software|check out our|try our|book a demo|free trial|discount code|affiliate)\b/i;
+const vendorRegex = /\b(we sell|our product|our software|check out our|try our|book a demo|free trial|discount code|affiliate|promo code)\b/i;
 
 /* =========================
-   FRESH POSTS - 72 HOURS
+   FRESHNESS — 7 DAYS
    
-   Extended from 48 to catch more
+   Extended window since car flip posts stay relevant longer
 ========================= */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 72;
+  return ageHours <= 168; // 7 days
 }
 
 /* =========================
-   CLASSIFIER - BALANCED FILTERING
+   CLASSIFIER — FLIPIFY TARGETING
    
-   CHANGED: Only requires primary keyword + pain signal
-   Business context is IMPLIED if both exist
+   Requires: primary keyword + pain signal
+   Bonus: flipper signal upgrades lead type
 ========================= */
 function classify(post) {
   const title = (post.title || "").toLowerCase();
@@ -111,42 +116,34 @@ function classify(post) {
 
   // Minimum quality
   if (title.length < 10) return null;
-  
+
   /* ========== HARD BLOCKS FIRST ========== */
   if (studentRegex.test(combined)) return null;
   if (jobSeekerRegex.test(combined)) return null;
   if (vendorRegex.test(combined)) return null;
-  
-  /* ========== RULE 1: PRIMARY KEYWORD REQUIRED ========== */
-  if (!primaryKeywordRegex.test(combined)) {
-    return null; // SKIP - not service trade related
-  }
 
-  /* ========== RULE 2: PAIN SIGNAL REQUIRED ========== */
+  /* ========== RULE 1: MUST BE CAR/VEHICLE RELATED ========== */
+  if (!primaryKeywordRegex.test(combined)) return null;
+
+  /* ========== RULE 2: MUST HAVE PAIN SIGNAL ========== */
   const hasPainSignal = painSignalRegex.test(combined);
-  
-  if (!hasPainSignal) {
-    return null; // SKIP - no business pain mentioned
-  }
+  if (!hasPainSignal) return null;
+
+  // Extract matched pain signal for DM context
+  const painMatch = combined.match(painSignalRegex)?.[0] || "the flip";
 
   /* ========== CLASSIFICATION ========== */
-  
-  // Extract matched pain signal
-  const painMatch = combined.match(painSignalRegex)?.[0] || "business challenge";
-  
-  // Check if they're clearly an owner (bonus, not required)
-  const hasOwnerSignal = ownerSignalRegex.test(combined);
-  
-  if (hasOwnerSignal) {
+  const hasFlipperSignal = flipperSignalRegex.test(combined);
+
+  if (hasFlipperSignal) {
     return {
-      type: "OWNER_WITH_PAIN",
+      type: "ACTIVE_FLIPPER_PAIN",   // Confirmed flipper with a pain point
       trigger: painMatch
     };
   }
-  
-  // Default: likely relevant even without explicit owner signals
+
   return {
-    type: "CONTRACTOR_PAIN",
+    type: "RESELLER_PAIN",           // Likely reseller, pain present
     trigger: painMatch
   };
 }
@@ -157,7 +154,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ========================= */
 async function scrape() {
-  console.log("Starting ClientMagnet scraper (Service-Based Trades)…");
+  console.log("Starting Flipify scraper (Car Flipping / Reseller Validation)...");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -195,8 +192,7 @@ async function scrape() {
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
-        
-        // Log the match
+
         console.log(`  ✓ ${result.type}: u/${p.author.name} - "${result.trigger}"`);
       }
 
@@ -210,11 +206,11 @@ async function scrape() {
 }
 
 /* =========================
-   RUN LOOP - AGGRESSIVE MODE
+   RUN LOOP — UNCHANGED FROM ORIGINAL
 ========================= */
 (async () => {
   while (true) {
     await scrape();
-    await wait(30 * 60 * 1000); // Run every 30 minutes
+    await wait(30 * 60 * 1000); // Every 30 minutes
   }
 })();

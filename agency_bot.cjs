@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Outreach (Service-Based Trades)
+// agency_bot.cjs — ClientMagnet Outreach (Flipify Validation)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -28,14 +28,7 @@ const sentPath = path.join(baseDir, "clean_leads_dmed.csv");
 const sentStatePath = path.join(baseDir, "clean_leads_sentState.json");
 
 /* =========================
-   RATE LIMITING CONFIG - AGGRESSIVE MODE
-   
-   Reddit-safe high volume:
-   - 15-25 DMs per cycle
-   - 3-5 min delays between DMs
-   - 8-12 min between cycles
-   
-   Daily capacity: ~150-200 DMs
+   RATE LIMITING — UNCHANGED FROM ORIGINAL
 ========================= */
 const MIN_DMS_PER_CYCLE = 15;
 const MAX_DMS_PER_CYCLE = 25;
@@ -50,20 +43,31 @@ let sentUserSet = new Set();
 let initialized = false;
 
 /* =========================
-   CSV WRITER
+   CSV WRITER — FLIPIFY VALIDATION FIELDS
+   
+   Extended with validation logging columns:
+   - painConfirmed: Y/N — did they confirm a real pain in their post?
+   - currentMethod: spreadsheet / gut / none / other
+   - expressedInterest: Y/N — did language suggest they'd want a tool?
+   - followUpPotential: Y/N — worth a follow-up if no response?
 ========================= */
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
   header: [
-    { id: "username", title: "Username" },
-    { id: "title", title: "Post Title" },
-    { id: "url", title: "Post URL" },
-    { id: "subreddit", title: "Subreddit" },
-    { id: "leadType", title: "Lead Type" },
-    { id: "matchedTrigger", title: "Matched Trigger" },
-    { id: "templateUsed", title: "Template Used" },
-    { id: "dmSentTime", title: "DM Sent Time" },
-    { id: "status", title: "Status" }
+    { id: "username",          title: "Username" },
+    { id: "title",             title: "Post Title" },
+    { id: "url",               title: "Post URL" },
+    { id: "subreddit",         title: "Subreddit" },
+    { id: "leadType",          title: "Lead Type" },
+    { id: "matchedTrigger",    title: "Matched Trigger" },
+    { id: "templateUsed",      title: "Template Used" },
+    { id: "dmSentTime",        title: "DM Sent Time" },
+    { id: "status",            title: "Status" },
+    // Flipify validation fields
+    { id: "painConfirmed",     title: "Pain Confirmed (Y/N)" },
+    { id: "currentMethod",     title: "Current Method (spreadsheet/gut/none/other)" },
+    { id: "expressedInterest", title: "Expressed Interest in Tool (Y/N)" },
+    { id: "followUpPotential", title: "Follow-Up Potential (Y/N)" }
   ],
   append: true
 });
@@ -71,7 +75,7 @@ const sentWriter = createObjectCsvWriter({
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* =========================
-   STATE LOADERS
+   STATE LOADERS — UNCHANGED
 ========================= */
 function loadJsonState() {
   if (!fs.existsSync(sentStatePath)) return;
@@ -119,95 +123,101 @@ function loadLeads() {
 }
 
 /* =========================
-   LEAD SCORING
+   LEAD SCORING — FLIPIFY
    
-   Prioritize owners with high-intent pain signals
-   Updated to include all service-based trade subreddits
+   Prioritizes active flippers with financial pain signals
 ========================= */
 function scoreLead(p) {
   let score = 0;
-  const title = (p.title || "").toLowerCase();
   const trigger = (p.matchedTrigger || "").toLowerCase();
 
   // Lead type scoring
-  if (p.leadType === "OWNER_WITH_PAIN") score += 5;
-  if (p.leadType === "CONTRACTOR_PAIN") score += 3;
+  if (p.leadType === "ACTIVE_FLIPPER_PAIN") score += 5;
+  if (p.leadType === "RESELLER_PAIN") score += 3;
 
-  // High-intent pain signals
-  if (trigger.includes("lead") || trigger.includes("customer") || trigger.includes("client")) score += 3;
-  if (trigger.includes("call") || trigger.includes("phone") || trigger.includes("miss")) score += 3;
-  if (trigger.includes("schedule") || trigger.includes("book") || trigger.includes("appointment")) score += 2;
-  if (trigger.includes("slow") || trigger.includes("dead") || trigger.includes("quiet")) score += 2;
-  if (trigger.includes("busy") || trigger.includes("overwhelm") || trigger.includes("swamp")) score += 2;
-  if (trigger.includes("market") || trigger.includes("advertis") || trigger.includes("seo")) score += 2;
-  
-  // Service trade subreddit bonus (all phone-based businesses)
-  if (["HVAC", "Plumbing", "electricians", "Roofing", "landscaping", "Handyman"].includes(p.subreddit)) score += 1;
-  
+  // High-value pain signals
+  if (trigger.includes("lost money") || trigger.includes("losing money")) score += 4;
+  if (trigger.includes("overpaid") || trigger.includes("overbid")) score += 4;
+  if (trigger.includes("unexpected repair") || trigger.includes("hidden damage")) score += 3;
+  if (trigger.includes("margin") || trigger.includes("break even")) score += 3;
+  if (trigger.includes("comp") || trigger.includes("kbb") || trigger.includes("book value")) score += 2;
+  if (trigger.includes("auction")) score += 2;
+  if (trigger.includes("roi") || trigger.includes("calculate") || trigger.includes("spreadsheet")) score += 3;
+  if (trigger.includes("couldn't sell") || trigger.includes("no offers") || trigger.includes("sitting")) score += 2;
+
+  // High-signal subreddits
+  if (["carflipping", "askcarsales", "flipping"].includes(p.subreddit)) score += 2;
+
   return score;
 }
 
 /* =========================
-   DM TEMPLATES - TRADE-AGNOSTIC & CONVERSATIONAL
+   DM TEMPLATES — FLIPIFY VALIDATION
    
-   7 rotating templates to avoid spam detection
-   All templates work for ANY service-based trade
-   All follow: reference pain + offer help + soft question
+   Rules enforced across ALL templates:
+   ✓ Single question only
+   ✓ Conversational tone — not salesy
+   ✓ No product pitch
+   ✓ No links
+   ✓ Under 3 sentences
+   ✓ Asks how they calculate ROI / profit before buying
+   ✓ References their specific pain trigger naturally
+   
+   7 rotating variants to avoid pattern detection
 ========================= */
 function getTemplate(post) {
-  const trigger = post.matchedTrigger || "business challenge";
+  const trigger = post.matchedTrigger || "that flip";
   const templates = [];
 
-  // Template 1: Direct help offer
+  // Template 1: Loss empathy
   templates.push({
-    id: "TEMPLATE_1",
-    subject: `Re: ${trigger}`,
-    text: `Hey, saw your post about ${trigger}. I've been helping service business owners automate booking and missed call capture without hiring more staff. Open to a quick convo if that's useful?`
-  });
-
-  // Template 2: Case study approach
-  templates.push({
-    id: "TEMPLATE_2",
+    id: "FLIPIFY_T1",
     subject: "Quick question",
-    text: `Saw your post on ${trigger}. I work with trade contractors on this exact issue—turning missed calls into booked jobs. Worth a chat?`
+    text: `Saw your post about ${trigger} — rough one. Curious, how do you usually figure out your all-in cost before you commit to buying?`
   });
 
-  // Template 3: Empathy angle
+  // Template 2: Neutral / process focused
   templates.push({
-    id: "TEMPLATE_3",
-    subject: "Might help",
-    text: `Hey, noticed you mentioned ${trigger}. Just helped a service company capture 80% more inbound calls without adding staff. Happy to share what worked if it's relevant.`
+    id: "FLIPIFY_T2",
+    subject: "Quick question",
+    text: `Your post caught my eye. How do you typically calculate whether a car is worth buying before you pull the trigger — do you have a system or is it more feel?`
   });
 
-  // Template 4: Curiosity approach
+  // Template 3: Auction angle
   templates.push({
-    id: "TEMPLATE_4",
-    subject: "Following up",
-    text: `Saw your comment about ${trigger}. Curious—are you handling scheduling in-house or using something? I've got a setup that could help.`
+    id: "FLIPIFY_T3",
+    subject: "Quick question",
+    text: `Saw your post about ${trigger}. Do you have a method for estimating total profit before you bid, or do you mostly go off instinct at the auction?`
   });
 
-  // Template 5: Peer-to-peer
+  // Template 4: Repair cost angle
   templates.push({
-    id: "TEMPLATE_5",
-    subject: "Same issue",
-    text: `Your post on ${trigger} hit home. Most service businesses I work with lose 30-40% of calls to voicemail. Fixed this for a few shops if you want to compare notes.`
+    id: "FLIPIFY_T4",
+    subject: "Quick question",
+    text: `Your post on ${trigger} hit home. How do you account for repair costs when you're deciding what to pay for a car?`
   });
 
-  // Template 6: Solution hint
+  // Template 5: Comp / pricing angle
   templates.push({
-    id: "TEMPLATE_6",
-    subject: "Quick fix",
-    text: `Re: ${trigger}. There's a pretty simple way to automate that without complicated software. Been setting this up for trade businesses. Want details?`
+    id: "FLIPIFY_T5",
+    subject: "Quick question",
+    text: `Noticed your post about ${trigger}. When you're pricing a car to resell, how do you pull comps — is there a process you follow or does it vary?`
   });
 
-  // Template 7: Results-focused
+  // Template 6: ROI direct
   templates.push({
-    id: "TEMPLATE_7",
-    subject: "Saw your post",
-    text: `Hey, about ${trigger}—I help contractors turn phone chaos into booked jobs. No fancy CRM needed. Interested in how?`
+    id: "FLIPIFY_T6",
+    subject: "Quick question",
+    text: `Saw your post about ${trigger}. Genuinely curious — do you calculate ROI before buying, or does it usually come together after the fact?`
   });
 
-  // Randomize to avoid patterns
+  // Template 7: Spreadsheet angle
+  templates.push({
+    id: "FLIPIFY_T7",
+    subject: "Quick question",
+    text: `Your post about ${trigger} made me wonder — do you use any kind of tracker or spreadsheet when you're evaluating a flip, or do you keep it in your head?`
+  });
+
   return templates[Math.floor(Math.random() * templates.length)];
 }
 
@@ -223,7 +233,7 @@ async function initState() {
 }
 
 /* =========================
-   DM CYCLE
+   DM CYCLE — UNCHANGED LOGIC, FLIPIFY FIELDS ADDED
 ========================= */
 async function runCycle() {
   let leads = await loadLeads();
@@ -232,16 +242,14 @@ async function runCycle() {
     return;
   }
 
-  // Filter and sort leads by score
   leads = leads
     .filter(l => l.username && l.url && l.leadType)
     .sort((a, b) => scoreLead(b) - scoreLead(a));
 
   console.log(`Loaded ${leads.length} leads.`);
 
-  // Randomize DM count per cycle (15-25)
   const targetDMs = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
-  
+
   let attempted = 0;
   let confirmed = 0;
 
@@ -258,7 +266,6 @@ async function runCycle() {
     const username = rawUser.toLowerCase();
     const url = post.url.trim();
 
-    // Skip if already contacted
     if (
       sentUserSet.has(username) ||
       sentUrlSet.has(url) ||
@@ -286,31 +293,33 @@ async function runCycle() {
       console.log(`  Post URL: ${url}`);
       console.log(`  Time: ${dmSentTime}`);
 
-      // Update state
       sentUserSet.add(username);
       sentUrlSet.add(url);
       cycleUsers.add(username);
       cycleUrls.add(url);
 
-      // Log to CSV
+      // Log with Flipify validation fields (blanks filled manually after responses come in)
       await sentWriter.writeRecords([{
-        username: rawUser,
-        title: post.title,
+        username:          rawUser,
+        title:             post.title,
         url,
-        subreddit: post.subreddit,
-        leadType: post.leadType,
-        matchedTrigger: post.matchedTrigger,
-        templateUsed: tpl.id,
-        dmSentTime: dmSentTime,
-        status: "OUTREACH"
+        subreddit:         post.subreddit,
+        leadType:          post.leadType,
+        matchedTrigger:    post.matchedTrigger,
+        templateUsed:      tpl.id,
+        dmSentTime:        dmSentTime,
+        status:            "OUTREACH",
+        painConfirmed:     "",   // Fill after response: Y / N
+        currentMethod:     "",   // Fill after response: spreadsheet / gut / none / other
+        expressedInterest: "",   // Fill after response: Y / N
+        followUpPotential: ""    // Fill after response: Y / N
       }]);
 
       saveJsonState();
 
-      // Random delay between 3-5 minutes
       const delayMs = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
       const delayMins = Math.round(delayMs / 60000);
-      
+
       if (attempted < targetDMs) {
         console.log(`  Waiting ${delayMins} minutes before next DM...`);
         await sleep(delayMs);
@@ -318,8 +327,6 @@ async function runCycle() {
 
     } catch (err) {
       console.log(`✗ Failed DM to u/${rawUser}: ${err.message}`);
-      
-      // If user doesn't accept DMs, mark as contacted to skip in future
       if (err.message.includes("NOT_WHITELISTED") || err.message.includes("USER_DOESNT_EXIST")) {
         sentUserSet.add(username);
         saveJsonState();
@@ -327,32 +334,28 @@ async function runCycle() {
     }
   }
 
-  console.log(
-    `\nCycle complete — attempted ${attempted}, confirmed ${confirmed}`
-  );
+  console.log(`\nCycle complete — attempted ${attempted}, confirmed ${confirmed}`);
 }
 
 /* =========================
-   LOOP
+   LOOP — UNCHANGED FROM ORIGINAL
 ========================= */
 (async () => {
   await initState();
-  
+
   console.log("=".repeat(60));
-  console.log("ClientMagnet Bot - Service-Based Trades Outreach");
-  console.log("AGGRESSIVE MODE - High Volume");
+  console.log("ClientMagnet Bot — Flipify Validation Outreach");
   console.log("=".repeat(60));
   console.log(`DMs per cycle: ${MIN_DMS_PER_CYCLE}-${MAX_DMS_PER_CYCLE} (randomized)`);
   console.log(`Delay between DMs: ${MIN_DELAY_MS/60000}-${MAX_DELAY_MS/60000} minutes`);
   console.log(`Cycle delay: 8-12 minutes`);
-  console.log(`Daily capacity: ~150-200 DMs (Reddit-safe limits)`);
+  console.log(`Daily capacity: ~150-200 DMs`);
   console.log("=".repeat(60));
-  
+
   while (true) {
     console.log(`\n[${new Date().toLocaleString()}] Starting new DM cycle...`);
     await runCycle();
-    
-    // Wait 8-12 minutes between cycles (aggressive mode)
+
     const cycleDelay = (8 + Math.floor(Math.random() * 4)) * 60 * 1000;
     console.log(`Waiting ${Math.round(cycleDelay/60000)} minutes until next cycle...`);
     await sleep(cycleDelay);

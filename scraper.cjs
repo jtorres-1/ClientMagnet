@@ -19,9 +19,10 @@ const reddit = new snoowrap({
 ========================= */
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
-const leadsPath = path.join(baseDir, "clean_leads.csv");
 
+const leadsPath = path.join(baseDir, "clean_leads.csv");
 const HEADER = "username,title,url,subreddit,time,leadType,matchedTrigger";
+
 if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
 }
@@ -35,79 +36,77 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   SUBREDDITS — FLIPIFY TARGETS
-   
-   Car flipping, reselling, auction buying,
-   marketplace sellers, side hustle dealers
+   SUBREDDITS — DEV JOB KIT TARGETS
+
+   Job hunting, resume help, career advice,
+   developer job search, recruiting pain
 ========================= */
 const subs = [
-  "carflipping",
-  "usedcars",
-  "askcarsales",
-  "flipping",
-  "sidehustle",
-  "Entrepreneur",
-  "carbuying",
-  "auctions",
-  "Flipping",
-  "smallbusiness",
-  "MechanicAdvice",
-  "cardeals",
-  "whatcarshouldibuy"
+  "cscareerquestions",
+  "devops",
+  "learnprogramming",
+  "ExperiencedDevs",
+  "webdev",
+  "jobs",
+  "resumes",
+  "recruitinghell",
+  "jobsearchhacks",
+  "careerguidance",
+  "programming",
+  "softwareengineering",
+  "techjobs"
 ];
 
 /* =========================
-   PRIMARY KEYWORDS — CAR FLIPPING CONTEXT
-   
-   Must match car/vehicle reselling activity.
+   PRIMARY KEYWORDS — DEV JOB HUNT CONTEXT
+
+   Must match active job searching activity.
    Categories:
-   - Vehicle types: car, vehicle, truck, suv, sedan, coupe, van
-   - Flip activity: flip, flipping, resell, reselling, wholesale, retail
-   - Auction platforms: copart, manheim, iaai, adesa, auction
-   - Marketplace: facebook marketplace, craigslist, autotrader, carvana, carmax
-   - Lot / dealer: lot, dealer, dealership, independent dealer, buy here pay here
+   - Job hunt activity: applying, applications, job search, job hunting
+   - Resume: resume, cv, bullet points, ATS, tailoring
+   - Responses: callbacks, interviews, responses, ghosted, rejected
+   - Cover letter: cover letter, writing, application materials
+   - Platforms: linkedin, indeed, greenhouse, lever, workday
 ========================= */
-const primaryKeywordRegex = /\b(car|cars|vehicle|vehicles|truck|trucks|suv|sedan|coupe|van|auto|autos|flip|flipping|flipped|resell|reselling|resale|wholesale|retail|copart|manheim|iaai|adesa|auction|auctions|facebook marketplace|craigslist|autotrader|carvana|carmax|lot|dealer|dealership|independent dealer|buy here pay here|bhph|salvage|rebuilt title|clean title|odometer)\b/i;
+const primaryKeywordRegex = /\b(applying|applied|application|applications|job search|job hunting|job hunt|resume|cv|cover letter|bullet points|ats|tailoring|tailor|callbacks|callback|interview|interviews|response|responses|ghosted|rejected|rejection|linkedin|indeed|greenhouse|lever|workday|hiring|recruiter|recruiters|job posting|job description)\b/i;
 
 /* =========================
-   PAIN SIGNALS — FLIPIFY-SPECIFIC
-   
-   Targets financial pain, miscalculation, thin margins,
-   repair surprises, pricing confusion, overpaying
+   PAIN SIGNALS — DEV JOB KIT SPECIFIC
+
+   Targets frustration, lack of responses,
+   resume confusion, application volume with no results
 ========================= */
-const painSignalRegex = /\b(lost money|losing money|lost on|broke even|barely broke even|thin margin|margins|not profitable|not worth it|ate the cost|underwater|overpaid|overbid|bid too high|auction mistake|should have walked|shouldn't have bought|hidden damage|unexpected repair|didn't account|more than i thought|cost me more|mechanic said|body work|paint|transmission|engine|timing|cost to fix|repair cost|repair estimate|couldn't sell|no offers|sitting|dropped price|price drop|had to lower|kbb|kelly blue book|book value|market value|comp|comps|comparable|how do you price|how do you calculate|how do you know|profit formula|spreadsheet|track costs|figure out|roi|return|margin|break even|what did you pay|what did you sell|how much did you make|how much profit|gut feeling|guessing|estimate|miscalculate|underestimated)\b/i;
+const painSignalRegex = /\b(no callbacks|no response|no responses|no interviews|not hearing back|getting ghosted|been ghosted|applied to \d+|applied to over|applied to hundreds|hundreds of applications|mass applying|spray and pray|rejection after rejection|rejection emails|generic resume|same resume|not tailoring|don't know how to tailor|how do i tailor|ats friendly|beating ats|ats rejected|resume not working|resume isn't working|resume feels|cover letter help|don't know what to write|hate writing cover letters|cover letter is generic|why am i not getting|why aren't i getting|months of applying|been applying for|out of work|laid off|got laid off|job hunting for months|no luck|running out of|desperate|nothing is working|what am i doing wrong|should i give up|feeling hopeless|feeling defeated|burnout|exhausted from applying)\b/i;
 
 /* =========================
-   FLIPPER / RESELLER SIGNALS (BONUS — NOT REQUIRED)
-   
-   Confirms the poster is actively flipping, not just buying
+   JOB SEEKER SIGNALS (BONUS — NOT REQUIRED)
+
+   Confirms the poster is actively job hunting
 ========================= */
-const flipperSignalRegex = /\b(i flip|i flipped|i resell|i buy and sell|i bought|i picked up|i got|i sold|i listed|my flip|my car|my truck|my vehicle|bought at auction|bought from copart|bought from manheim|bought at|picked up for|selling for|listed for|asking|profit on|made on|lost on|been flipping|side hustle|extra income|supplement|part time|full time flip)\b/i;
+const jobSeekerSignalRegex = /\b(i applied|i've applied|i have applied|i'm applying|i am applying|my resume|my cv|my cover letter|sent out|sending out|been applying|applying for months|job hunting|on the market|open to work|currently looking|actively looking|need a job|need work|between jobs|unemployed|laid off)\b/i;
 
 /* =========================
    HARD BLOCKS — SKIP THESE
 ========================= */
-const studentRegex = /\b(student|studying|in school|how do i become|getting into|career advice|thinking about becoming|new to this|just starting)\b/i;
-
-const jobSeekerRegex = /\b(resume|cv|looking for work|need a job|job hunt|where to apply|anyone hiring|apply|application)\b/i;
-
 const vendorRegex = /\b(we sell|our product|our software|check out our|try our|book a demo|free trial|discount code|affiliate|promo code)\b/i;
+const hiringRegex = /\b(we are hiring|we're hiring|our team is hiring|join our team|open position|job opening|now hiring)\b/i;
+const studentOnlyRegex = /\b(thinking about becoming a developer|how do i get into|career change advice|should i learn to code|is coding worth it)\b/i;
 
 /* =========================
-   FRESHNESS — 7 DAYS
-   
-   Extended window since car flip posts stay relevant longer
+   FRESHNESS — 48 HOURS
+
+   Job posts go stale fast — tighter window than car flipping
 ========================= */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 168; // 7 days
+  return ageHours <= 48;
 }
 
 /* =========================
-   CLASSIFIER — FLIPIFY TARGETING
-   
+   CLASSIFIER — DEV JOB KIT TARGETING
+
    Requires: primary keyword + pain signal
-   Bonus: flipper signal upgrades lead type
+   Bonus: job seeker signal upgrades lead type
 ========================= */
 function classify(post) {
   const title = (post.title || "").toLowerCase();
@@ -118,11 +117,11 @@ function classify(post) {
   if (title.length < 10) return null;
 
   /* ========== HARD BLOCKS FIRST ========== */
-  if (studentRegex.test(combined)) return null;
-  if (jobSeekerRegex.test(combined)) return null;
   if (vendorRegex.test(combined)) return null;
+  if (hiringRegex.test(combined)) return null;
+  if (studentOnlyRegex.test(combined)) return null;
 
-  /* ========== RULE 1: MUST BE CAR/VEHICLE RELATED ========== */
+  /* ========== RULE 1: MUST BE JOB HUNT RELATED ========== */
   if (!primaryKeywordRegex.test(combined)) return null;
 
   /* ========== RULE 2: MUST HAVE PAIN SIGNAL ========== */
@@ -130,20 +129,20 @@ function classify(post) {
   if (!hasPainSignal) return null;
 
   // Extract matched pain signal for DM context
-  const painMatch = combined.match(painSignalRegex)?.[0] || "the flip";
+  const painMatch = combined.match(painSignalRegex)?.[0] || "the job search";
 
   /* ========== CLASSIFICATION ========== */
-  const hasFlipperSignal = flipperSignalRegex.test(combined);
+  const hasJobSeekerSignal = jobSeekerSignalRegex.test(combined);
 
-  if (hasFlipperSignal) {
+  if (hasJobSeekerSignal) {
     return {
-      type: "ACTIVE_FLIPPER_PAIN",   // Confirmed flipper with a pain point
+      type: "ACTIVE_SEEKER_PAIN",    // Confirmed job seeker with a pain point
       trigger: painMatch
     };
   }
 
   return {
-    type: "RESELLER_PAIN",           // Likely reseller, pain present
+    type: "GENERAL_JOB_PAIN",        // Likely job seeker, pain present
     trigger: painMatch
   };
 }
@@ -154,7 +153,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ========================= */
 async function scrape() {
-  console.log("Starting Flipify scraper (Car Flipping / Reseller Validation)...");
+  console.log("Starting Dev Job Kit scraper (Job Hunt / Resume Pain Targeting)...");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -192,7 +191,6 @@ async function scrape() {
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
-
         console.log(`  ✓ ${result.type}: u/${p.author.name} - "${result.trigger}"`);
       }
 

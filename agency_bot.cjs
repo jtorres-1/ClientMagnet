@@ -163,49 +163,49 @@ function getTemplate(post) {
   templates.push({
     id: "JK_T1",
     subject: "something that might help",
-    text: `hey, saw your post about ${trigger} — that's genuinely exhausting. i built a small tool called jobkit that takes your resume + a job description and instantly writes tailored bullets, a cover letter, and a "why i fit" paragraph. might save you a ton of time. jobkit.tech if you want to check it out, no pressure`
+    text: `hey, saw your post about ${trigger} — that's genuinely exhausting. i built a small tool called jobkit that takes your resume + a job description and instantly writes tailored bullets, a cover letter, and a "why i fit" paragraph. might save you a ton of time. https://jobkit.tech/ if you want to check it out, no pressure`
   });
 
   // Template 2 — Direct and short
   templates.push({
     id: "JK_T2",
     subject: "quick thing re: your post",
-    text: `yo saw your post about ${trigger}. built something that might actually help — paste your resume + job description and it generates tailored resume bullets, a cover letter, and your pitch in seconds. $9 one time, no subscription. jobkit.tech`
+    text: `yo saw your post about ${trigger}. built something that might actually help — paste your resume + job description and it generates tailored resume bullets, a cover letter, and your pitch in seconds. $9 one time, no subscription. https://jobkit.tech/`
   });
 
   // Template 3 — Resume angle
   templates.push({
     id: "JK_T3",
     subject: "re: your job search",
-    text: `saw your post and felt it — the resume tailoring grind is brutal. made a tool that does it automatically. you paste your resume + the job post, it spits out tailored bullets, a clean cover letter, and a why-you-fit paragraph. jobkit.tech — takes about 10 seconds`
+    text: `saw your post and felt it — the resume tailoring grind is brutal. made a tool that does it automatically. you paste your resume + the job post, it spits out tailored bullets, a clean cover letter, and a why-you-fit paragraph. https://jobkit.tech/ — takes about 10 seconds`
   });
 
   // Template 4 — ATS angle
   templates.push({
     id: "JK_T4",
     subject: "something that might help",
-    text: `hey, noticed your post about ${trigger}. a big part of getting past ATS is tailoring your resume to each job — which is annoying to do manually. built a tool that handles it automatically. jobkit.tech — you paste your resume + the job description and it writes everything for you`
+    text: `hey, noticed your post about ${trigger}. a big part of getting past ATS is tailoring your resume to each job — which is annoying to do manually. built a tool that handles it automatically. https://jobkit.tech/ — you paste your resume + the job description and it writes everything for you`
   });
 
   // Template 5 — Volume angle
   templates.push({
     id: "JK_T5",
     subject: "re: your applications",
-    text: `saw your post about ${trigger} — sending that many apps with no response is rough. the problem is usually that the resume isn't tailored to each role. i built jobkit to fix that — it writes tailored bullets + a cover letter for any job in seconds. jobkit.tech`
+    text: `saw your post about ${trigger} — sending that many apps with no response is rough. the problem is usually that the resume isn't tailored to each role. i built jobkit to fix that — it writes tailored bullets + a cover letter for any job in seconds. https://jobkit.tech/`
   });
 
   // Template 6 — Soft question opener
   templates.push({
     id: "JK_T6",
     subject: "quick question",
-    text: `hey saw your post about ${trigger} — are you tailoring your resume for each application or sending the same one? asking because i built jobkit.tech which does it automatically. paste your resume + the job post and it generates tailored bullets, a cover letter, and a pitch instantly`
+    text: `hey saw your post about ${trigger} — are you tailoring your resume for each application or sending the same one? asking because i built https://jobkit.tech/ which does it automatically. paste your resume + the job post and it generates tailored bullets, a cover letter, and a pitch instantly`
   });
 
   // Template 7 — Laid off / urgency angle
   templates.push({
     id: "JK_T7",
     subject: "something useful for your search",
-    text: `saw your post — job hunting after a layoff is one of the worst situations. built a tool that takes your resume + any job description and writes tailored application materials in about 10 seconds. no subscription, just $9 one time. jobkit.tech — hope it helps`
+    text: `saw your post — job hunting after a layoff is one of the worst situations. built a tool that takes your resume + any job description and writes tailored application materials in about 10 seconds. no subscription, just $9 one time. https://jobkit.tech/ — hope it helps`
   });
 
   return templates[Math.floor(Math.random() * templates.length)];

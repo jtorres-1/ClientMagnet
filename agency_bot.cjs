@@ -1,4 +1,4 @@
-// agency_bot.cjs — ClientMagnet Outreach (Flipify Validation)
+// agency_bot.cjs — ClientMagnet Outreach (Dev Job Kit)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -23,8 +23,8 @@ const reddit = new snoowrap({
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-const leadsPath = path.join(baseDir, "clean_leads.csv");
-const sentPath = path.join(baseDir, "clean_leads_dmed.csv");
+const leadsPath    = path.join(baseDir, "clean_leads.csv");
+const sentPath     = path.join(baseDir, "clean_leads_dmed.csv");
 const sentStatePath = path.join(baseDir, "clean_leads_sentState.json");
 
 /* =========================
@@ -38,36 +38,28 @@ const MAX_DELAY_MS = 5 * 60 * 1000;   // 5 minutes
 /* =========================
    MEMORY
 ========================= */
-let sentUrlSet = new Set();
+let sentUrlSet  = new Set();
 let sentUserSet = new Set();
 let initialized = false;
 
 /* =========================
-   CSV WRITER — FLIPIFY VALIDATION FIELDS
-   
-   Extended with validation logging columns:
-   - painConfirmed: Y/N — did they confirm a real pain in their post?
-   - currentMethod: spreadsheet / gut / none / other
-   - expressedInterest: Y/N — did language suggest they'd want a tool?
-   - followUpPotential: Y/N — worth a follow-up if no response?
+   CSV WRITER — DEV JOB KIT FIELDS
 ========================= */
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
   header: [
-    { id: "username",          title: "Username" },
-    { id: "title",             title: "Post Title" },
-    { id: "url",               title: "Post URL" },
-    { id: "subreddit",         title: "Subreddit" },
-    { id: "leadType",          title: "Lead Type" },
-    { id: "matchedTrigger",    title: "Matched Trigger" },
-    { id: "templateUsed",      title: "Template Used" },
-    { id: "dmSentTime",        title: "DM Sent Time" },
-    { id: "status",            title: "Status" },
-    // Flipify validation fields
-    { id: "painConfirmed",     title: "Pain Confirmed (Y/N)" },
-    { id: "currentMethod",     title: "Current Method (spreadsheet/gut/none/other)" },
-    { id: "expressedInterest", title: "Expressed Interest in Tool (Y/N)" },
-    { id: "followUpPotential", title: "Follow-Up Potential (Y/N)" }
+    { id: "username",       title: "Username" },
+    { id: "title",          title: "Post Title" },
+    { id: "url",            title: "Post URL" },
+    { id: "subreddit",      title: "Subreddit" },
+    { id: "leadType",       title: "Lead Type" },
+    { id: "matchedTrigger", title: "Matched Trigger" },
+    { id: "templateUsed",   title: "Template Used" },
+    { id: "dmSentTime",     title: "DM Sent Time" },
+    { id: "status",         title: "Status" },
+    { id: "replied",        title: "Replied (Y/N)" },
+    { id: "converted",      title: "Converted (Y/N)" },
+    { id: "followUpSent",   title: "Follow-Up Sent (Y/N)" }
   ],
   append: true
 });
@@ -81,7 +73,7 @@ function loadJsonState() {
   if (!fs.existsSync(sentStatePath)) return;
   try {
     const data = JSON.parse(fs.readFileSync(sentStatePath, "utf8"));
-    if (data.urls) data.urls.forEach(u => sentUrlSet.add(u));
+    if (data.urls)  data.urls.forEach(u  => sentUrlSet.add(u));
     if (data.users) data.users.forEach(u => sentUserSet.add(u.toLowerCase()));
   } catch {}
 }
@@ -90,7 +82,7 @@ function saveJsonState() {
   fs.writeFileSync(
     sentStatePath,
     JSON.stringify({
-      urls: [...sentUrlSet],
+      urls:  [...sentUrlSet],
       users: [...sentUserSet]
     }, null, 2)
   );
@@ -103,9 +95,9 @@ function loadCsvState() {
       .pipe(csv())
       .on("data", row => {
         if (row.username) sentUserSet.add(row.username.toLowerCase());
-        if (row.url) sentUrlSet.add(row.url);
+        if (row.url)      sentUrlSet.add(row.url);
       })
-      .on("end", resolve)
+      .on("end",   resolve)
       .on("error", resolve);
   });
 }
@@ -117,105 +109,103 @@ function loadLeads() {
     fs.createReadStream(leadsPath)
       .pipe(csv())
       .on("data", row => arr.push(row))
-      .on("end", () => resolve(arr))
+      .on("end",  () => resolve(arr))
       .on("error", () => resolve(arr));
   });
 }
 
 /* =========================
-   LEAD SCORING — FLIPIFY
-   
-   Prioritizes active flippers with financial pain signals
+   LEAD SCORING — DEV JOB KIT
+
+   Prioritizes active seekers with high-frustration signals
 ========================= */
 function scoreLead(p) {
   let score = 0;
   const trigger = (p.matchedTrigger || "").toLowerCase();
 
   // Lead type scoring
-  if (p.leadType === "ACTIVE_FLIPPER_PAIN") score += 5;
-  if (p.leadType === "RESELLER_PAIN") score += 3;
+  if (p.leadType === "ACTIVE_SEEKER_PAIN")  score += 5;
+  if (p.leadType === "GENERAL_JOB_PAIN")    score += 3;
 
   // High-value pain signals
-  if (trigger.includes("lost money") || trigger.includes("losing money")) score += 4;
-  if (trigger.includes("overpaid") || trigger.includes("overbid")) score += 4;
-  if (trigger.includes("unexpected repair") || trigger.includes("hidden damage")) score += 3;
-  if (trigger.includes("margin") || trigger.includes("break even")) score += 3;
-  if (trigger.includes("comp") || trigger.includes("kbb") || trigger.includes("book value")) score += 2;
-  if (trigger.includes("auction")) score += 2;
-  if (trigger.includes("roi") || trigger.includes("calculate") || trigger.includes("spreadsheet")) score += 3;
-  if (trigger.includes("couldn't sell") || trigger.includes("no offers") || trigger.includes("sitting")) score += 2;
+  if (trigger.includes("no callbacks") || trigger.includes("no response"))  score += 4;
+  if (trigger.includes("no interviews"))                                     score += 4;
+  if (trigger.includes("applied to") || trigger.includes("hundreds"))       score += 4;
+  if (trigger.includes("ghosted"))                                           score += 3;
+  if (trigger.includes("months"))                                            score += 3;
+  if (trigger.includes("resume") || trigger.includes("cover letter"))       score += 3;
+  if (trigger.includes("ats"))                                               score += 3;
+  if (trigger.includes("laid off") || trigger.includes("unemployed"))       score += 2;
+  if (trigger.includes("desperate") || trigger.includes("hopeless"))        score += 2;
 
   // High-signal subreddits
-  if (["carflipping", "askcarsales", "flipping"].includes(p.subreddit)) score += 2;
+  if (["cscareerquestions", "recruitinghell", "resumes"].includes(p.subreddit)) score += 2;
 
   return score;
 }
 
 /* =========================
-   DM TEMPLATES — FLIPIFY VALIDATION
-   
+   DM TEMPLATES — DEV JOB KIT
+
    Rules enforced across ALL templates:
-   ✓ Single question only
-   ✓ Conversational tone — not salesy
-   ✓ No product pitch
-   ✓ No links
-   ✓ Under 3 sentences
-   ✓ Asks how they calculate ROI / profit before buying
-   ✓ References their specific pain trigger naturally
-   
-   7 rotating variants to avoid pattern detection
+   ✓ Casual, lowercase tone
+   ✓ References their specific pain trigger
+   ✓ Not salesy — feels like a real person
+   ✓ Includes jobkit.tech link naturally
+   ✓ Under 4 sentences
+   ✓ 7 rotating variants to avoid pattern detection
 ========================= */
 function getTemplate(post) {
-  const trigger = post.matchedTrigger || "that flip";
+  const trigger = post.matchedTrigger || "the job search";
   const templates = [];
 
-  // Template 1: Loss empathy
+  // Template 1 — Empathy + soft pitch
   templates.push({
-    id: "FLIPIFY_T1",
-    subject: "Quick question",
-    text: `Saw your post about ${trigger} — rough one. Curious, how do you usually figure out your all-in cost before you commit to buying?`
+    id: "JK_T1",
+    subject: "something that might help",
+    text: `hey, saw your post about ${trigger} — that's genuinely exhausting. i built a small tool called jobkit that takes your resume + a job description and instantly writes tailored bullets, a cover letter, and a "why i fit" paragraph. might save you a ton of time. jobkit.tech if you want to check it out, no pressure`
   });
 
-  // Template 2: Neutral / process focused
+  // Template 2 — Direct and short
   templates.push({
-    id: "FLIPIFY_T2",
-    subject: "Quick question",
-    text: `Your post caught my eye. How do you typically calculate whether a car is worth buying before you pull the trigger — do you have a system or is it more feel?`
+    id: "JK_T2",
+    subject: "quick thing re: your post",
+    text: `yo saw your post about ${trigger}. built something that might actually help — paste your resume + job description and it generates tailored resume bullets, a cover letter, and your pitch in seconds. $9 one time, no subscription. jobkit.tech`
   });
 
-  // Template 3: Auction angle
+  // Template 3 — Resume angle
   templates.push({
-    id: "FLIPIFY_T3",
-    subject: "Quick question",
-    text: `Saw your post about ${trigger}. Do you have a method for estimating total profit before you bid, or do you mostly go off instinct at the auction?`
+    id: "JK_T3",
+    subject: "re: your job search",
+    text: `saw your post and felt it — the resume tailoring grind is brutal. made a tool that does it automatically. you paste your resume + the job post, it spits out tailored bullets, a clean cover letter, and a why-you-fit paragraph. jobkit.tech — takes about 10 seconds`
   });
 
-  // Template 4: Repair cost angle
+  // Template 4 — ATS angle
   templates.push({
-    id: "FLIPIFY_T4",
-    subject: "Quick question",
-    text: `Your post on ${trigger} hit home. How do you account for repair costs when you're deciding what to pay for a car?`
+    id: "JK_T4",
+    subject: "something that might help",
+    text: `hey, noticed your post about ${trigger}. a big part of getting past ATS is tailoring your resume to each job — which is annoying to do manually. built a tool that handles it automatically. jobkit.tech — you paste your resume + the job description and it writes everything for you`
   });
 
-  // Template 5: Comp / pricing angle
+  // Template 5 — Volume angle
   templates.push({
-    id: "FLIPIFY_T5",
-    subject: "Quick question",
-    text: `Noticed your post about ${trigger}. When you're pricing a car to resell, how do you pull comps — is there a process you follow or does it vary?`
+    id: "JK_T5",
+    subject: "re: your applications",
+    text: `saw your post about ${trigger} — sending that many apps with no response is rough. the problem is usually that the resume isn't tailored to each role. i built jobkit to fix that — it writes tailored bullets + a cover letter for any job in seconds. jobkit.tech`
   });
 
-  // Template 6: ROI direct
+  // Template 6 — Soft question opener
   templates.push({
-    id: "FLIPIFY_T6",
-    subject: "Quick question",
-    text: `Saw your post about ${trigger}. Genuinely curious — do you calculate ROI before buying, or does it usually come together after the fact?`
+    id: "JK_T6",
+    subject: "quick question",
+    text: `hey saw your post about ${trigger} — are you tailoring your resume for each application or sending the same one? asking because i built jobkit.tech which does it automatically. paste your resume + the job post and it generates tailored bullets, a cover letter, and a pitch instantly`
   });
 
-  // Template 7: Spreadsheet angle
+  // Template 7 — Laid off / urgency angle
   templates.push({
-    id: "FLIPIFY_T7",
-    subject: "Quick question",
-    text: `Your post about ${trigger} made me wonder — do you use any kind of tracker or spreadsheet when you're evaluating a flip, or do you keep it in your head?`
+    id: "JK_T7",
+    subject: "something useful for your search",
+    text: `saw your post — job hunting after a layoff is one of the worst situations. built a tool that takes your resume + any job description and writes tailored application materials in about 10 seconds. no subscription, just $9 one time. jobkit.tech — hope it helps`
   });
 
   return templates[Math.floor(Math.random() * templates.length)];
@@ -233,7 +223,7 @@ async function initState() {
 }
 
 /* =========================
-   DM CYCLE — UNCHANGED LOGIC, FLIPIFY FIELDS ADDED
+   DM CYCLE — UNCHANGED LOGIC, DEV JOB KIT FIELDS
 ========================= */
 async function runCycle() {
   let leads = await loadLeads();
@@ -254,7 +244,7 @@ async function runCycle() {
   let confirmed = 0;
 
   const cycleUsers = new Set();
-  const cycleUrls = new Set();
+  const cycleUrls  = new Set();
 
   for (const post of leads) {
     if (attempted >= targetDMs) {
@@ -262,62 +252,60 @@ async function runCycle() {
       break;
     }
 
-    const rawUser = post.username.trim();
+    const rawUser  = post.username.trim();
     const username = rawUser.toLowerCase();
-    const url = post.url.trim();
+    const url      = post.url.trim();
 
     if (
       sentUserSet.has(username) ||
-      sentUrlSet.has(url) ||
-      cycleUsers.has(username) ||
+      sentUrlSet.has(url)       ||
+      cycleUsers.has(username)  ||
       cycleUrls.has(url)
     ) continue;
 
     attempted++;
 
     try {
-      const tpl = getTemplate(post);
+      const tpl       = getTemplate(post);
       const dmSentTime = new Date().toISOString();
 
       await reddit.composeMessage({
-        to: rawUser,
+        to:      rawUser,
         subject: tpl.subject,
-        text: tpl.text
+        text:    tpl.text
       });
 
       confirmed++;
       console.log(`\n✓ DM sent to u/${rawUser}`);
-      console.log(`  Lead Type: ${post.leadType}`);
-      console.log(`  Pain Signal: "${post.matchedTrigger}"`);
-      console.log(`  Template: ${tpl.id}`);
-      console.log(`  Post URL: ${url}`);
-      console.log(`  Time: ${dmSentTime}`);
+      console.log(`  Lead Type:    ${post.leadType}`);
+      console.log(`  Pain Signal:  "${post.matchedTrigger}"`);
+      console.log(`  Template:     ${tpl.id}`);
+      console.log(`  Post URL:     ${url}`);
+      console.log(`  Time:         ${dmSentTime}`);
 
       sentUserSet.add(username);
       sentUrlSet.add(url);
       cycleUsers.add(username);
       cycleUrls.add(url);
 
-      // Log with Flipify validation fields (blanks filled manually after responses come in)
       await sentWriter.writeRecords([{
-        username:          rawUser,
-        title:             post.title,
+        username:       rawUser,
+        title:          post.title,
         url,
-        subreddit:         post.subreddit,
-        leadType:          post.leadType,
-        matchedTrigger:    post.matchedTrigger,
-        templateUsed:      tpl.id,
-        dmSentTime:        dmSentTime,
-        status:            "OUTREACH",
-        painConfirmed:     "",   // Fill after response: Y / N
-        currentMethod:     "",   // Fill after response: spreadsheet / gut / none / other
-        expressedInterest: "",   // Fill after response: Y / N
-        followUpPotential: ""    // Fill after response: Y / N
+        subreddit:      post.subreddit,
+        leadType:       post.leadType,
+        matchedTrigger: post.matchedTrigger,
+        templateUsed:   tpl.id,
+        dmSentTime,
+        status:         "OUTREACH",
+        replied:        "",   // Fill manually after response: Y / N
+        converted:      "",   // Fill manually after purchase: Y / N
+        followUpSent:   ""    // Fill manually after follow-up: Y / N
       }]);
 
       saveJsonState();
 
-      const delayMs = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
+      const delayMs   = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
       const delayMins = Math.round(delayMs / 60000);
 
       if (attempted < targetDMs) {
@@ -344,7 +332,7 @@ async function runCycle() {
   await initState();
 
   console.log("=".repeat(60));
-  console.log("ClientMagnet Bot — Flipify Validation Outreach");
+  console.log("ClientMagnet Bot — Dev Job Kit Outreach");
   console.log("=".repeat(60));
   console.log(`DMs per cycle: ${MIN_DMS_PER_CYCLE}-${MAX_DMS_PER_CYCLE} (randomized)`);
   console.log(`Delay between DMs: ${MIN_DELAY_MS/60000}-${MAX_DELAY_MS/60000} minutes`);

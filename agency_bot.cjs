@@ -218,7 +218,7 @@ const FOLLOWUP_LINK = [
   },
   {
     id: "FL3",
-    text: `https://jobkit.tech if you want to check it out\nyou just paste your resume + the job description and it generates everything in about 10 seconds`
+    text: `jobkit.tech if you want to check it out\nyou just paste your resume + the job description and it generates everything in about 10 seconds`
   },
   {
     id: "FL4",
@@ -378,6 +378,12 @@ async function runOutreachCycle(state) {
    INBOX MONITOR — STEP 2
    Polls inbox, detects replies, fires follow-up sequence
    Runs on setInterval — does NOT block outreach loop
+
+   FIX: Uses getUnreadMessages() so we only ever process
+   NEW items the bot hasn't seen yet. Marks each item read
+   after processing so it never fires twice — even across
+   restarts. Also validates item is a real DM (not a comment
+   mention or mod notification) before acting on it.
 ========================= */
 async function checkInboxAndFollowup() {
   const state       = loadState();
@@ -385,16 +391,34 @@ async function checkInboxAndFollowup() {
   const followed_up = state.followed_up || {};
 
   try {
-    const messages = await reddit.getInbox({ filter: "messages", limit: 50 });
+    // getUnreadMessages returns ONLY unread items — no duplicates ever
+    const unread = await reddit.getUnreadMessages({ limit: 50 });
 
-    for (const item of messages) {
-      if (!item.author) continue;
+    // Collect items to mark as read after processing
+    const toMarkRead = [];
+
+    for (const item of unread) {
+
+      // Must be a real DM — not a comment reply, mention, or mod message
+      // was_comment === false  → it's a direct message
+      // body exists            → has actual content
+      // author exists          → not a system message
+      if (item.was_comment !== false) continue;
+      if (!item.body)                 continue;
+      if (!item.author)               continue;
+
+      // Always mark read so we never reprocess, even if we skip it
+      toMarkRead.push(item);
 
       const sender = item.author.name.toLowerCase();
 
-      if (!messaged[sender])          continue; // not someone we messaged
+      // Skip our own bot account sending messages
+      const botUsername = (process.env.REDDIT_USERNAME || "").toLowerCase();
+      if (sender === botUsername) continue;
+
+      if (!messaged[sender])          continue; // not someone we DM'd
       if (messaged[sender].blocked)   continue; // blocked user
-      if (followed_up[sender])        continue; // already followed up
+      if (followed_up[sender])        continue; // already followed up — never double send
 
       console.log(`\n↩ Reply detected from u/${item.author.name}`);
 
@@ -456,6 +480,16 @@ async function checkInboxAndFollowup() {
 
       } catch (err) {
         console.log(`✗ Failed follow-up → u/${item.author.name}: ${err.message}`);
+      }
+    }
+
+    // Mark all valid DMs as read so getUnreadMessages never returns them again
+    if (toMarkRead.length > 0) {
+      try {
+        await reddit.markMessagesAsRead(toMarkRead);
+        console.log(`  Marked ${toMarkRead.length} message(s) as read.`);
+      } catch (err) {
+        console.log(`  Warning: could not mark messages as read: ${err.message}`);
       }
     }
 

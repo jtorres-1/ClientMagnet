@@ -187,10 +187,9 @@ const FOLLOWUP_VALUE = [
    USERNAME injected at send time → ?u=USERNAME
 ========================= */
 const FOLLOWUP_LINK = [
-  { id: "FL1", text: (u) => `here it is if you want to try it: https://jobkit.tech/?u=${u}\ntakes like 10 seconds per job, $9 one time` },
-  { id: "FL2", text: (u) => `https://jobkit.tech/?u=${u} — paste your resume + the job post and it writes everything for you\n$9 one time, no subscription` },
-  { id: "FL3", text: (u) => `jobkit.tech if you want to check it out: https://jobkit.tech/?u=${u}\nyou just paste your resume + the job description and it generates everything in about 10 seconds` },
-  { id: "FL4", text: (u) => `here: https://jobkit.tech/?u=${u}\none-time $9, no account needed — just paste and go` }
+  { id: "FL1", text: (u) => `made this for exactly that: https://jobkit.tech/?u=${u}\npaste your resume + the job post — it rewrites your bullets and cover letter to match. takes 30 seconds` },
+  { id: "FL2", text: (u) => `here: https://jobkit.tech/?u=${u}\nit tailors your resume to each job description so you stop getting filtered out before anyone reads it` },
+  { id: "FL3", text: (u) => `https://jobkit.tech/?u=${u}\npaste your resume + the posting, it rewrites everything to match — most people start getting callbacks within a week` }
 ];
 
 /* =========================

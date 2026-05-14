@@ -1,7 +1,5 @@
-// agency_bot.cjs — ClientMagnet Outreach (Dev Job Kit)
-// 2-Step Conversational System — Fully Idempotent
-//   Step 1: Context-aware opener, NO link — sent ONCE per user
-//   Step 2: On reply → value + tracking link — sent ONCE per user
+// agency_bot.cjs -- ClientMagnet Outreach (Business Owner Lead Gen)
+// 2-Step Automated + Manual Step 3 Takeover
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -26,9 +24,9 @@ const reddit = new snoowrap({
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-const leadsPath  = path.join(baseDir, "clean_leads.csv");
-const sentPath   = path.join(baseDir, "clean_leads_dmed.csv");
-const usersPath  = path.join(baseDir, "contacted_users.json");
+const leadsPath = path.join(baseDir, "clean_leads.csv");
+const sentPath  = path.join(baseDir, "clean_leads_dmed.csv");
+const usersPath = path.join(baseDir, "contacted_users.json");
 
 /* =========================
    RATE LIMITS
@@ -43,7 +41,6 @@ const FOLLOWUP_MAX_MS   = 30 * 1000;
 
 /* =========================
    NEGATIVE REPLY FILTER
-   If reply contains any of these → close user, skip Step 2
 ========================= */
 const NEGATIVE_SIGNALS = [
   "not interested",
@@ -66,27 +63,7 @@ function isNegativeReply(body) {
 }
 
 /* =========================
-   CONTACTED USERS — SINGLE SOURCE OF TRUTH
-   Structure per user:
-   {
-     username:               string
-     step1_sent:             bool
-     step1_sent_at:          ISO string
-     step1_template:         string
-     step2_sent:             bool
-     step2_sent_at:          ISO string | null
-     step2_value_template:   string | null
-     step2_link_template:    string | null
-     replied:                bool
-     closed:                 bool   ← negative reply or blocked
-     closed_reason:          string | null
-     last_message_at:        ISO string
-     processed_message_ids:  string[]  ← never reprocess same reply
-     trigger:                string
-     leadType:               string
-     url:                    string
-     subreddit:              string
-   }
+   USER STATE
 ========================= */
 function loadUsers() {
   if (!fs.existsSync(usersPath)) return {};
@@ -110,7 +87,7 @@ function upsertUser(users, username, fields) {
 }
 
 /* =========================
-   CSV WRITER — SENT LOG
+   CSV WRITER
 ========================= */
 const sentWriter = createObjectCsvWriter({
   path: sentPath,
@@ -136,60 +113,51 @@ function log(tag, msg) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* =========================
-   STEP 1 TEMPLATES — OPENERS (NO LINK)
-   6 categories × 3 variants = 18 openers
+   STEP 1 OPENERS -- QUALIFYING QUESTIONS
+   No pitch. No price. Just a question that gets them talking.
 ========================= */
 const OPENERS = {
-  no_response: [
-    { id: "O_NR1", text: `yo saw your post about getting no responses — that's genuinely demoralizing\n\nquick question: are you tailoring your resume for each job or mostly sending the same one?` },
-    { id: "O_NR2", text: `saw your post about no callbacks — rough spot to be in\n\nhonest question: when you apply, do you rewrite your resume bullets for each role or keep it the same?` },
-    { id: "O_NR3", text: `noticed your post about getting ghosted — that grind is brutal\n\nare you customizing your application for each job or sending the same resume out?` }
+  no_leads: [
+    { id: "O_NL1", text: `saw your post about the lead gen struggle -- that's a frustrating spot to be in\n\nquick question: are you doing any outreach right now or mostly waiting on inbound?` },
+    { id: "O_NL2", text: `noticed your post about not getting leads -- been there\n\nhonest question: have you tried any kind of direct outreach or is it mostly organic/ads right now?` },
+    { id: "O_NL3", text: `saw your post about the lead situation -- rough\n\nare you actively reaching out to potential clients or mostly relying on people finding you?` }
   ],
-  volume: [
-    { id: "O_V1", text: `saw your post about sending out that many applications — respect for the grind\n\nbut real question: are you tailoring each one or mostly using the same resume?` },
-    { id: "O_V2", text: `noticed your post about the application volume with no results — that's exhausting\n\nquick thing: are you customizing your resume for each job description or keeping it generic?` },
-    { id: "O_V3", text: `saw your post — applying that much with nothing back is demoralizing\n\nhonest question: do you rewrite your bullets for each role or send the same version out?` }
+  no_clients: [
+    { id: "O_NC1", text: `saw your post about struggling to get clients -- that grind is real\n\nquick question: what's your current main channel for finding new business?` },
+    { id: "O_NC2", text: `noticed your post about the client acquisition problem -- are you doing any direct outreach or mostly relying on referrals and inbound?` },
+    { id: "O_NC3", text: `saw your post about getting clients -- honest question: have you tried any automated outreach or is it all manual right now?` }
   ],
-  resume: [
-    { id: "O_R1", text: `saw your post about the resume struggles — it's one of those things that feels like it should be simple but isn't\n\nare you tailoring it to each job description or keeping one version?` },
-    { id: "O_R2", text: `noticed your post about the resume — are you rewriting your bullets for each job or mostly keeping the same resume?` },
-    { id: "O_R3", text: `saw your post about the resume situation — quick question: do you customize it for each role or send the same one out?` }
-  ],
-  cover_letter: [
-    { id: "O_CL1", text: `saw your post about the cover letter — most people either skip it or write something generic\n\ndo you write a new one for each job or reuse the same one?` },
-    { id: "O_CL2", text: `noticed your post about cover letters — are you writing a custom one per application or mostly copying the same version?` },
-    { id: "O_CL3", text: `saw your post — cover letters are genuinely painful to write from scratch every time\n\nare you customizing yours for each role or keeping it the same?` }
-  ],
-  laid_off: [
-    { id: "O_LO1", text: `saw your post — getting laid off and having to job hunt immediately is a brutal combo\n\nare you tailoring your resume for each role you apply to or mostly sending the same version?` },
-    { id: "O_LO2", text: `noticed your post — that situation is tough, job hunting under pressure is no joke\n\nquick question: do you customize your resume and cover letter for each job or keep it the same?` },
-    { id: "O_LO3", text: `saw your post about the job search — hope it turns around soon\n\nhonest question: are you rewriting your resume for each role or sending the same one out?` }
+  slow_sales: [
+    { id: "O_SS1", text: `saw your post about the slow month -- happens to everyone but still stings\n\nare you actively prospecting right now or waiting for things to pick up?` },
+    { id: "O_SS2", text: `noticed your post about slow sales -- quick question: is your pipeline completely dry or just not converting?` },
+    { id: "O_SS3", text: `saw your post about the sales situation -- are you reaching out to new prospects or mostly working existing leads?` }
   ],
   general: [
-    { id: "O_G1", text: `saw your post about the job search — that process is rough\n\nquick question: are you tailoring your resume for each job or sending the same version out?` },
-    { id: "O_G2", text: `noticed your post — job hunting is genuinely exhausting\n\nare you customizing your resume and cover letter for each role or mostly keeping it the same?` },
-    { id: "O_G3", text: `saw your post — that job search grind hits different\n\nhonest question: do you rewrite your resume for each application or send one version out?` }
+    { id: "O_G1", text: `saw your post about the growth struggle -- quick question: what's your main bottleneck right now, finding leads or closing them?` },
+    { id: "O_G2", text: `noticed your post -- are you getting enough leads but not closing, or is the problem finding people in the first place?` },
+    { id: "O_G3", text: `saw your post -- honest question: have you tried any kind of automated outreach for your business yet?` }
   ]
 };
 
 /* =========================
-   STEP 2A TEMPLATES — VALUE (NO LINK)
+   STEP 2 VALUE REPLY -- POSITION AS SOLUTION
+   No price. No hard sell. Just value and curiosity.
 ========================= */
 const FOLLOWUP_VALUE = [
-  { id: "FV1", text: `yeah that's usually the issue — most people send the same resume and ATS filters it out before a human even sees it\n\ni built a tool that rewrites your resume bullets + cover letter for each job automatically` },
-  { id: "FV2", text: `right — sending the same resume is basically why most apps go nowhere. each job description has specific keywords and if your resume doesn't match, it gets filtered\n\ni actually built something that handles the tailoring automatically` },
-  { id: "FV3", text: `yeah exactly — the tailoring is what makes the difference but it's also the most time consuming part\n\nbuilt a tool that does it for you — takes your resume + the job description and rewrites everything` },
-  { id: "FV4", text: `makes sense — doing it manually for every job is brutal and most people just don't\n\ni built a tool that automates the whole thing — resume bullets, cover letter, and a why-you-fit paragraph` }
+  { id: "FV1", text: `yeah that's the core problem -- most businesses are either waiting on inbound or doing manual outreach that doesn't scale\n\ni built an automated outreach system that finds your ideal customers on Reddit and reaches out to them directly. gets replies within days` },
+  { id: "FV2", text: `right -- relying on referrals and hoping people find you is unpredictable\n\ni built a system that actively finds people on Reddit who are already looking for what you offer and reaches out automatically. takes the guesswork out` },
+  { id: "FV3", text: `makes sense -- manual outreach is time consuming and most automated tools feel spammy\n\ni built something different -- it finds high-intent people on Reddit already talking about the problem you solve and reaches out with a personalized message. been getting solid reply rates` },
+  { id: "FV4", text: `yeah that's the issue -- most outreach is either too broad or too manual\n\ni run done-for-you Reddit outreach campaigns. find the exact people already talking about needing your solution and reach out automatically. happy to show you how it works` }
 ];
 
 /* =========================
-   STEP 2B TEMPLATES — LINK (WITH TRACKING)
-   USERNAME injected at send time → ?u=USERNAME
+   STEP 2B -- SOFT CLOSE (NO PRICE YET)
+   Goal: get them to say yes to a conversation
 ========================= */
-const FOLLOWUP_LINK = [
-  { id: "FL1", text: (u) => `made this for exactly that: https://jobkit.tech/?u=${u}\npaste your resume + the job post — it rewrites your bullets and cover letter to match. takes 30 seconds` },
-  { id: "FL2", text: (u) => `here: https://jobkit.tech/?u=${u}\nit tailors your resume to each job description so you stop getting filtered out before anyone reads it` },
-  { id: "FL3", text: (u) => `https://jobkit.tech/?u=${u}\npaste your resume + the posting, it rewrites everything to match — most people start getting callbacks within a week` }
+const FOLLOWUP_CLOSE = [
+  { id: "FC1", text: (u) => `want me to show you how it would work for your specific business? just need to know what you sell and who your ideal customer is` },
+  { id: "FC2", text: (u) => `if you want i can run a quick analysis of which subreddits your ideal customers are actually active in -- no commitment, just so you can see if it makes sense` },
+  { id: "FC3", text: (u) => `would it be worth a quick conversation to see if this would work for what you're selling? takes 10 minutes` }
 ];
 
 /* =========================
@@ -197,18 +165,16 @@ const FOLLOWUP_LINK = [
 ========================= */
 function getOpenerCategory(trigger) {
   const t = (trigger || "").toLowerCase();
-  if (/no callbacks|no response|no interviews|ghosted|not hearing/.test(t)) return "no_response";
-  if (/applied to|hundreds|mass applying|applications/.test(t))             return "volume";
-  if (/resume|ats|bullet|tailoring/.test(t))                                return "resume";
-  if (/cover letter/.test(t))                                               return "cover_letter";
-  if (/laid off|layoff|unemployed|between jobs/.test(t))                    return "laid_off";
+  if (/no leads|not getting leads|need more leads/.test(t)) return "no_leads";
+  if (/no clients|not getting clients|need more clients|can't get clients/.test(t)) return "no_clients";
+  if (/slow|dead pipeline|no sales|revenue dropped/.test(t)) return "slow_sales";
   return "general";
 }
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function getOpener(trigger)  { return pick(OPENERS[getOpenerCategory(trigger)]); }
 function getValueMsg()       { return pick(FOLLOWUP_VALUE); }
-function getLinkMsg()        { return pick(FOLLOWUP_LINK); }
+function getCloseMsg()       { return pick(FOLLOWUP_CLOSE); }
 
 /* =========================
    LEAD SCORING
@@ -216,23 +182,18 @@ function getLinkMsg()        { return pick(FOLLOWUP_LINK); }
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
-  if (p.leadType === "ACTIVE_SEEKER_PAIN") score += 5;
-  if (p.leadType === "GENERAL_JOB_PAIN")   score += 3;
-  if (/no callbacks|no response/.test(t))  score += 4;
-  if (/no interviews/.test(t))             score += 4;
-  if (/applied to|hundreds/.test(t))       score += 4;
-  if (/ghosted/.test(t))                   score += 3;
-  if (/months/.test(t))                    score += 3;
-  if (/resume|cover letter/.test(t))       score += 3;
-  if (/ats/.test(t))                       score += 3;
-  if (/laid off|unemployed/.test(t))       score += 2;
-  if (/desperate|hopeless/.test(t))        score += 2;
-  if (["cscareerquestions","recruitinghell","resumes"].includes(p.subreddit)) score += 2;
+  if (p.leadType === "CONFIRMED_OWNER_PAIN") score += 5;
+  if (p.leadType === "GENERAL_BUSINESS_PAIN") score += 3;
+  if (/no leads|no clients/.test(t))  score += 4;
+  if (/slow sales|dead pipeline/.test(t)) score += 3;
+  if (/desperate|running out|about to shut down/.test(t)) score += 5;
+  if (/tried everything|nothing is working/.test(t)) score += 4;
+  if (["entrepreneur","smallbusiness","SaaS","agency"].includes(p.subreddit)) score += 2;
   return score;
 }
 
 /* =========================
-   LOAD LEADS FROM CSV
+   LOAD LEADS
 ========================= */
 function loadLeads() {
   return new Promise(resolve => {
@@ -247,9 +208,7 @@ function loadLeads() {
 }
 
 /* =========================
-   OUTREACH CYCLE — STEP 1
-   Guard: step1_sent must be false
-   Guard: closed must be false
+   OUTREACH CYCLE -- STEP 1
 ========================= */
 async function runOutreachCycle() {
   const leads = await loadLeads();
@@ -273,10 +232,10 @@ async function runOutreachCycle() {
       break;
     }
 
-    const username = (post.username || "").trim();
-    const url      = (post.url      || "").trim();
-    const trigger  = (post.matchedTrigger || "the job search").trim();
-    const leadType = (post.leadType || "").trim();
+    const username  = (post.username || "").trim();
+    const url       = (post.url      || "").trim();
+    const trigger   = (post.matchedTrigger || "getting clients").trim();
+    const leadType  = (post.leadType || "").trim();
     const subreddit = (post.subreddit || "").trim();
 
     if (!username || !url) continue;
@@ -284,7 +243,6 @@ async function runOutreachCycle() {
     const key  = username.toLowerCase();
     const user = getUser(users, username);
 
-    // ── DEDUPLICATION GUARDS ──
     if (cyclesSeen.has(key)) continue;
 
     if (user) {
@@ -321,10 +279,11 @@ async function runOutreachCycle() {
         step2_sent:           false,
         step2_sent_at:        null,
         step2_value_template: null,
-        step2_link_template:  null,
+        step2_close_template: null,
         replied:              false,
         closed:               false,
         closed_reason:        null,
+        ready_for_manual:     false,
         processed_message_ids: [],
         trigger,
         leadType,
@@ -355,18 +314,13 @@ async function runOutreachCycle() {
     }
   }
 
-  log("INFO", `Outreach cycle complete — attempted ${attempted}, confirmed ${confirmed}`);
+  log("INFO", `Outreach cycle complete -- attempted ${attempted}, confirmed ${confirmed}`);
 }
 
 /* =========================
-   INBOX MONITOR — STEP 2
-   Guards:
-     - Real DM only (was_comment === false)
-     - Not from our own account
-     - User must be in contacted_users with step1_sent = true
-     - step2_sent must be false
-     - Message ID must not be in processed_message_ids
-     - Negative reply → close user, skip Step 2
+   INBOX MONITOR -- STEP 2
+   After Step 2 sends, flags user as ready_for_manual = true
+   so you know to take over manually
 ========================= */
 async function checkInboxAndFollowup() {
   const users = loadUsers();
@@ -377,8 +331,6 @@ async function checkInboxAndFollowup() {
     const toMarkRead = [];
 
     for (const item of unread) {
-
-      // Must be a real DM
       if (item.was_comment !== false) continue;
       if (!item.body)                 continue;
       if (!item.author)               continue;
@@ -388,57 +340,52 @@ async function checkInboxAndFollowup() {
       const sender    = item.author.name.toLowerCase();
       const messageId = item.name || item.id || "";
 
-      // Never process our own sent messages
       if (sender === botUsername) continue;
 
       const user = getUser(users, item.author.name);
 
-      // Must be someone we contacted in Step 1
       if (!user || !user.step1_sent) {
-        log("SKIP", `unknown sender u/${item.author.name} — not in contacted_users`);
+        log("SKIP", `unknown sender u/${item.author.name}`);
         continue;
       }
 
-      // Skip closed users
       if (user.closed) {
-        log("SKIP", `closed user u/${item.author.name} (${user.closed_reason})`);
+        log("SKIP", `closed user u/${item.author.name}`);
         continue;
       }
 
-      // Never process same message twice
       const processed = user.processed_message_ids || [];
       if (messageId && processed.includes(messageId)) {
-        log("SKIP", `already processed message ${messageId} from u/${item.author.name}`);
+        log("SKIP", `already processed message ${messageId}`);
         continue;
       }
 
-      // Mark message ID as processed immediately
       processed.push(messageId);
       upsertUser(users, item.author.name, { processed_message_ids: processed, replied: true });
 
-      // ── NEGATIVE REPLY FILTER ──
       if (isNegativeReply(item.body)) {
         upsertUser(users, item.author.name, {
           closed: true,
           closed_reason: "negative_reply"
         });
-        log("SKIP: negative reply", `u/${item.author.name} — closing user`);
+        log("SKIP: negative reply", `u/${item.author.name} -- closing`);
         continue;
       }
 
-      // ── STEP 2 DEDUPLICATION GUARD ──
       if (user.step2_sent) {
-        log("SKIP: step2 already sent", `u/${item.author.name}`);
+        // Step 2 already sent -- flag for manual takeover
+        upsertUser(users, item.author.name, { ready_for_manual: true });
+        log("MANUAL NEEDED", `u/${item.author.name} replied after Step 2 -- take over now`);
         continue;
       }
 
-      log("INFO", `Reply detected from u/${item.author.name}`);
+      log("INFO", `Reply from u/${item.author.name} -- sending Step 2`);
 
-      const valTpl  = getValueMsg();
-      const linkTpl = getLinkMsg();
+      const valTpl   = getValueMsg();
+      const closeTpl = getCloseMsg();
 
       try {
-        // Step 2a — value, no link
+        // Step 2a -- value
         await reddit.composeMessage({
           to:      item.author.name,
           subject: "re: quick question",
@@ -453,42 +400,41 @@ async function checkInboxAndFollowup() {
           trigger: user.trigger || "", url: user.url || "", note: ""
         }]);
 
-        // Wait 10–30s before link
         const pause = FOLLOWUP_MIN_MS + Math.random() * (FOLLOWUP_MAX_MS - FOLLOWUP_MIN_MS);
-        log("INFO", `Pausing ${Math.round(pause/1000)}s before link...`);
+        log("INFO", `Pausing ${Math.round(pause/1000)}s before close...`);
         await sleep(pause);
 
-        // Step 2b — tracking link with username
-        const linkText = linkTpl.text(item.author.name);
+        // Step 2b -- soft close
+        const closeText = closeTpl.text(item.author.name);
         await reddit.composeMessage({
           to:      item.author.name,
           subject: "re: quick question",
-          text:    linkText
+          text:    closeText
         });
-        log("SENT: step2b", `u/${item.author.name} | ${linkTpl.id} | link: https://jobkit.tech/?u=${item.author.name}`);
+        log("SENT: step2b", `u/${item.author.name} | ${closeTpl.id}`);
 
         await sentWriter.writeRecords([{
           time: new Date().toISOString(), username: item.author.name,
-          step: "STEP_2B", templateId: linkTpl.id,
+          step: "STEP_2B", templateId: closeTpl.id,
           subreddit: user.subreddit || "", leadType: user.leadType || "",
-          trigger: user.trigger || "", url: user.url || "",
-          note: `tracking: https://jobkit.tech/?u=${item.author.name}`
+          trigger: user.trigger || "", url: user.url || "", note: "soft close sent -- monitor for reply"
         }]);
 
-        // ── MARK STEP 2 COMPLETE — will never fire again for this user ──
         upsertUser(users, item.author.name, {
           step2_sent:           true,
           step2_sent_at:        new Date().toISOString(),
           step2_value_template: valTpl.id,
-          step2_link_template:  linkTpl.id
+          step2_close_template: closeTpl.id,
+          ready_for_manual:     false
         });
+
+        log("INFO", `Step 2 complete for u/${item.author.name} -- watch for reply to take over manually`);
 
       } catch (err) {
         log("ERROR", `Step 2 failed u/${item.author.name}: ${err.message}`);
       }
     }
 
-    // Mark all processed items as read on Reddit
     if (toMarkRead.length > 0) {
       try {
         await reddit.markMessagesAsRead(toMarkRead);
@@ -508,19 +454,17 @@ async function checkInboxAndFollowup() {
 ========================= */
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet — Dev Job Kit 2-Step Outreach (Idempotent)");
+  console.log("ClientMagnet -- Business Owner Lead Gen Outreach");
+  console.log("Target: $1,500 setup + $500/month retainer");
   console.log("=".repeat(60));
-  console.log(`Step 1 DMs per cycle:  ${MIN_DMS_PER_CYCLE}–${MAX_DMS_PER_CYCLE}`);
-  console.log(`Delay between DMs:     ${MIN_DELAY_MS/60000}–${MAX_DELAY_MS/60000} min`);
+  console.log(`Step 1 DMs per cycle:  ${MIN_DMS_PER_CYCLE}-${MAX_DMS_PER_CYCLE}`);
+  console.log(`Delay between DMs:     ${MIN_DELAY_MS/60000}-${MAX_DELAY_MS/60000} min`);
   console.log(`Inbox poll interval:   ${INBOX_POLL_MS/1000}s`);
-  console.log(`Follow-up split delay: ${FOLLOWUP_MIN_MS/1000}–${FOLLOWUP_MAX_MS/1000}s`);
   console.log(`State file:            logs/contacted_users.json`);
   console.log("=".repeat(60));
 
-  // Inbox monitor — non-blocking
   setInterval(checkInboxAndFollowup, INBOX_POLL_MS);
 
-  // Outreach loop
   while (true) {
     console.log(`\n[${new Date().toLocaleString()}] Starting outreach cycle...`);
     await runOutreachCycle();

@@ -36,66 +36,48 @@ function prependLead(file, rowObj) {
 }
 
 /* =========================
-   SUBREDDITS — DEV JOB KIT TARGETS
-
-   Job hunting, resume help, career advice,
-   developer job search, recruiting pain
+   SUBREDDITS — BUSINESS OWNER / FOUNDER TARGETS
 ========================= */
 const subs = [
-  "cscareerquestions",
-  "devops",
-  "learnprogramming",
-  "ExperiencedDevs",
-  "webdev",
-  "jobs",
-  "resumes",
-  "recruitinghell",
-  "jobsearchhacks",
-  "careerguidance",
-  "programming",
-  "softwareengineering",
-  "techjobs"
+  "entrepreneur",
+  "smallbusiness",
+  "startups",
+  "SaaS",
+  "digital_marketing",
+  "agency",
+  "Entrepreneur",
+  "freelance",
+  "consulting",
+  "marketing",
+  "sales",
+  "growmybusiness",
+  "ecommerce",
+  "Affiliatemarketing"
 ];
 
 /* =========================
-   PRIMARY KEYWORDS — DEV JOB HUNT CONTEXT
-
-   Must match active job searching activity.
-   Categories:
-   - Job hunt activity: applying, applications, job search, job hunting
-   - Resume: resume, cv, bullet points, ATS, tailoring
-   - Responses: callbacks, interviews, responses, ghosted, rejected
-   - Cover letter: cover letter, writing, application materials
-   - Platforms: linkedin, indeed, greenhouse, lever, workday
+   PRIMARY KEYWORDS — BUSINESS / LEAD GEN CONTEXT
 ========================= */
-const primaryKeywordRegex = /\b(applying|applied|application|applications|job search|job hunting|job hunt|resume|cv|cover letter|bullet points|ats|tailoring|tailor|callbacks|callback|interview|interviews|response|responses|ghosted|rejected|rejection|linkedin|indeed|greenhouse|lever|workday|hiring|recruiter|recruiters|job posting|job description)\b/i;
+const primaryKeywordRegex = /\b(leads|lead generation|lead gen|clients|customer acquisition|getting customers|getting clients|outreach|cold email|cold outreach|sales pipeline|pipeline|prospecting|booking calls|booked calls|closing deals|conversion|converting|inbound|outbound|marketing|advertising|growth|revenue|churn|retention|referrals|word of mouth|social media|content marketing|seo|paid ads|facebook ads|google ads)\b/i;
 
 /* =========================
-   PAIN SIGNALS — DEV JOB KIT SPECIFIC
-
-   Targets frustration, lack of responses,
-   resume confusion, application volume with no results
+   PAIN SIGNALS — LEAD GEN / CLIENT ACQUISITION PAIN
 ========================= */
-const painSignalRegex = /\b(no callbacks|no response|no responses|no interviews|not hearing back|getting ghosted|been ghosted|applied to \d+|applied to over|applied to hundreds|hundreds of applications|mass applying|spray and pray|rejection after rejection|rejection emails|generic resume|same resume|not tailoring|don't know how to tailor|how do i tailor|ats friendly|beating ats|ats rejected|resume not working|resume isn't working|resume feels|cover letter help|don't know what to write|hate writing cover letters|cover letter is generic|why am i not getting|why aren't i getting|months of applying|been applying for|out of work|laid off|got laid off|job hunting for months|no luck|running out of|desperate|nothing is working|what am i doing wrong|should i give up|feeling hopeless|feeling defeated|burnout|exhausted from applying)\b/i;
+const painSignalRegex = /\b(no leads|no clients|can't get clients|can't get leads|struggling to get|not getting clients|not getting leads|slow month|slow sales|dead pipeline|no pipeline|no sales|revenue dropped|losing clients|losing customers|churn is high|nobody is buying|no one is buying|low conversion|low conversions|not converting|outreach isn't working|cold email not working|ads not working|wasting money on ads|burning through budget|no roi|terrible roi|tried everything|nothing is working|what am i doing wrong|how do i get more clients|how do i get more leads|how do i grow|struggling to grow|can't scale|can't grow|need more clients|need more leads|need more sales|desperate for clients|running out of money|runway is short|about to shut down|barely surviving|slow season|business is slow|not enough clients|not enough leads)\b/i;
 
 /* =========================
-   JOB SEEKER SIGNALS (BONUS — NOT REQUIRED)
-
-   Confirms the poster is actively job hunting
+   BUSINESS OWNER SIGNALS
 ========================= */
-const jobSeekerSignalRegex = /\b(i applied|i've applied|i have applied|i'm applying|i am applying|my resume|my cv|my cover letter|sent out|sending out|been applying|applying for months|job hunting|on the market|open to work|currently looking|actively looking|need a job|need work|between jobs|unemployed|laid off)\b/i;
+const businessOwnerRegex = /\b(my business|my company|my agency|my startup|my saas|my product|my service|i run|i own|i started|i founded|i built|we offer|we sell|our product|our service|our company|our agency|our startup|b2b|b2c|solopreneur|founder|co-founder|ceo|owner|operator)\b/i;
 
 /* =========================
-   HARD BLOCKS — SKIP THESE
+   HARD BLOCKS
 ========================= */
-const vendorRegex = /\b(we sell|our product|our software|check out our|try our|book a demo|free trial|discount code|affiliate|promo code)\b/i;
-const hiringRegex = /\b(we are hiring|we're hiring|our team is hiring|join our team|open position|job opening|now hiring)\b/i;
-const studentOnlyRegex = /\b(thinking about becoming a developer|how do i get into|career change advice|should i learn to code|is coding worth it)\b/i;
+const jobSeekerRegex = /\b(looking for a job|job hunting|job search|need a job|resume|cover letter|applying for|interview prep|laid off|unemployment)\b/i;
+const spamRegex = /\b(check out my|buy now|limited offer|discount code|promo code|affiliate link|click here)\b/i;
 
 /* =========================
    FRESHNESS — 48 HOURS
-
-   Job posts go stale fast — tighter window than car flipping
 ========================= */
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
@@ -103,48 +85,29 @@ function isFresh(post) {
 }
 
 /* =========================
-   CLASSIFIER — DEV JOB KIT TARGETING
-
-   Requires: primary keyword + pain signal
-   Bonus: job seeker signal upgrades lead type
+   CLASSIFIER
 ========================= */
 function classify(post) {
   const title = (post.title || "").toLowerCase();
   const body = (post.selftext || "").toLowerCase();
   const combined = `${title} ${body}`;
 
-  // Minimum quality
   if (title.length < 10) return null;
 
-  /* ========== HARD BLOCKS FIRST ========== */
-  if (vendorRegex.test(combined)) return null;
-  if (hiringRegex.test(combined)) return null;
-  if (studentOnlyRegex.test(combined)) return null;
+  if (jobSeekerRegex.test(combined)) return null;
+  if (spamRegex.test(combined)) return null;
 
-  /* ========== RULE 1: MUST BE JOB HUNT RELATED ========== */
   if (!primaryKeywordRegex.test(combined)) return null;
+  if (!painSignalRegex.test(combined)) return null;
 
-  /* ========== RULE 2: MUST HAVE PAIN SIGNAL ========== */
-  const hasPainSignal = painSignalRegex.test(combined);
-  if (!hasPainSignal) return null;
+  const painMatch = combined.match(painSignalRegex)?.[0] || "getting clients";
+  const hasOwnerSignal = businessOwnerRegex.test(combined);
 
-  // Extract matched pain signal for DM context
-  const painMatch = combined.match(painSignalRegex)?.[0] || "the job search";
-
-  /* ========== CLASSIFICATION ========== */
-  const hasJobSeekerSignal = jobSeekerSignalRegex.test(combined);
-
-  if (hasJobSeekerSignal) {
-    return {
-      type: "ACTIVE_SEEKER_PAIN",    // Confirmed job seeker with a pain point
-      trigger: painMatch
-    };
+  if (hasOwnerSignal) {
+    return { type: "CONFIRMED_OWNER_PAIN", trigger: painMatch };
   }
 
-  return {
-    type: "GENERAL_JOB_PAIN",        // Likely job seeker, pain present
-    trigger: painMatch
-  };
+  return { type: "GENERAL_BUSINESS_PAIN", trigger: painMatch };
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
@@ -153,7 +116,7 @@ const wait = ms => new Promise(res => setTimeout(res, ms));
    SCRAPER LOOP
 ========================= */
 async function scrape() {
-  console.log("Starting Dev Job Kit scraper (Job Hunt / Resume Pain Targeting)...");
+  console.log("Starting ClientMagnet scraper (Business Owner / Lead Gen Pain Targeting)...");
 
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8")
@@ -191,7 +154,7 @@ async function scrape() {
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
-        console.log(`  ✓ ${result.type}: u/${p.author.name} - "${result.trigger}"`);
+        console.log(`  + ${result.type}: u/${p.author.name} - "${result.trigger}"`);
       }
 
     } catch (err) {
@@ -200,15 +163,12 @@ async function scrape() {
     }
   }
 
-  console.log(`Scrape complete — leads found: ${leads}`);
+  console.log(`Scrape complete -- leads found: ${leads}`);
 }
 
-/* =========================
-   RUN LOOP — UNCHANGED FROM ORIGINAL
-========================= */
 (async () => {
   while (true) {
     await scrape();
-    await wait(30 * 60 * 1000); // Every 30 minutes
+    await wait(30 * 60 * 1000);
   }
 })();

@@ -29,33 +29,22 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// BOT SERVICE SUBREDDITS
-const BOT_SERVICE_SUBS = [
-  "entrepreneur", "smallbusiness", "startups", "SaaS",
-  "digital_marketing", "agency", "Entrepreneur", "freelance",
-  "consulting", "marketing", "sales", "growmybusiness",
-  "ecommerce", "Affiliatemarketing"
+// CONTRACTOR / SERVICE BUSINESS SUBREDDITS
+const CONTRACTOR_SUBS = [
+  "Plumbing", "HVAC", "electricians", "Construction", "Roofing",
+  "Contractor", "homeimprovement", "landscaping", "lawncare",
+  "smallbusiness", "Entrepreneur", "Flooring", "handyman",
+  "pestcontrol", "GarageDoors", "Locksmith", "AskElectricians",
+  "AskPlumbing", "AskContractors"
 ];
 
-// VOICE AGENT SUBREDDITS
-const RESTAURANT_SUBS = [
-  "restaurant", "restaurantowners", "KitchenConfidential",
-  "bar", "foodservice", "bartenders", "Serverlife",
-  "smallbusiness", "entrepreneur"
-];
-
-// BOT SERVICE PATTERNS
-const botPrimaryRegex = /\b(leads|lead generation|lead gen|clients|customer acquisition|getting customers|getting clients|outreach|cold email|cold outreach|sales pipeline|pipeline|prospecting|booking calls|closing deals|conversion|inbound|outbound|marketing|advertising|growth|revenue|churn|referrals|social media|seo|paid ads|facebook ads|google ads)\b/i;
-const botPainRegex = /\b(no leads|no clients|can't get clients|can't get leads|struggling to get|not getting clients|not getting leads|slow month|slow sales|dead pipeline|no pipeline|no sales|revenue dropped|losing clients|losing customers|nobody is buying|no one is buying|low conversion|not converting|outreach isn't working|cold email not working|ads not working|no roi|terrible roi|tried everything|nothing is working|what am i doing wrong|how do i get more clients|how do i get more leads|struggling to grow|can't scale|can't grow|need more clients|need more leads|need more sales|desperate for clients|running out of money|about to shut down|barely surviving|slow season|business is slow|not enough clients|not enough leads)\b/i;
-const businessOwnerRegex = /\b(my business|my company|my agency|my startup|my saas|my product|my service|i run|i own|i started|i founded|i built|we offer|we sell|our product|our service|our company|our agency|b2b|b2c|solopreneur|founder|co-founder|ceo|owner|operator)\b/i;
-
-// VOICE AGENT PATTERNS
-const restaurantPrimaryRegex = /\b(phone|calls|reservations|booking|answering|receptionist|front of house|staffing|customers calling|missed calls|voicemail|phone system|call volume|busy signal|answer the phone|pickup|ring)\b/i;
-const restaurantPainRegex = /\b(missing calls|missed calls|can't answer|can't get to the phone|phones ringing|overwhelmed|too busy to answer|no one answers|goes to voicemail|losing reservations|losing customers|phone always busy|staff too busy|short staffed|understaffed|can't hire|can't afford staff|phones are chaos|hate answering phones|phones are killing us|drowning in calls|need a receptionist|can't afford receptionist|after hours calls|calls go unanswered|reservation calls|takeout calls|call handling)\b/i;
-const restaurantOwnerRegex = /\b(my restaurant|my bar|my cafe|my diner|my bistro|i own|i run|we run|we own|our restaurant|our bar|our place|our spot|our establishment|front of house|foh|chef|owner|operator|gm|general manager|hospitality|food service|fine dining|fast casual|qsr)\b/i;
+// CONTRACTOR / SERVICE BUSINESS PATTERNS
+const contractorPrimaryRegex = /\b(phone|calls|booking|scheduling|dispatch|appointments|receptionist|answering service|missed calls|voicemail|leads|customers calling|service calls|estimates|quotes|jobs|jobsite|on a job|in the field)\b/i;
+const contractorPainRegex = /\b(missing calls|missed calls|can't answer|can't get to the phone|on a job|in someone's house|under a sink|on a roof|in an attic|in a crawl space|phones ringing|too busy|drowning in calls|no time to call back|losing jobs|losing customers|losing leads|can't hire|can't afford a receptionist|need a receptionist|answering service is terrible|too expensive|after hours calls|emergency calls|calls go unanswered|voicemail full|missed leads|missed estimates|missing money|missing work|forgot to call back|never called them back|callback)\b/i;
+const contractorOwnerRegex = /\b(my plumbing|my hvac|my electrical|my roofing|my contracting|my construction|my landscaping|my company|my crew|my truck|my shop|i own|i run|we run|we own|owner operator|owner|operator|self employed|sole prop|licensed|journeyman|master plumber|master electrician|gc|general contractor|tradesman|in the trades|field tech|service tech)\b/i;
 
 // HARD BLOCKS
-const jobSeekerRegex = /\b(looking for a job|job hunting|job search|need a job|resume|cover letter|applying for|interview prep|laid off|unemployment)\b/i;
+const jobSeekerRegex = /\b(looking for a job|job hunting|job search|need a job|resume|cover letter|applying for|interview prep|laid off|unemployment|apprentice|trying to get into|how do i become|how to become a)\b/i;
 const spamRegex = /\b(check out my|buy now|limited offer|discount code|promo code|affiliate link|click here)\b/i;
 
 function isFresh(post) {
@@ -63,7 +52,7 @@ function isFresh(post) {
   return ageHours <= 48;
 }
 
-function classify(post, product) {
+function classify(post) {
   const title = (post.title || "").toLowerCase();
   const body = (post.selftext || "").toLowerCase();
   const combined = `${title} ${body}`;
@@ -72,34 +61,19 @@ function classify(post, product) {
   if (jobSeekerRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
 
-  if (product === "BOT_SERVICE") {
-    if (!botPrimaryRegex.test(combined)) return null;
-    if (!botPainRegex.test(combined)) return null;
-    const painMatch = combined.match(botPainRegex)?.[0] || "getting clients";
-    return {
-      type: businessOwnerRegex.test(combined) ? "CONFIRMED_OWNER_PAIN" : "GENERAL_BUSINESS_PAIN",
-      trigger: painMatch,
-      product: "BOT_SERVICE"
-    };
-  }
-
-  if (product === "VOICE_AGENT") {
-    if (!restaurantPrimaryRegex.test(combined)) return null;
-    if (!restaurantPainRegex.test(combined)) return null;
-    const painMatch = combined.match(restaurantPainRegex)?.[0] || "missed calls";
-    return {
-      type: restaurantOwnerRegex.test(combined) ? "CONFIRMED_RESTAURANT_OWNER" : "GENERAL_RESTAURANT_PAIN",
-      trigger: painMatch,
-      product: "VOICE_AGENT"
-    };
-  }
-
-  return null;
+  if (!contractorPrimaryRegex.test(combined)) return null;
+  if (!contractorPainRegex.test(combined)) return null;
+  const painMatch = combined.match(contractorPainRegex)?.[0] || "missed calls";
+  return {
+    type: contractorOwnerRegex.test(combined) ? "CONFIRMED_CONTRACTOR_OWNER" : "GENERAL_CONTRACTOR_PAIN",
+    trigger: painMatch,
+    product: "VOICE_AGENT"
+  };
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
 
-async function scrapeSubreddits(subs, product) {
+async function scrapeSubreddits(subs) {
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2])
   );
@@ -107,14 +81,14 @@ async function scrapeSubreddits(subs, product) {
   let leads = 0;
 
   for (const sub of subs) {
-    console.log(`[${product}] Scanning r/${sub}`);
+    console.log(`Scanning r/${sub}`);
     try {
       await wait(1200);
       const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
 
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
-        const result = classify(p, product);
+        const result = classify(p);
         if (!result) continue;
 
         const url = `https://reddit.com${p.permalink}`;
@@ -134,7 +108,7 @@ async function scrapeSubreddits(subs, product) {
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
-        console.log(`  + [${product}] ${result.type}: u/${p.author.name} - "${result.trigger}"`);
+        console.log(`  + ${result.type}: u/${p.author.name} - "${result.trigger}"`);
       }
 
     } catch (err) {
@@ -148,13 +122,12 @@ async function scrapeSubreddits(subs, product) {
 
 async function scrape() {
   console.log("=".repeat(50));
-  console.log("ClientMagnet Dual Scraper -- Bot Service + Voice Agent");
+  console.log("ClientMagnet Contractor Scraper -- CallDone Voice Agent");
   console.log("=".repeat(50));
 
-  const botLeads = await scrapeSubreddits(BOT_SERVICE_SUBS, "BOT_SERVICE");
-  const voiceLeads = await scrapeSubreddits(RESTAURANT_SUBS, "VOICE_AGENT");
+  const leads = await scrapeSubreddits(CONTRACTOR_SUBS);
 
-  console.log(`Scrape complete -- Bot leads: ${botLeads} | Voice agent leads: ${voiceLeads}`);
+  console.log(`Scrape complete -- Contractor leads found: ${leads}`);
 }
 
 (async () => {

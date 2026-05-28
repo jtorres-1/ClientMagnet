@@ -1,5 +1,5 @@
-// agency_bot.cjs -- ClientMagnet Contractor Outreach
-// Product: AI Voice Agent / CallDone for contractors ($1,000 setup + $500/mo) -- auto close via link
+// agency_bot.cjs -- ClientMagnet Business Outreach
+// Product: AI Voice Agent / CallDone for any business ($500/mo) -- auto close via link
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -72,20 +72,20 @@ function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* =========================
-   VOICE AGENT (CALLDONE) TEMPLATES -- contractors
+   VOICE AGENT (CALLDONE) TEMPLATES -- any business
 ========================= */
 const VOICE_OPENERS = [
-  { id: "V_O1", text: `saw your post about the phone situation -- quick question: how many calls would you say you miss in a week when you're on a job?` },
-  { id: "V_O2", text: `noticed your post about missed calls -- honest question: roughly how many calls a week go to voicemail because you're in the field?` },
-  { id: "V_O3", text: `saw your post about the phones -- are you using anything to handle calls when you're on a jobsite or under a truck?` },
-  { id: "V_O4", text: `noticed your post -- quick question: do you have anything answering your phone when you can't pick up during a job?` },
-  { id: "V_O5", text: `saw your post about callbacks getting away from you -- are you missing calls or just running out of time to call back?` }
+  { id: "V_O1", text: `saw your post about the phone situation -- quick question: how many calls would you say you miss in a week when you're busy with customers?` },
+  { id: "V_O2", text: `noticed your post about missed calls -- honest question: roughly how many calls a week go to voicemail because you're tied up?` },
+  { id: "V_O3", text: `saw your post about the phones -- are you using anything to handle calls when you can't get to them?` },
+  { id: "V_O4", text: `noticed your post -- quick question: do you have anything answering your phone when you're with a customer or closed?` },
+  { id: "V_O5", text: `saw your post about calls slipping through -- are you missing them or just running out of time to call back?` }
 ];
 
 const VOICE_VALUE = [
-  { id: "V_V1", text: `right -- every missed call is a job someone else is taking\n\ni built an AI receptionist that picks up every call 24/7 -- books service calls, qualifies the lead, gets the address and the issue, and texts you a summary the second you're free` },
-  { id: "V_V2", text: `yeah that's the thing -- you can't answer the phone while you're under a sink or on a roof, and after-hours calls just go nowhere\n\ni built an AI that answers every call automatically. sounds like a real receptionist, books service appointments, handles the basic questions. you only call back the ones that actually matter` },
-  { id: "V_V3", text: `makes sense -- you can't hire a receptionist for a 1-3 person shop, and answering services are expensive and feel robotic\n\ni built an AI phone receptionist specifically for service businesses like yours. answers 24/7, books jobs, captures lead info. live in 48 hours` }
+  { id: "V_V1", text: `right -- every missed call is a customer someone else is getting\n\ni built an AI receptionist that picks up every call 24/7 -- books appointments, answers your FAQs, captures the lead info, and texts you a summary instantly so you never miss a thing` },
+  { id: "V_V2", text: `yeah that's the thing -- you can't answer the phone when you're with a customer, and after-hours calls just disappear\n\ni built an AI that answers every call automatically. sounds like a real receptionist, books appointments, handles basic questions. you only deal with the ones that actually need you` },
+  { id: "V_V3", text: `makes sense -- hiring a full-time receptionist is expensive, and answering services feel robotic and miss details\n\ni built an AI phone receptionist for small businesses. answers 24/7, books appointments, captures every lead. live on your number in 48 hours` }
 ];
 
 const VOICE_CLOSE = [
@@ -109,12 +109,12 @@ function getCloseMsg() { return pick(VOICE_CLOSE); }
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
-  if (p.leadType === "CONFIRMED_CONTRACTOR_OWNER") score += 5;
-  if (p.leadType === "GENERAL_CONTRACTOR_PAIN") score += 3;
-  if (/missed calls|missing calls|losing jobs|losing leads|missing work|missing money/.test(t)) score += 4;
+  if (p.leadType === "CONFIRMED_BUSINESS_OWNER") score += 5;
+  if (p.leadType === "GENERAL_BUSINESS_PAIN") score += 3;
+  if (/missed calls|missing calls|losing customers|losing clients|losing bookings|losing leads/.test(t)) score += 4;
   if (/desperate|drowning|can't keep up|overwhelmed/.test(t)) score += 5;
-  if (/need a receptionist|can't afford|too expensive/.test(t)) score += 4;
-  if (["Plumbing","HVAC","electricians","Roofing","Contractor","Construction","landscaping","lawncare","handyman","AskPlumbing","AskElectricians","AskContractors"].includes(p.subreddit)) score += 3;
+  if (/need a receptionist|can't afford|too expensive|front desk/.test(t)) score += 4;
+  if (["smallbusiness","Entrepreneur","restaurantowners","realtors","Dentistry","gymowners","AutoMechanic","salons","retail","eventplanning"].includes(p.subreddit)) score += 3;
   return score;
 }
 
@@ -309,8 +309,8 @@ async function checkInboxAndFollowup() {
 ========================= */
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet -- CallDone Voice Agent for Contractors");
-  console.log("$1,000 setup + $500/mo (self-serve close via calldone.org)");
+  console.log("ClientMagnet -- CallDone AI Receptionist for Any Business");
+  console.log("$500/mo (self-serve close via calldone.org)");
   console.log("=".repeat(60));
 
   setInterval(checkInboxAndFollowup, INBOX_POLL_MS);

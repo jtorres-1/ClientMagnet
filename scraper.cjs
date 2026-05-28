@@ -2,7 +2,6 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 const snoowrap = require("snoowrap");
-
 const reddit = new snoowrap({
   userAgent: process.env.REDDIT_USER_AGENT,
   clientId: process.env.REDDIT_CLIENT_ID,
@@ -10,17 +9,13 @@ const reddit = new snoowrap({
   username: process.env.REDDIT_USERNAME,
   password: process.env.REDDIT_PASSWORD,
 });
-
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
-
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 const HEADER = "username,title,url,subreddit,time,leadType,matchedTrigger,product";
-
 if (!fs.existsSync(leadsPath)) {
   fs.writeFileSync(leadsPath, HEADER + "\n");
 }
-
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
   const lines = fs.readFileSync(file, "utf8").split("\n");
@@ -29,19 +24,24 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// CONTRACTOR / SERVICE BUSINESS SUBREDDITS
-const CONTRACTOR_SUBS = [
-  "Plumbing", "HVAC", "electricians", "Construction", "Roofing",
-  "Contractor", "homeimprovement", "landscaping", "lawncare",
-  "smallbusiness", "Entrepreneur", "Flooring", "handyman",
-  "pestcontrol", "GarageDoors", "Locksmith", "AskElectricians",
-  "AskPlumbing", "AskContractors"
+// ALL BUSINESS SUBREDDITS
+const BUSINESS_SUBS = [
+  "smallbusiness", "Entrepreneur", "restaurantowners", "restaurant",
+  "realtors", "RealEstate", "legaladvice", "lawyers",
+  "Dentistry", "medical", "Fitness", "gymowners",
+  "AutoMechanic", "MechanicAdvice", "Insurance",
+  "marketing", "Accounting", "salons", "beauty",
+  "retail", "ecommerce", "eventplanning", "photography",
+  "veterinary", "petbusiness", "spa", "massage",
+  "personaltraining", "tutoring", "cleaning", "landscaping"
 ];
 
-// CONTRACTOR / SERVICE BUSINESS PATTERNS
-const contractorPrimaryRegex = /\b(phone|calls|booking|scheduling|dispatch|appointments|receptionist|answering service|missed calls|voicemail|leads|customers calling|service calls|estimates|quotes|jobs|jobsite|on a job|in the field)\b/i;
-const contractorPainRegex = /\b(missing calls|missed calls|can't answer|can't get to the phone|on a job|in someone's house|under a sink|on a roof|in an attic|in a crawl space|phones ringing|too busy|drowning in calls|no time to call back|losing jobs|losing customers|losing leads|can't hire|can't afford a receptionist|need a receptionist|answering service is terrible|too expensive|after hours calls|emergency calls|calls go unanswered|voicemail full|missed leads|missed estimates|missing money|missing work|forgot to call back|never called them back|callback)\b/i;
-const contractorOwnerRegex = /\b(my plumbing|my hvac|my electrical|my roofing|my contracting|my construction|my landscaping|my company|my crew|my truck|my shop|i own|i run|we run|we own|owner operator|owner|operator|self employed|sole prop|licensed|journeyman|master plumber|master electrician|gc|general contractor|tradesman|in the trades|field tech|service tech)\b/i;
+// ANY BUSINESS OWNER MISSING CALLS / LOSING CUSTOMERS
+const businessPrimaryRegex = /\b(phone|calls|booking|scheduling|appointments|receptionist|answering service|missed calls|voicemail|leads|customers calling|inquiries|client calls|front desk|after hours|call handling)\b/i;
+
+const businessPainRegex = /\b(missing calls|missed calls|can't answer|can't get to the phone|too busy to answer|losing customers|losing clients|losing leads|losing bookings|calls go to voicemail|nobody answers|phone goes unanswered|after hours calls|calls go unanswered|voicemail full|missed leads|missed appointments|missed bookings|can't afford a receptionist|need a receptionist|answering service|front desk overwhelmed|calls slip through|no one to answer|dropping calls|phone situation|can't keep up with calls)\b/i;
+
+const businessOwnerRegex = /\b(my business|my shop|my salon|my restaurant|my practice|my firm|my office|my clinic|my studio|my company|i own|i run|we run|we own|owner|operator|self employed|sole prop|small business owner|entrepreneur|running a business|manage a business|our business|our shop|our office)\b/i;
 
 // HARD BLOCKS
 const jobSeekerRegex = /\b(looking for a job|job hunting|job search|need a job|resume|cover letter|applying for|interview prep|laid off|unemployment|apprentice|trying to get into|how do i become|how to become a)\b/i;
@@ -56,16 +56,14 @@ function classify(post) {
   const title = (post.title || "").toLowerCase();
   const body = (post.selftext || "").toLowerCase();
   const combined = `${title} ${body}`;
-
   if (title.length < 10) return null;
   if (jobSeekerRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
-
-  if (!contractorPrimaryRegex.test(combined)) return null;
-  if (!contractorPainRegex.test(combined)) return null;
-  const painMatch = combined.match(contractorPainRegex)?.[0] || "missed calls";
+  if (!businessPrimaryRegex.test(combined)) return null;
+  if (!businessPainRegex.test(combined)) return null;
+  const painMatch = combined.match(businessPainRegex)?.[0] || "missed calls";
   return {
-    type: contractorOwnerRegex.test(combined) ? "CONFIRMED_CONTRACTOR_OWNER" : "GENERAL_CONTRACTOR_PAIN",
+    type: businessOwnerRegex.test(combined) ? "CONFIRMED_BUSINESS_OWNER" : "GENERAL_BUSINESS_PAIN",
     trigger: painMatch,
     product: "VOICE_AGENT"
   };
@@ -77,23 +75,18 @@ async function scrapeSubreddits(subs) {
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2])
   );
-
   let leads = 0;
-
   for (const sub of subs) {
     console.log(`Scanning r/${sub}`);
     try {
       await wait(1200);
       const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
-
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
         const result = classify(p);
         if (!result) continue;
-
         const url = `https://reddit.com${p.permalink}`;
         if (existingUrls.has(url)) continue;
-
         const row = {
           username: p.author.name,
           title: `"${p.title.replace(/"/g, "'")}"`,
@@ -104,30 +97,25 @@ async function scrapeSubreddits(subs) {
           matchedTrigger: result.trigger,
           product: result.product
         };
-
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
         console.log(`  + ${result.type}: u/${p.author.name} - "${result.trigger}"`);
       }
-
     } catch (err) {
       console.log(`Error r/${sub}: ${err.message}`);
       await wait(30000);
     }
   }
-
   return leads;
 }
 
 async function scrape() {
   console.log("=".repeat(50));
-  console.log("ClientMagnet Contractor Scraper -- CallDone Voice Agent");
+  console.log("ClientMagnet Business Scraper -- CallDone AI Receptionist");
   console.log("=".repeat(50));
-
-  const leads = await scrapeSubreddits(CONTRACTOR_SUBS);
-
-  console.log(`Scrape complete -- Contractor leads found: ${leads}`);
+  const leads = await scrapeSubreddits(BUSINESS_SUBS);
+  console.log(`Scrape complete -- Business leads found: ${leads}`);
 }
 
 (async () => {

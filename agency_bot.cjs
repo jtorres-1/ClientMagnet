@@ -22,10 +22,10 @@ const leadsPath = path.join(baseDir, "clean_leads.csv");
 const sentPath  = path.join(baseDir, "clean_leads_dmed.csv");
 const usersPath = path.join(baseDir, "contacted_users.json");
 
-const MIN_DMS_PER_CYCLE = 15;
-const MAX_DMS_PER_CYCLE = 25;
-const MIN_DELAY_MS      = 3 * 60 * 1000;
-const MAX_DELAY_MS      = 5 * 60 * 1000;
+const MIN_DMS_PER_CYCLE = 25;
+const MAX_DMS_PER_CYCLE = 40;
+const MIN_DELAY_MS      = 2 * 60 * 1000;
+const MAX_DELAY_MS      = 4 * 60 * 1000;
 const INBOX_POLL_MS     = 60 * 1000;
 const FOLLOWUP_MIN_MS   = 10 * 1000;
 const FOLLOWUP_MAX_MS   = 30 * 1000;
@@ -98,7 +98,6 @@ const VOICE_CLOSE = [
    HELPERS
 ========================= */
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
 function getOpener() { return pick(VOICE_OPENERS); }
 function getValueMsg() { return pick(VOICE_VALUE); }
 function getCloseMsg() { return pick(VOICE_CLOSE); }
@@ -114,7 +113,7 @@ function scoreLead(p) {
   if (/missed calls|missing calls|losing customers|losing clients|losing bookings|losing leads/.test(t)) score += 4;
   if (/desperate|drowning|can't keep up|overwhelmed/.test(t)) score += 5;
   if (/need a receptionist|can't afford|too expensive|front desk/.test(t)) score += 4;
-  if (["smallbusiness","Entrepreneur","restaurantowners","realtors","Dentistry","gymowners","AutoMechanic","salons","retail","eventplanning"].includes(p.subreddit)) score += 3;
+  if (["smallbusiness","Entrepreneur","restaurantowners","realtors","Dentistry","AutoMechanic","beauty","retail","eventplanning","Barbershop"].includes(p.subreddit)) score += 3;
   return score;
 }
 
@@ -204,7 +203,6 @@ async function runOutreachCycle() {
 
 /* =========================
    INBOX MONITOR -- STEP 2
-   Sends value pitch + calldone.org link -- auto-close, no manual needed
 ========================= */
 async function checkInboxAndFollowup() {
   const users = loadUsers();
@@ -283,7 +281,7 @@ async function checkInboxAndFollowup() {
           step2_value_template: valTpl.id, step2_close_template: closeTpl.id
         });
 
-        log("INFO", `Step 2 complete for u/${item.author.name} -- calldone.org link sent, waiting for self-serve purchase`);
+        log("INFO", `Step 2 complete for u/${item.author.name} -- calldone.org link sent`);
 
       } catch (err) {
         log("ERROR", `Step 2 failed u/${item.author.name}: ${err.message}`);
@@ -318,7 +316,7 @@ async function checkInboxAndFollowup() {
   while (true) {
     console.log(`\n[${new Date().toLocaleString()}] Starting outreach cycle...`);
     await runOutreachCycle();
-    const cycleDelay = (8 + Math.floor(Math.random() * 4)) * 60 * 1000;
+    const cycleDelay = (6 + Math.floor(Math.random() * 3)) * 60 * 1000;
     log("INFO", `Next cycle in ${Math.round(cycleDelay/60000)} minutes...`);
     await sleep(cycleDelay);
   }

@@ -89,9 +89,9 @@ const VOICE_VALUE = [
 ];
 
 const VOICE_CLOSE = [
-  { id: "V_C1", text: () => `you can actually call the AI right now and hear it for yourself -- calldone.org has a live demo number. no commitment, just call it and see if it sounds right for your business` },
-  { id: "V_C2", text: () => `i set up a live demo you can call right now -- calldone.org. hear exactly what your callers would hear. takes 2 minutes` },
-  { id: "V_C3", text: () => `built a demo you can call right now to hear how it sounds -- calldone.org. if it sounds good, setup takes 48 hours and your phones are handled` }
+  { id: "V_C1", text: () => `you can actually call the AI right now and hear it for yourself -- https://calldone.org has a live demo number. no commitment, just call it and see if it sounds right for your business` },
+  { id: "V_C2", text: () => `i set up a live demo you can call right now -- https://calldone.org. hear exactly what your callers would hear. takes 2 minutes` },
+  { id: "V_C3", text: () => `built a demo you can call right now to hear how it sounds -- https://calldone.org. if it sounds good, setup takes 48 hours and your phones are handled` }
 ];
 
 /* =========================
@@ -273,7 +273,7 @@ async function checkInboxAndFollowup() {
           step: "STEP_2B", templateId: closeTpl.id,
           subreddit: user.subreddit || "", leadType: user.leadType || "",
           trigger: user.trigger || "", url: user.url || "", product: "VOICE_AGENT",
-          note: "calldone.org link sent -- self-serve close"
+          note: "https://calldone.org link sent -- self-serve close"
         }]);
 
         upsertUser(users, item.author.name, {
@@ -281,7 +281,7 @@ async function checkInboxAndFollowup() {
           step2_value_template: valTpl.id, step2_close_template: closeTpl.id
         });
 
-        log("INFO", `Step 2 complete for u/${item.author.name} -- calldone.org link sent`);
+        log("INFO", `Step 2 complete for u/${item.author.name} -- https://calldone.org link sent`);
 
       } catch (err) {
         log("ERROR", `Step 2 failed u/${item.author.name}: ${err.message}`);
@@ -308,7 +308,7 @@ async function checkInboxAndFollowup() {
 (async () => {
   console.log("=".repeat(60));
   console.log("ClientMagnet -- CallDone AI Receptionist for Any Business");
-  console.log("$500/mo (self-serve close via calldone.org)");
+  console.log("$500/mo (self-serve close via https://calldone.org)");
   console.log("=".repeat(60));
 
   setInterval(checkInboxAndFollowup, INBOX_POLL_MS);

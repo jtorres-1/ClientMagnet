@@ -24,20 +24,31 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// ALL BUSINESS SUBREDDITS
+// ALL BUSINESS SUBREDDITS -- MAXIMUM COVERAGE
 const BUSINESS_SUBS = [
-  "smallbusiness", "Entrepreneur", "restaurantowners", "restaurant",
-  "realtors", "RealEstate", "legaladvice",
-  "Dentistry", "medical", "Fitness",
-  "AutoMechanic", "MechanicAdvice", "Insurance",
-  "marketing", "Accounting", "beauty",
-  "retail", "ecommerce", "eventplanning", "photography",
-  "veterinary", "petbusiness", "massage",
-  "personaltraining", "tutoring", "landscaping"
+  // Food & Hospitality
+  "smallbusiness", "restaurantowners", "restaurant", "AskARestaurantOwner",
+  "barowners", "coffeeshops", "FoodTruck",
+  // Professional Services
+  "Entrepreneur", "legaladvice", "Accounting", "Insurance", "RealEstate", "realtors",
+  "PropertyManagement", "mortgage",
+  // Health & Wellness
+  "Dentistry", "medical", "chiropractic", "physicaltherapy", "personaltraining",
+  "Fitness", "massage", "optometry",
+  // Beauty & Grooming
+  "beauty", "Barbershop", "tattoo", "MedSpa",
+  // Auto & Home
+  "AutoMechanic", "MechanicAdvice", "Plumbing", "HVAC", "electricians", "handyman",
+  "landscaping", "homeowners", "FlipThis",
+  // Retail & Services
+  "retail", "ecommerce", "eventplanning", "photography", "tutoring",
+  "veterinary", "petbusiness", "airbnb",
+  // General Business
+  "marketing", "Flipping", "sidehustle", "passive_income"
 ];
 
-// ANY BUSINESS OWNER MENTIONING PHONES/CALLS/BOOKINGS
-const businessPrimaryRegex = /\b(phone|calls|booking|scheduling|appointments|receptionist|answering service|missed calls|voicemail|leads|customers calling|inquiries|client calls|front desk|after hours|call handling)\b/i;
+// ANY POST MENTIONING PHONES/CALLS/BOOKINGS
+const businessPrimaryRegex = /\b(phone|calls|booking|scheduling|appointments|receptionist|answering service|missed calls|voicemail|leads|customers calling|inquiries|client calls|front desk|after hours|call handling|callback|ring|ringing)\b/i;
 
 const businessOwnerRegex = /\b(my business|my shop|my salon|my restaurant|my practice|my firm|my office|my clinic|my studio|my company|i own|i run|we run|we own|owner|operator|self employed|sole prop|small business owner|entrepreneur|running a business|manage a business|our business|our shop|our office)\b/i;
 
@@ -76,8 +87,8 @@ async function scrapeSubreddits(subs) {
   for (const sub of subs) {
     console.log(`Scanning r/${sub}`);
     try {
-      await wait(1200);
-      const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
+      await wait(1000);
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
         const result = classify(p);
@@ -118,6 +129,6 @@ async function scrape() {
 (async () => {
   while (true) {
     await scrape();
-    await wait(30 * 60 * 1000);
+    await wait(20 * 60 * 1000);
   }
 })();

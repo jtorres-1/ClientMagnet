@@ -27,19 +27,17 @@ function prependLead(file, rowObj) {
 // ALL BUSINESS SUBREDDITS
 const BUSINESS_SUBS = [
   "smallbusiness", "Entrepreneur", "restaurantowners", "restaurant",
-  "realtors", "RealEstate", "legaladvice", "lawyers",
-  "Dentistry", "medical", "Fitness", "gymowners",
+  "realtors", "RealEstate", "legaladvice",
+  "Dentistry", "medical", "Fitness",
   "AutoMechanic", "MechanicAdvice", "Insurance",
-  "marketing", "Accounting", "salons", "beauty",
+  "marketing", "Accounting", "beauty",
   "retail", "ecommerce", "eventplanning", "photography",
-  "veterinary", "petbusiness", "spa", "massage",
-  "personaltraining", "tutoring", "cleaning", "landscaping"
+  "veterinary", "petbusiness", "massage",
+  "personaltraining", "tutoring", "landscaping"
 ];
 
-// ANY BUSINESS OWNER MISSING CALLS / LOSING CUSTOMERS
+// ANY BUSINESS OWNER MENTIONING PHONES/CALLS/BOOKINGS
 const businessPrimaryRegex = /\b(phone|calls|booking|scheduling|appointments|receptionist|answering service|missed calls|voicemail|leads|customers calling|inquiries|client calls|front desk|after hours|call handling)\b/i;
-
-const businessPainRegex = /\b(missing calls|missed calls|can't answer|can't get to the phone|too busy to answer|losing customers|losing clients|losing leads|losing bookings|calls go to voicemail|nobody answers|phone goes unanswered|after hours calls|calls go unanswered|voicemail full|missed leads|missed appointments|missed bookings|can't afford a receptionist|need a receptionist|answering service|front desk overwhelmed|calls slip through|no one to answer|dropping calls|phone situation|can't keep up with calls)\b/i;
 
 const businessOwnerRegex = /\b(my business|my shop|my salon|my restaurant|my practice|my firm|my office|my clinic|my studio|my company|i own|i run|we run|we own|owner|operator|self employed|sole prop|small business owner|entrepreneur|running a business|manage a business|our business|our shop|our office)\b/i;
 
@@ -60,11 +58,10 @@ function classify(post) {
   if (jobSeekerRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
   if (!businessPrimaryRegex.test(combined)) return null;
-  if (!businessPainRegex.test(combined)) return null;
-  const painMatch = combined.match(businessPainRegex)?.[0] || "missed calls";
+  const triggerMatch = combined.match(businessPrimaryRegex)?.[0] || "calls";
   return {
     type: businessOwnerRegex.test(combined) ? "CONFIRMED_BUSINESS_OWNER" : "GENERAL_BUSINESS_PAIN",
-    trigger: painMatch,
+    trigger: triggerMatch,
     product: "VOICE_AGENT"
   };
 }

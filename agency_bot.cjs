@@ -1,5 +1,4 @@
 // agency_bot.cjs -- ClientMagnet MapZap Outreach
-// Product: MapZap -- 100 local business leads in 60 seconds ($49 one time)
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -85,9 +84,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 /* =========================
-   OUTREACH MESSAGES
-   Goal: sound like a person who stumbled on something useful,
-   not a bot promoting a product. Short. Casual. Link included.
+   OUTREACH MESSAGES — no subject, casual, one shot
 ========================= */
 const OUTREACH_MESSAGES = [
   {
@@ -116,53 +113,47 @@ const OUTREACH_MESSAGES = [
   },
   {
     id: "MZ_7",
-    text: `hey -- not trying to spam you but saw your post about leads and built exactly this\n\ntype a business type and city, get 100 leads with phones and addresses as a CSV in 60 seconds. $49 one time\n\nhttps://mapzap.org`
+    text: `hey -- saw your post about leads and built exactly this\n\ntype a business type and city, get 100 leads with phones and addresses as a CSV in 60 seconds. $49 one time\n\nhttps://mapzap.org`
   }
 ];
 
 /* =========================
-   REPLY HANDLER MESSAGES
-   Sent when someone replies with interest.
-   Close the sale. Direct. Include the link again.
+   REPLY CLOSER — fires ONCE only, then hands off to human
 ========================= */
 const REPLY_CLOSERS = [
   {
     id: "RC_1",
-    text: `yeah happy to explain -- you go to https://mapzap.org, pay $49 one time via stripe, then type any business type and city\n\nit pulls up to 100 leads with the business name, phone number, address, and website as a CSV you can download immediately\n\nno monthly fees, no limits on what you search, just $49 once`
+    text: `yeah -- $49 one time, go to https://mapzap.org, pay via stripe, type any business type and city, download the CSV instantly\n\n100 leads with name, phone, address, website. no subscription, no limits on searches`
   },
   {
     id: "RC_2",
-    text: `sure -- it's $49 one time, you go to https://mapzap.org, pay via stripe, then type something like "dentists, Los Angeles" and it returns 100 leads as a CSV with names, phones, and addresses\n\ntakes about 60 seconds total. no subscription`
+    text: `$49 once at https://mapzap.org -- type something like "dentists, Los Angeles" and you get 100 leads as a CSV with names, phones, and addresses in about 60 seconds\n\nno monthly fee`
   },
   {
     id: "RC_3",
-    text: `it's pretty simple -- https://mapzap.org, pay $49 once, type your target business type and city, download the CSV\n\nyou get up to 100 leads with business name, phone number, address, and website. works for any niche, any city in the US`
+    text: `one time $49 at https://mapzap.org -- type your niche and city, download the CSV\n\n100 leads with business name, phone, address, website. works for any niche, any US city`
   }
 ];
 
 /* =========================
    LEAD SCORING
-   Higher score = messaged first
 ========================= */
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
   const sub = (p.subreddit || "").toLowerCase();
 
-  // Lead type score
   if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
   else if (p.leadType === "HIGH_INTENT") score += 7;
   else if (p.leadType === "MEDIUM_INTENT_OWNER") score += 5;
   else score += 2;
 
-  // Trigger quality
   if (/need leads|buy leads|lead source|lead list|lead database/.test(t)) score += 5;
   if (/where (do i|can i) (find|get)|how (do i|to) get/.test(t)) score += 4;
-  if (/apollo|zoominfo|hunter|lusha|seamless/.test(t)) score += 6; // replacing expensive tools
+  if (/apollo|zoominfo|hunter|lusha|seamless/.test(t)) score += 6;
   if (/local businesses|local outreach|local market/.test(t)) score += 4;
   if (/cold outreach|cold email|prospecting/.test(t)) score += 3;
 
-  // Subreddit quality
   if (["sales","b2bsales","coldemail","coldcalling","leadgeneration"].includes(sub)) score += 5;
   if (["realtors","RealEstate","WholesaleRealestate"].includes(sub)) score += 4;
   if (["Insurance","InsuranceAgent","LifeInsurance"].includes(sub)) score += 4;
@@ -186,6 +177,7 @@ function loadLeads() {
 
 /* =========================
    OUTREACH CYCLE
+   NO subject line on DMs -- sounds human
 ========================= */
 async function runOutreachCycle() {
   const leads = await loadLeads();
@@ -216,7 +208,8 @@ async function runOutreachCycle() {
 
     const tpl = pick(OUTREACH_MESSAGES);
     try {
-      await reddit.composeMessage({ to: username, subject: "quick tool for leads", text: tpl.text });
+      // NO subject line -- blank subject sounds human
+      await reddit.composeMessage({ to: username, subject: "", text: tpl.text });
       confirmed++;
       log("SENT", `u/${username} | ${tpl.id} | score:${scoreLead(post)} | ${leadType}`);
       upsertUser(users, username, {
@@ -228,7 +221,7 @@ async function runOutreachCycle() {
       });
       await sentWriter.writeRecords([{
         time: new Date().toISOString(), username, step: "OUTREACH", templateId: tpl.id,
-        subreddit, leadType, trigger, url, product: "MAPZAP", note: "initial DM with mapzap.org"
+        subreddit, leadType, trigger, url, product: "MAPZAP", note: "initial DM"
       }]);
       if (attempted < target) {
         const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
@@ -247,8 +240,8 @@ async function runOutreachCycle() {
 
 /* =========================
    INBOX MONITOR
-   When someone replies with interest, send the closer.
-   This turns a reply into a sale.
+   Closer fires ONCE only.
+   After that, logs it and stops -- human takes over.
 ========================= */
 async function checkInboxAndFollowup() {
   const users = loadUsers();
@@ -275,42 +268,41 @@ async function checkInboxAndFollowup() {
 
       if (isNegativeReply(item.body)) {
         upsertUser(users, item.author.name, { closed: true, closed_reason: "negative_reply" });
-        log("NEGATIVE", `u/${item.author.name} -- marked closed`);
+        log("NEGATIVE", `u/${item.author.name} -- closed`);
         continue;
       }
 
+      // CLOSER ALREADY SENT -- stop bot, human takes over
       if (user.closer_sent) {
-        log("INFO", `u/${item.author.name} replied again after closer -- monitor manually`);
+        log("NEEDS HUMAN", `u/${item.author.name} replied after closer -- CHECK YOUR REDDIT INBOX`);
         continue;
       }
 
-      // Send closer only on positive or neutral replies
-      if (isPositiveReply(item.body) || !isNegativeReply(item.body)) {
-        log("POSITIVE REPLY", `u/${item.author.name} -- sending closer`);
-        const closer = pick(REPLY_CLOSERS);
-        try {
-          await reddit.composeMessage({
-            to: item.author.name,
-            subject: "re: quick tool for leads",
-            text: closer.text
-          });
-          log("SENT CLOSER", `u/${item.author.name} | ${closer.id}`);
-          await sentWriter.writeRecords([{
-            time: new Date().toISOString(), username: item.author.name,
-            step: "CLOSER", templateId: closer.id,
-            subreddit: user.subreddit || "", leadType: user.leadType || "",
-            trigger: user.trigger || "", url: user.url || "",
-            product: "MAPZAP", note: "reply closer sent -- https://mapzap.org"
-          }]);
-          upsertUser(users, item.author.name, {
-            reply_positive: true,
-            closer_sent: true,
-            closer_sent_at: new Date().toISOString(),
-            closer_template: closer.id
-          });
-        } catch (err) {
-          log("ERROR", `Closer failed u/${item.author.name}: ${err.message}`);
-        }
+      // Send closer ONE time only
+      log("REPLY", `u/${item.author.name} -- sending closer once`);
+      const closer = pick(REPLY_CLOSERS);
+      try {
+        await reddit.composeMessage({
+          to: item.author.name,
+          subject: "",
+          text: closer.text
+        });
+        log("CLOSER SENT", `u/${item.author.name} | ${closer.id} -- bot done, human takes over if they reply again`);
+        await sentWriter.writeRecords([{
+          time: new Date().toISOString(), username: item.author.name,
+          step: "CLOSER", templateId: closer.id,
+          subreddit: user.subreddit || "", leadType: user.leadType || "",
+          trigger: user.trigger || "", url: user.url || "",
+          product: "MAPZAP", note: "closer sent once -- hand off to human"
+        }]);
+        upsertUser(users, item.author.name, {
+          reply_positive: true,
+          closer_sent: true,
+          closer_sent_at: new Date().toISOString(),
+          closer_template: closer.id
+        });
+      } catch (err) {
+        log("ERROR", `Closer failed u/${item.author.name}: ${err.message}`);
       }
     }
     if (toMarkRead.length > 0) {
@@ -335,7 +327,6 @@ async function checkInboxAndFollowup() {
   console.log("100 Local Business Leads -- https://mapzap.org -- $49");
   console.log("=".repeat(60));
 
-  // Poll inbox every minute for replies
   setInterval(checkInboxAndFollowup, INBOX_POLL_MS);
 
   while (true) {

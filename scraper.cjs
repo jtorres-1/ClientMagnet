@@ -25,34 +25,38 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// Hyper-targeted subs where people are ACTIVELY looking for leads right now
 const BUSINESS_SUBS = [
   // Direct lead buyers
   "sales", "b2bsales", "coldemail", "coldcalling", "leadgeneration",
   "salestechniques", "salesforce", "salestips",
-  // Agencies and freelancers who need leads constantly
+  // Agencies and freelancers
   "agency", "marketing", "digital_marketing", "freelance", "freelancing",
-  "PPC", "bigseo", "SEO", "socialmediamarketing",
-  // Real estate -- obsessed with leads
+  "PPC", "bigseo", "SEO", "socialmediamarketing", "copywriting",
+  // Real estate
   "RealEstate", "realtors", "realestateinvesting", "WholesaleRealestate",
   "FirstTimeHomeBuyer", "CommercialRealEstate",
-  // Insurance -- always prospecting
+  // Insurance
   "Insurance", "LifeInsurance", "InsuranceAgent",
   // High ticket services
   "financialplanning", "FinancialAdvisors", "mortgagebroker",
   // Entrepreneurs and small biz
   "Entrepreneur", "smallbusiness", "startups", "ecommerce",
-  "dropship", "AmazonSeller",
-  // Solar and home services -- huge lead buyers
+  "dropship", "AmazonSeller", "EntrepreneurRideAlong",
+  // Home services
   "solar", "HVAC", "Plumbing", "homeowners", "roofing",
-  // Side hustlers and outreach folks
-  "sidehustle", "passive_income", "Flipping", "hustle"
+  "pressurewashing", "landscaping", "lawncare", "cleaning", "maid",
+  // Local service businesses with bad or no websites
+  "personaltraining", "gymowners", "foodtrucks", "coffeeshops",
+  "barber", "Barbers", "tattoo", "weddingplanning", "weddingphotography",
+  "AutoDetailing", "towing", "movers", "petgrooming",
+  // Side hustlers
+  "sidehustle", "passive_income", "Flipping", "sweatystartup"
 ];
 
-// Strong buying intent -- these people NEED leads now
+// Strong buying intent
 const highIntentRegex = /\b(need leads|need more leads|where (do i|can i) (find|get) leads|how (do i|to) get (more )?(leads|clients|customers)|looking for leads|finding leads|lead source|buy leads|purchase leads|lead list|lead database|list of (businesses|contacts|clients)|build a list|prospect list|contact list|where to find (businesses|clients|customers|prospects)|how to find (businesses|clients|customers|prospects)|outreach list|cold list|email list of|phone list|scraping (leads|businesses|contacts)|data for outreach|getting clients|acquire clients|find (local |new |more )?(clients|customers|businesses)|generate leads|lead generation (tool|software|service)|Apollo|ZoomInfo|Hunter\.io|Lusha|Seamless|lead gen tool)\b/i;
 
-// Secondary intent -- pain points that lead to buying
+// Secondary intent
 const mediumIntentRegex = /\b(struggling to get clients|can't find clients|hard to find customers|need more business|grow my (business|agency|practice)|scale my (business|agency)|client acquisition|new clients|outreach strategy|cold outreach|prospecting strategy|building a pipeline|sales pipeline|door to door|canvassing|local business owners|target local|local (market|marketing|outreach))\b/i;
 
 const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|account exec|business development|bdr|sdr|marketer|realtor|agent|broker|rep)\b/i;
@@ -62,7 +66,7 @@ const spamRegex = /\b(check out my|buy now|limited offer|discount code|promo cod
 
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 72; // 72 hours to cast wider net
+  return ageHours <= 72;
 }
 
 function classify(post) {
@@ -72,20 +76,16 @@ function classify(post) {
   if (title.length < 10) return null;
   if (blockRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
-
   const highIntent = highIntentRegex.test(combined);
   const medIntent = mediumIntentRegex.test(combined);
   if (!highIntent && !medIntent) return null;
-
   const triggerMatch = (combined.match(highIntentRegex) || combined.match(mediumIntentRegex))?.[0] || "leads";
   const isOwner = ownerRegex.test(combined);
-
   let type;
   if (highIntent && isOwner) type = "HIGH_INTENT_OWNER";
   else if (highIntent) type = "HIGH_INTENT";
   else if (isOwner) type = "MEDIUM_INTENT_OWNER";
   else type = "MEDIUM_INTENT";
-
   return { type, trigger: triggerMatch, product: "MAPZAP" };
 }
 

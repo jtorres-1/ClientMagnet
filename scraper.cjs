@@ -46,32 +46,25 @@ const BUSINESS_SUBS = [
   "solar", "HVAC", "Plumbing", "homeowners", "roofing",
   "pressurewashing", "landscaping", "lawncare", "cleaning", "maid",
   // Local service businesses
-  "personaltraining", "gymowners", "foodtrucks", "coffeeshops",
+  "personaltraining", "foodtrucks", "coffeeshops",
   "barber", "Barbers", "tattoo", "weddingplanning", "weddingphotography",
-  "AutoDetailing", "towing", "movers", "petgrooming",
+  "AutoDetailing", "towing", "petgrooming",
   // Side hustlers
   "sidehustle", "passive_income", "Flipping", "sweatystartup",
-  // Developer hiring subs -- people looking to hire
+  // Developer and freelance hiring subs
   "forhire", "slavelabour", "jobs4bitcoins", "WorkOnline",
-  "HireaWriter", "DeveloperJobs", "CodingJobs", "FreelanceProgramming",
+  "DeveloperJobs", "CodingJobs", "FreelanceProgramming",
   "webdev", "Python", "javascript", "node", "reactjs",
   "devops", "SoftwareEngineering", "cscareerquestions",
   "learnprogramming", "learnpython", "django", "flask",
   "programming", "coding", "techjobs", "remotework",
-  "RemoteJobs", "digitalnomad", "WorkOnline", "ProgrammerHumor",
+  "RemoteJobs", "digitalnomad", "ProgrammerHumor",
   "webdesign", "web_design", "Frontend", "backend",
-  "softwaretesting", "QualityAssurance", "MachineLearning",
-  "artificial", "ChatGPT", "OpenAI", "LangChain",
+  "MachineLearning", "artificial", "ChatGPT", "OpenAI", "LangChain",
   "nocode", "lowcode", "Zapier", "n8n", "automation",
   "SideProject", "indiehackers", "buildinpublic",
-  "EntrepreneurRideAlong", "jobsearchhacks", "datascience",
-  "dataengineering", "analytics", "BusinessIntelligence"
-  "forhire", "slavelabour", "jobs4bitcoins", "WorkOnline",
-  "HireaWriter", "DeveloperJobs", "ProgrammerHumor",
-  "webdev", "Python", "javascript", "node", "reactjs",
-  "devops", "SoftwareEngineering", "cscareerquestions",
-  "learnprogramming", "learnpython", "django", "flask",
-  "softwaregore", "programming", "coding", "techjobs"
+  "jobsearchhacks", "datascience", "dataengineering",
+  "analytics", "BusinessIntelligence"
 ];
 
 // MapZap lead intent
@@ -82,10 +75,10 @@ const mediumIntentRegex = /\b(struggling to get clients|can't find clients|hard 
 const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|account exec|business development|bdr|sdr|marketer|realtor|agent|broker|rep)\b/i;
 
 // Developer hiring intent -- people looking to HIRE a developer
-const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|someone to build|someone who can build)|want (a |an )?(developer|dev|programmer)|searching for (a |an )?(developer|dev|programmer)|seeking (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|commission (based|only)|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|available for (hire|work|projects))\b/i;
+const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|someone to build|someone who can build)|want (a |an )?(developer|dev|programmer)|searching for (a |an )?(developer|dev|programmer)|seeking (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|commission (based|only)|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made)|anyone (here )?build|can someone build|who can build|looking to (hire|commission))\b/i;
 
-// Block for hire posts (people offering services, not hiring)
-const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|i am available|i('m| am) a (developer|designer|programmer|dev)|offering my services|available for hire|hire me|my portfolio|my rates|my services|i build|i develop|i create|i code|i design|check out my work|dm me (if|for)|starting at \$|flat fee)\b/i;
+// Block for hire posts
+const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|i am available|i('m| am) a (developer|designer|programmer|dev)|offering my services|available for hire|hire me|my portfolio|my rates|my services|i build|i develop|i create|i code|i design|check out my work|starting at \$|flat fee)\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become)\b/i;
 const spamRegex = /\b(check out my|buy now|limited offer|discount code|promo code|affiliate link|click here|dm me for)\b/i;
@@ -102,18 +95,12 @@ function classify(post) {
   if (title.length < 10) return null;
   if (blockRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
-
-  // Block for hire posts -- we only want people HIRING, not offering
   if (forHireBlockRegex.test(combined)) return null;
-
-  // Check dev hiring intent first
   const devHire = devHireRegex.test(combined);
   if (devHire) {
     const triggerMatch = combined.match(devHireRegex)?.[0] || "hiring";
     return { type: "DEV_HIRE", trigger: triggerMatch, product: "DEVHIRE" };
   }
-
-  // MapZap lead intent
   const highIntent = highIntentRegex.test(combined);
   const medIntent = mediumIntentRegex.test(combined);
   if (!highIntent && !medIntent) return null;

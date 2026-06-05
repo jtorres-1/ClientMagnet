@@ -45,28 +45,40 @@ const BUSINESS_SUBS = [
   // Home services
   "solar", "HVAC", "Plumbing", "homeowners", "roofing",
   "pressurewashing", "landscaping", "lawncare", "cleaning", "maid",
-  // Local service businesses with bad or no websites
+  // Local service businesses
   "personaltraining", "gymowners", "foodtrucks", "coffeeshops",
   "barber", "Barbers", "tattoo", "weddingplanning", "weddingphotography",
   "AutoDetailing", "towing", "movers", "petgrooming",
   // Side hustlers
-  "sidehustle", "passive_income", "Flipping", "sweatystartup"
+  "sidehustle", "passive_income", "Flipping", "sweatystartup",
+  // Developer hiring subs
+  "forhire", "slavelabour", "jobs4bitcoins", "WorkOnline",
+  "HireaWriter", "DeveloperJobs", "ProgrammerHumor",
+  "webdev", "Python", "javascript", "node", "reactjs",
+  "devops", "SoftwareEngineering", "cscareerquestions",
+  "learnprogramming", "learnpython", "django", "flask",
+  "softwaregore", "programming", "coding", "techjobs"
 ];
 
-// Strong buying intent
+// MapZap lead intent
 const highIntentRegex = /\b(need leads|need more leads|where (do i|can i) (find|get) leads|how (do i|to) get (more )?(leads|clients|customers)|looking for leads|finding leads|lead source|buy leads|purchase leads|lead list|lead database|list of (businesses|contacts|clients)|build a list|prospect list|contact list|where to find (businesses|clients|customers|prospects)|how to find (businesses|clients|customers|prospects)|outreach list|cold list|email list of|phone list|scraping (leads|businesses|contacts)|data for outreach|getting clients|acquire clients|find (local |new |more )?(clients|customers|businesses)|generate leads|lead generation (tool|software|service)|Apollo|ZoomInfo|Hunter\.io|Lusha|Seamless|lead gen tool)\b/i;
 
-// Secondary intent
 const mediumIntentRegex = /\b(struggling to get clients|can't find clients|hard to find customers|need more business|grow my (business|agency|practice)|scale my (business|agency)|client acquisition|new clients|outreach strategy|cold outreach|prospecting strategy|building a pipeline|sales pipeline|door to door|canvassing|local business owners|target local|local (market|marketing|outreach))\b/i;
 
 const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|account exec|business development|bdr|sdr|marketer|realtor|agent|broker|rep)\b/i;
+
+// Developer hiring intent -- people looking to HIRE a developer
+const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|someone to build|someone who can build)|want (a |an )?(developer|dev|programmer)|searching for (a |an )?(developer|dev|programmer)|seeking (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|commission (based|only)|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|available for (hire|work|projects))\b/i;
+
+// Block for hire posts (people offering services, not hiring)
+const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|i am available|i('m| am) a (developer|designer|programmer|dev)|offering my services|available for hire|hire me|my portfolio|my rates|my services|i build|i develop|i create|i code|i design|check out my work|dm me (if|for)|starting at \$|flat fee)\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become)\b/i;
 const spamRegex = /\b(check out my|buy now|limited offer|discount code|promo code|affiliate link|click here|dm me for)\b/i;
 
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= 72;
+  return ageHours <= 48;
 }
 
 function classify(post) {
@@ -76,6 +88,18 @@ function classify(post) {
   if (title.length < 10) return null;
   if (blockRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
+
+  // Block for hire posts -- we only want people HIRING, not offering
+  if (forHireBlockRegex.test(combined)) return null;
+
+  // Check dev hiring intent first
+  const devHire = devHireRegex.test(combined);
+  if (devHire) {
+    const triggerMatch = combined.match(devHireRegex)?.[0] || "hiring";
+    return { type: "DEV_HIRE", trigger: triggerMatch, product: "DEVHIRE" };
+  }
+
+  // MapZap lead intent
   const highIntent = highIntentRegex.test(combined);
   const medIntent = mediumIntentRegex.test(combined);
   if (!highIntent && !medIntent) return null;
@@ -120,7 +144,7 @@ async function scrapeSubreddits(subs) {
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
-        console.log(`  + ${result.type}: u/${p.author.name} - "${result.trigger}"`);
+        console.log(`  + ${result.type} [${result.product}]: u/${p.author.name} - "${result.trigger}"`);
       }
     } catch (err) {
       console.log(`Error r/${sub}: ${err.message}`);
@@ -132,7 +156,7 @@ async function scrapeSubreddits(subs) {
 
 async function scrape() {
   console.log("=".repeat(50));
-  console.log("ClientMagnet -- MapZap Scraper");
+  console.log("ClientMagnet -- MapZap + DevHire Scraper");
   console.log("=".repeat(50));
   const leads = await scrapeSubreddits(BUSINESS_SUBS);
   console.log(`Scrape complete -- leads found: ${leads}`);

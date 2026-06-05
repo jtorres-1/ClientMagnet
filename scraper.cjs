@@ -51,7 +51,21 @@ const BUSINESS_SUBS = [
   "AutoDetailing", "towing", "movers", "petgrooming",
   // Side hustlers
   "sidehustle", "passive_income", "Flipping", "sweatystartup",
-  // Developer hiring subs
+  // Developer hiring subs -- people looking to hire
+  "forhire", "slavelabour", "jobs4bitcoins", "WorkOnline",
+  "HireaWriter", "DeveloperJobs", "CodingJobs", "FreelanceProgramming",
+  "webdev", "Python", "javascript", "node", "reactjs",
+  "devops", "SoftwareEngineering", "cscareerquestions",
+  "learnprogramming", "learnpython", "django", "flask",
+  "programming", "coding", "techjobs", "remotework",
+  "RemoteJobs", "digitalnomad", "WorkOnline", "ProgrammerHumor",
+  "webdesign", "web_design", "Frontend", "backend",
+  "softwaretesting", "QualityAssurance", "MachineLearning",
+  "artificial", "ChatGPT", "OpenAI", "LangChain",
+  "nocode", "lowcode", "Zapier", "n8n", "automation",
+  "SideProject", "indiehackers", "buildinpublic",
+  "EntrepreneurRideAlong", "jobsearchhacks", "datascience",
+  "dataengineering", "analytics", "BusinessIntelligence"
   "forhire", "slavelabour", "jobs4bitcoins", "WorkOnline",
   "HireaWriter", "DeveloperJobs", "ProgrammerHumor",
   "webdev", "Python", "javascript", "node", "reactjs",

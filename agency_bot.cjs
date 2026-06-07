@@ -201,7 +201,7 @@ async function runOutreachCycle() {
     const tpl = product === "DEVHIRE" ? pick(DEVHIRE_MESSAGES) : pick(MAPZAP_MESSAGES);
 
     try {
-      await reddit.composeMessage({ to: username, subject: "", text: tpl.text });
+      await reddit.composeMessage({ to: username, subject: "saw your post", text: tpl.text });
       confirmed++;
       log("SENT", `u/${username} | ${tpl.id} | [${product}] | score:${scoreLead(post)} | ${leadType}`);
       upsertUser(users, username, {
@@ -273,7 +273,7 @@ async function checkInboxAndFollowup() {
       try {
         await reddit.composeMessage({
           to: item.author.name,
-          subject: "",
+          subject: "saw your post",
           text: closer.text
         });
         log("CLOSER SENT", `u/${item.author.name} | ${closer.id} -- bot done, human takes over`);

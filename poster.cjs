@@ -17,120 +17,93 @@ const POSTED_PATH = path.join(__dirname, "logs", "posted_subs.json");
 const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
+// Only subs where hiring posts make sense
 const DEVHIRE_SUBS = [
   "forhire",
   "freelance_forhire",
-  "jobbit",
   "slavelabour",
+  "jobbit",
   "WorkOnline",
-  "PythonJobs",
-  "MachineLearningJobs",
-  "remotepython",
-  "webdevjobs",
-  "techjobs",
-  "cscareerquestionsEU",
-  "freelancing",
-  "digitalnomad",
-  "RemoteWork",
-  "beermoney",
   "Jobs4Bitcoins",
   "HireaWriter",
   "hireadev",
-  "SideProject",
-  "IMadeThis",
-  "softwareengineering",
-  "cscareerquestions",
-  "learnprogramming",
-  "webdev",
-  "django",
-  "flask",
-  "Python",
-  "javascript",
-  "reactjs",
-  "node",
+  "PythonJobs",
+  "webdevjobs",
+  "MachineLearningJobs",
+  "remotepython",
+  "RemoteWork",
+  "digitalnomad",
+  "freelancing",
 ];
 
+// Only subs where business owners and sales people hang out
 const MAPZAP_SUBS = [
-  "agency",
-  "Flipping",
-  "Affiliatemarketing",
-  "entrepreneurs",
-  "Business_Ideas",
-  "passive_income",
-  "hustle",
-  "sidehustle",
+  "smallbusiness",
+  "Entrepreneur",
   "EntrepreneurRideAlong",
   "sweatystartup",
   "growmybusiness",
-  "juststart",
-  "copywriting",
-  "cold_email",
-  "automation",
-  "recruiting",
-  "realestateinvesting",
-  "InsuranceAgents",
-  "coldemail",
-  "smallbusiness",
+  "agency",
   "sales",
   "leadgeneration",
+  "cold_email",
+  "coldemail",
+  "b2bmarketing",
   "digital_marketing",
   "Emailmarketing",
-  "b2bmarketing",
+  "copywriting",
   "msp",
   "marketing",
-  "ecommerce",
-  "dropship",
-  "FulfillmentByAmazon",
-  "AmazonSeller",
-  "reselling",
-  "PPC",
-  "FacebookAds",
-  "googleads",
-  "shopify",
-  "Wordpress",
+  "realestateinvesting",
+  "InsuranceAgents",
   "realtors",
+  "recruiting",
+  "automation",
+  "sidehustle",
+  "hustle",
+  "Affiliatemarketing",
+  "shopify",
+  "ecommerce",
+  "AmazonSeller",
+  "FulfillmentByAmazon",
 ];
 
 const DEVHIRE_POSTS = [
   {
-    title: "[FOR HIRE] Python dev in LA — websites, scrapers, bots, AI integrations — fast turnaround, flat fee",
-    text: `Hey, putting this out there — I'm a Python developer based in LA with availability this week.
+    title: "[FOR HIRE] Python developer — websites, scrapers, bots, AI integrations — flat fee, 48hr delivery",
+    text: `Available for freelance work this week.
 
-Built some things I'm proud of: a live Google Maps lead scraper SaaS with Stripe payments, a cold email pipeline pushing 500 emails per day, and a Reddit automation bot all running in production.
+I build websites, web scrapers, automation bots, and AI integrations. All flat fee, no hourly. 48 hour delivery on most projects.
 
-Looking for a project to work on. Websites, scrapers, automation bots, AI integrations. Flat fee only, no hourly. 48 hour delivery on most projects.
+Things I have shipped: a live SaaS with Stripe payments and Google Maps integration, a cold email pipeline running 500 emails per day, and a Reddit automation bot in production.
 
-Floor pricing: $500 for websites, $800 for automation and scrapers.
-
-Portfolio: https://casa-fuego-demo.netlify.app
+Floor: $500 for websites, $800 for automation and scrapers.
 
 DM me what you need built.`
   },
   {
-    title: "[FOR HIRE] Available now — Python, Node.js, automation, web apps — LA based dev, ships fast",
-    text: `I'm a developer based in Los Angeles available for freelance work right now.
+    title: "[FOR HIRE] Python dev in LA — scraping, automation, web apps, AI — ships fast, flat fee",
+    text: `Putting this out there — I am a Python developer based in LA available immediately.
 
-What I actually build and ship: web scrapers, automation bots, cold outreach pipelines, business websites, AI integrations. Not theory — I have live production projects running.
+I have live production projects running including a Google Maps scraper SaaS, a cold email pipeline, and a Reddit DM automation bot.
 
-48 hour turnaround. Flat fee. No hourly rates ever.
-
-$500 minimum for websites, $800 for automation.
-
-Portfolio: https://casa-fuego-demo.netlify.app
-
-DM me a scope and I'll tell you if I can build it.`
-  },
-  {
-    title: "[FOR HIRE] Freelance Python developer — scraping, automation, bots, web apps — flat fee, fast delivery",
-    text: `Throwing this out there — I'm a Python dev in LA looking for a project this week.
-
-Stuff I've shipped: a Google Maps scraper SaaS that pulls 100 leads in 60 seconds, email outreach pipelines, Reddit bots, business websites. All running in production.
-
-Flat fee. 48 hours. No subscriptions on my end, no hourly, no retainers unless you want one.
+I do websites, scrapers, automation, AI integrations. Flat fee only. 48 hour turnaround.
 
 $500 websites, $800 automation, higher for complex builds.
 
-DM me what you're trying to build.`
+DM me a scope.`
+  },
+  {
+    title: "[FOR HIRE] Freelance Python developer — bots, scrapers, web apps, automation — available now",
+    text: `Available for a project this week.
+
+Stack: Python, Flask, Node.js, Puppeteer, OpenAI API, Stripe, PostgreSQL.
+
+Shipped: a live Google Maps lead scraper SaaS, a 500 email per day cold outreach pipeline, a Reddit automation bot, and multiple business websites.
+
+Flat fee. 48 hours. $500 floor for websites, $800 for automation.
+
+DM me what you need.`
   },
 ];
 
@@ -141,7 +114,7 @@ const MAPZAP_POSTS = [
 
 MapZap pulls 100 local businesses from Google Maps in about 60 seconds. Type a business type and city, get a CSV with names, phone numbers, addresses, and websites.
 
-$49 per month, unlimited searches. Free preview before you pay — no card required.
+$49 per month, unlimited searches. Free preview before you pay, no card required.
 
 https://mapzap.org
 
@@ -153,7 +126,7 @@ Happy to answer questions.`
 
 I built MapZap to fix that. Type any business niche and city, get 100 leads as a downloadable CSV instantly. Name, phone, address, website.
 
-Use cases I've seen: cold callers, agencies building client lists, freelancers finding local prospects, sales reps targeting specific niches.
+Use cases: cold callers, agencies building client lists, freelancers finding local prospects, sales reps targeting specific niches.
 
 $49 per month, unlimited searches. Try 5 leads free first.
 
@@ -161,11 +134,11 @@ https://mapzap.org`
   },
   {
     title: "MapZap — pull 100 local business leads from Google Maps in 60 seconds — $49/month unlimited searches",
-    text: `Sharing something I built that's been useful for cold outreach.
+    text: `Sharing something I built that has been useful for cold outreach.
 
-You type a business type and city, it hits Google Maps and returns 100 businesses as a CSV — name, phone number, address, website. Takes about 60 seconds.
+You type a business type and city, it hits Google Maps and returns 100 businesses as a CSV with name, phone number, address, and website. Takes about 60 seconds.
 
-Monthly subscription at $49 gets you unlimited searches. There's also a $99/month Pro tier that includes business emails where available.
+$49 per month gets you unlimited searches. There is also a $99 per month Pro tier that includes business emails where available.
 
 Free preview with no credit card: https://mapzap.org`
   },

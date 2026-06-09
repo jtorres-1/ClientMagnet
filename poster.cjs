@@ -82,7 +82,6 @@ What I build:
 - AI integrations
 - Cold outreach systems
 
-Portfolio: https://casa-fuego-demo.netlify.app
 
 Flat fee, no hourly rates. 50% deposit upfront, 50% on delivery.
 
@@ -102,7 +101,6 @@ I have built and shipped:
 
 Tech stack: Python, Flask, Node.js, React, Puppeteer, PostgreSQL, Stripe, OpenAI API.
 
-Portfolio: https://casa-fuego-demo.netlify.app
 
 Flat fee only. No hourly. DM me what you need built.`
   },
@@ -119,7 +117,6 @@ Specialties:
 
 Flat fee. 48 hour delivery. $500 floor for websites, $800 for automation.
 
-Portfolio: https://casa-fuego-demo.netlify.app
 
 DM me a scope.`
   },

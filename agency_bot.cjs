@@ -1,301 +1,346 @@
-// agency_bot.cjs -- ClientMagnet MapZap + DevHire Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
-const fs       = require("fs");
-const path     = require("path");
-const csv      = require("csv-parser");
-const { createObjectCsvWriter } = require("csv-writer");
+const fs = require("fs");
+const path = require("path");
+
 const reddit = new snoowrap({
-  userAgent:    process.env.REDDIT_USER_AGENT,
-  clientId:     process.env.REDDIT_CLIENT_ID,
+  userAgent: process.env.REDDIT_USER_AGENT,
+  clientId: process.env.REDDIT_CLIENT_ID,
   clientSecret: process.env.REDDIT_CLIENT_SECRET,
-  username:     process.env.REDDIT_USERNAME,
-  password:     process.env.REDDIT_PASSWORD,
+  username: process.env.REDDIT_USERNAME,
+  password: process.env.REDDIT_PASSWORD,
 });
-const baseDir   = path.resolve(__dirname, "logs");
-if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
-const leadsPath = path.join(baseDir, "clean_leads.csv");
-const sentPath  = path.join(baseDir, "clean_leads_dmed.csv");
-const usersPath = path.join(baseDir, "contacted_users.json");
-const MIN_DMS_PER_CYCLE = 60;
-const MAX_DMS_PER_CYCLE = 80;
-const MIN_DELAY_MS      = 2 * 60 * 1000;
-const MAX_DELAY_MS      = 4 * 60 * 1000;
-const INBOX_POLL_MS     = 60 * 1000;
-const NEGATIVE_SIGNALS = [
-  "not interested","stop","leave me alone","no thanks","no thank you",
-  "unsubscribe","remove me","don't message","do not message","spam","reported","block",
-  "go away","f off","scam","reported you"
+
+const BANNED_PATH = path.join(__dirname, "logs", "banned_subs.json");
+const POSTED_PATH = path.join(__dirname, "logs", "posted_subs.json");
+
+const MIN_DELAY_MS = 10 * 60 * 1000;
+const MAX_DELAY_MS = 13 * 60 * 1000;
+
+const DEVHIRE_SUBS = [
+  "forhire",
+  "jobbit",
+  "slavelabour",
+  "freelance_forhire",
+  "WorkOnline",
+  "PythonJobs",
+  "webdevjobs",
+  "MachineLearningJobs",
+  "remotepython",
+  "jobboard",
+  "techjobs",
+  "ITCareerQuestions",
+  "cscareerquestionsEU",
+  "RemoteWork",
+  "freelance",
+  "digitalnomad",
+  "hiring",
+  "jobs",
+  "beermoney",
+  "Jobs4Bitcoins",
+  "HireaWriter",
+  "WorkOnlineJobs",
+  "FreelanceDesigners",
+  "FreelanceWriters",
+  "forhire",
+  "techsupport",
+  "sysadmin",
+  "ITCareerQuestions",
+  "devops",
+  "netsec",
+  "cybersecurity",
+  "homelab",
+  "selfhosted",
 ];
-const POSITIVE_SIGNALS = [
-  "how much","price","cost","how does it work","tell me more","interested",
-  "sounds good","where","link","send it","sign me up","i'll try","let me see",
-  "how many","what is it","can i","do you","does it","will it","more info",
-  "portfolio","rate","available","timeline","when can you start"
+
+const MAPZAP_SUBS = [
+  "agency",
+  "Flipping",
+  "Affiliatemarketing",
+  "entrepreneurs",
+  "Business_Ideas",
+  "passive_income",
+  "hustle",
+  "sidehustle",
+  "Emailmarketing",
+  "EntrepreneurRideAlong",
+  "sweatystartup",
+  "growmybusiness",
+  "juststart",
+  "copywriting",
+  "cold_email",
+  "automation",
+  "recruiting",
+  "realestateinvesting",
+  "Bookkeeping",
+  "InsuranceAgents",
+  "coldemail",
+  "content_marketing",
+  "PPC",
+  "FacebookAds",
+  "googleads",
+  "Wordpress",
+  "shopify",
+  "FulfillmentByAmazon",
+  "AmazonSeller",
+  "reselling",
+  "personalfinance",
+  "financialindependence",
+  "Fire",
+  "leanfire",
+  "fatfire",
+  "gig",
+  "doordash_drivers",
+  "UberDrivers",
+  "InstacartShoppers",
+  "MedicalBilling",
+  "acupuncture",
+  "Dentistry",
+  "smallbusiness",
+  "Entrepreneur",
+  "sales",
+  "leadgeneration",
+  "digital_marketing",
+  "realtors",
+  "msp",
+  "marketing",
+  "SEO",
+  "socialmedia",
 ];
-function isNegativeReply(body) {
-  const b = (body || "").toLowerCase();
-  return NEGATIVE_SIGNALS.some(s => b.includes(s));
-}
-function isPositiveReply(body) {
-  const b = (body || "").toLowerCase();
-  return POSITIVE_SIGNALS.some(s => b.includes(s));
-}
-function loadUsers() {
-  if (!fs.existsSync(usersPath)) return {};
-  try { return JSON.parse(fs.readFileSync(usersPath, "utf8")); }
-  catch { return {}; }
-}
-function saveUsers(users) { fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
-function getUser(users, username) { return users[username.toLowerCase()] || null; }
-function upsertUser(users, username, fields) {
-  const key = username.toLowerCase();
-  users[key] = { ...(users[key] || {}), ...fields, last_message_at: new Date().toISOString() };
-  saveUsers(users);
-  return users[key];
-}
-const sentWriter = createObjectCsvWriter({
-  path: sentPath,
-  header: [
-    { id: "time",       title: "Time" },
-    { id: "username",   title: "Username" },
-    { id: "step",       title: "Step" },
-    { id: "templateId", title: "Template ID" },
-    { id: "subreddit",  title: "Subreddit" },
-    { id: "leadType",   title: "Lead Type" },
-    { id: "trigger",    title: "Matched Trigger" },
-    { id: "url",        title: "Post URL" },
-    { id: "product",    title: "Product" },
-    { id: "note",       title: "Note" },
-  ],
-  append: true
-});
-function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
+
+const DEVHIRE_POSTS = [
+  {
+    title: "[offer] Python Developer in LA | Websites, Scrapers, Bots, AI Integrations | 48hr Delivery | Flat Fee",
+    text: `Hey everyone, I am a Python developer based in Los Angeles available for immediate freelance work.
+
+What I build:
+- Business websites (48 hour delivery)
+- Custom scrapers and data pipelines
+- Automation bots
+- AI integrations
+- Cold outreach systems
+
+Flat fee, no hourly rates. 50% deposit upfront, 50% on delivery.
+
+Floor pricing: $500 websites, $800 automation.
+
+DM me a scope and I will get back to you immediately.`
+  },
+  {
+    title: "[offer] Full Stack Developer | Python, Node.js, React | Bots, Scrapers, Web Apps | 48hr Turnaround",
+    text: `Python and Node.js developer available for freelance projects right now.
+
+I have built and shipped:
+- A live Google Maps lead scraper SaaS with Stripe payments
+- A cold email pipeline pushing 500 emails per day
+- A Reddit automation bot in production
+- Multiple business websites delivered in 48 hours
+
+Tech stack: Python, Flask, Node.js, React, Puppeteer, PostgreSQL, Stripe, OpenAI API.
+
+Flat fee only. No hourly. DM me what you need built.`
+  },
+  {
+    title: "[offer] Python Dev | Automation, Scrapers, AI, Websites | LA Based | Fast Delivery",
+    text: `Available for freelance work immediately.
+
+Specialties:
+- Web scraping and data pipelines
+- Automation bots
+- AI integrations with OpenAI
+- Business websites in 48 hours
+- Cold outreach systems
+
+Flat fee. 48 hour delivery. $500 floor for websites, $800 for automation.
+
+DM me a scope.`
+  },
+];
+
+const MAPZAP_POSTS = [
+  {
+    title: "I built a tool that pulls 100 local business leads as a CSV in 60 seconds",
+    text: `Hey, wanted to share something I built that might help people here.
+
+It is called MapZap. You type a business type and city, it pulls 100 local businesses from Google Maps and exports a CSV with names, phone numbers, addresses, and websites in about 60 seconds.
+
+Useful for:
+- Cold outreach lists
+- Sales prospecting
+- Market research
+- Lead generation agencies
+
+$49 one time, no subscription. First 5 leads free.
+
+https://mapzap.org
+
+Happy to answer any questions.`
+  },
+  {
+    title: "Stop building lead lists manually. I automated it.",
+    text: `Built a tool that scrapes 100 local business leads from Google Maps in under a minute.
+
+Type a niche and city, get a CSV with:
+- Business name
+- Phone number
+- Address
+- Website
+
+One time $49. No monthly fee. No limits on searches after you pay.
+
+Free trial, no credit card needed.
+
+https://mapzap.org`
+  },
+  {
+    title: "Tool I built for cold outreach prospecting: 100 leads in 60 seconds",
+    text: `Been doing cold outreach for a while and got tired of manually building lists so I built something to automate it.
+
+Enter any business type and city, get 100 leads as a downloadable CSV instantly. Name, phone, address, website.
+
+Use cases:
+- Local business outreach
+- B2B prospecting
+- Agency lead gen
+- Sales pipelines
+
+$49 flat, no subscription. First 5 leads free so you can check data quality before buying.
+
+https://mapzap.org`
+  },
+];
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-const MAPZAP_MESSAGES = [
-  {
-    id: "MZ_1",
-    text: `not sure if this helps but i built a tool that pulls 100 local business leads as a CSV in about 60 seconds\n\nyou type a business type and city, it returns names, phone numbers, and addresses. $49 one time\n\nhttps://mapzap.org`
-  },
-  {
-    id: "MZ_2",
-    text: `might be relevant\n\ni built mapzap, pulls 100 local business leads (name, phone, address) as a CSV in under a minute. $49 flat, no subscription\n\nhttps://mapzap.org`
-  },
-  {
-    id: "MZ_3",
-    text: `this might save you some time -- built a tool that scrapes 100 local business leads in 60 seconds\n\ntype a niche and city, get a CSV with names, phones, addresses. one time $49\n\nhttps://mapzap.org`
-  },
-  {
-    id: "MZ_4",
-    text: `building lead lists manually is a nightmare -- i built something that does it in 60 seconds\n\n100 local businesses, names + phone numbers + addresses, CSV download. $49 once\n\nhttps://mapzap.org`
-  },
-  {
-    id: "MZ_5",
-    text: `thought this might help -- i built a lead scraper that pulls 100 local businesses from any city in 60 seconds\n\nCSV with name, phone, address. $49 one time, no monthly fee\n\nhttps://mapzap.org`
-  }
-];
-const DEVHIRE_MESSAGES = [
-  {
-    id: "DH_1",
-    text: `i'm a python developer based in LA available for immediate freelance work. i've built a live google maps scraper with stripe payments, a cold email pipeline pushing 500 emails per day, and a reddit automation bot in production. websites, scrapers, bots, ai integrations. 48 hour delivery, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me a scope`
-  },
-  {
-    id: "DH_2",
-    text: `python developer in LA, available now, i ship fast. built a google maps lead scraper with stripe, a 500 email per day cold outreach pipeline, and a reddit automation bot all in production.\n\nwebsites, scrapers, automation, ai integrations. flat fee, 48 hour delivery.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\nwhat do you need built`
-  },
-  {
-    id: "DH_3",
-    text: `python dev here, based in LA, available now. i have live production projects including a google maps scraper, a cold email pipeline, and a reddit dm bot.\n\ni do websites, scrapers, automation bots, and ai integrations. 48 hour turnaround, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me what you need`
-  }
-];
-const MAPZAP_CLOSERS = [
-  {
-    id: "RC_1",
-    text: `yeah -- $49 one time, go to https://mapzap.org, pay via stripe, type any business type and city, download the CSV instantly\n\n100 leads with name, phone, address, website. no subscription, no limits on searches`
-  },
-  {
-    id: "RC_2",
-    text: `$49 once at https://mapzap.org -- type something like "dentists, Los Angeles" and you get 100 leads as a CSV with names, phones, and addresses in about 60 seconds\n\nno monthly fee`
-  }
-];
-function scoreLead(p) {
-  let score = 0;
-  const t = (p.matchedTrigger || "").toLowerCase();
-  const sub = (p.subreddit || "").toLowerCase();
-  const product = (p.product || "").toUpperCase();
-  if (product === "DEVHIRE") score += 15;
-  if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
-  else if (p.leadType === "HIGH_INTENT") score += 7;
-  else if (p.leadType === "MEDIUM_INTENT_OWNER") score += 5;
-  else score += 2;
-  if (/need leads|buy leads|lead source|lead list|lead database/.test(t)) score += 5;
-  if (/looking for (a |an )?(developer|dev|programmer)/.test(t)) score += 8;
-  if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
-  if (["forhire","slavelabour","jobs4bitcoins","WorkOnline","HireaWriter"].includes(sub)) score += 5;
-  if (["sales","b2bsales","coldemail","coldcalling","leadgeneration"].includes(sub)) score += 5;
-  return score;
+const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+function loadBanned() {
+  if (!fs.existsSync(BANNED_PATH)) return [];
+  try { return JSON.parse(fs.readFileSync(BANNED_PATH)); } catch { return []; }
 }
-function loadLeads() {
-  return new Promise(resolve => {
-    if (!fs.existsSync(leadsPath)) return resolve([]);
-    const arr = [];
-    fs.createReadStream(leadsPath)
-      .pipe(csv())
-      .on("data", row => arr.push(row))
-      .on("end",  () => resolve(arr))
-      .on("error", () => resolve(arr));
-  });
+
+function saveBanned(banned) {
+  fs.writeFileSync(BANNED_PATH, JSON.stringify(banned, null, 2));
 }
-async function runOutreachCycle() {
-  const leads = await loadLeads();
-  if (!leads.length) { log("INFO", "No leads found. Waiting for scraper..."); return; }
-  leads.sort((a, b) => scoreLead(b) - scoreLead(a));
-  const users      = loadUsers();
-  const target     = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
-  const cyclesSeen = new Set();
-  let attempted = 0, confirmed = 0;
-  for (const post of leads) {
-    if (attempted >= target) { log("INFO", `Cycle target reached (${target} DMs).`); break; }
-    const username  = (post.username || "").trim();
-    const url       = (post.url      || "").trim();
-    const trigger   = (post.matchedTrigger || "").trim();
-    const leadType  = (post.leadType || "").trim();
-    const subreddit = (post.subreddit || "").trim();
-    const product   = (post.product || "MAPZAP").trim().toUpperCase();
-    if (!username || !url) continue;
-    const key  = username.toLowerCase();
-    const user = getUser(users, username);
-    if (cyclesSeen.has(key)) continue;
-    if (user?.sent) { log("SKIP", `already contacted u/${username}`); continue; }
-    if (user?.closed) { log("SKIP", `closed u/${username} (${user.closed_reason})`); continue; }
-    cyclesSeen.add(key);
-    attempted++;
-    const tpl = product === "DEVHIRE" ? pick(DEVHIRE_MESSAGES) : pick(MAPZAP_MESSAGES);
-    const subject = product === "DEVHIRE" ? "dev for hire" : "lead gen tool";
-    try {
-      // Fresh check right before sending to prevent double sends
-      const freshUser = getUser(loadUsers(), username);
-      if (freshUser?.sent) {
-        log("SKIP", `already contacted u/${username} (fresh check)`);
-        continue;
-      }
-      await reddit.composeMessage({ to: username, subject, text: tpl.text });
-      confirmed++;
-      log("SENT", `u/${username} | ${tpl.id} | [${product}] | score:${scoreLead(post)} | ${leadType}`);
-      upsertUser(users, username, {
-        username, product,
-        sent: true, sent_at: new Date().toISOString(), template: tpl.id,
-        replied: false, reply_positive: false,
-        closer_sent: false, closed: false, closed_reason: null,
-        processed_message_ids: [], trigger, leadType, url, subreddit
-      });
-      await sentWriter.writeRecords([{
-        time: new Date().toISOString(), username, step: "OUTREACH", templateId: tpl.id,
-        subreddit, leadType, trigger, url, product, note: "initial DM"
-      }]);
-      if (attempted < target) {
-        const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
-        log("INFO", `Waiting ${Math.round(delay/60000)}m before next DM...`);
-        await sleep(delay);
-      }
-    } catch (err) {
-      log("ERROR", `DM failed u/${username}: ${err.message}`);
-      if (/NOT_WHITELISTED|USER_DOESNT_EXIST|BANNED/.test(err.message)) {
-        upsertUser(users, username, { username, sent: false, closed: true, closed_reason: "blocked_or_banned" });
-      }
-    }
-  }
-  log("INFO", `Outreach cycle complete -- attempted ${attempted}, confirmed ${confirmed}`);
+
+function loadPosted() {
+  if (!fs.existsSync(POSTED_PATH)) return {};
+  try { return JSON.parse(fs.readFileSync(POSTED_PATH)); } catch { return {}; }
 }
-async function checkInboxAndFollowup() {
-  const users = loadUsers();
-  const botUsername = (process.env.REDDIT_USERNAME || "").toLowerCase();
+
+function savePosted(posted) {
+  fs.writeFileSync(POSTED_PATH, JSON.stringify(posted, null, 2));
+}
+
+function wasPostedToday(posted, sub) {
+  if (!posted[sub]) return false;
+  const last = new Date(posted[sub]);
+  const now = new Date();
+  return last.toDateString() === now.toDateString();
+}
+
+function log(tag, msg) {
+  console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`);
+}
+
+async function postToSub(sub, type) {
+  const post = type === "DEVHIRE" ? pick(DEVHIRE_POSTS) : pick(MAPZAP_POSTS);
   try {
-    const unread = await reddit.getUnreadMessages({ limit: 50 });
-    const toMarkRead = [];
-    for (const item of unread) {
-      if (item.was_comment !== false) continue;
-      if (!item.body || !item.author) continue;
-      toMarkRead.push(item);
-      const sender    = item.author.name.toLowerCase();
-      const messageId = item.name || item.id || "";
-      if (sender === botUsername) continue;
-      const user = getUser(users, item.author.name);
-      if (!user?.sent) { log("SKIP", `unknown sender u/${item.author.name}`); continue; }
-      if (user.closed) { log("SKIP", `closed u/${item.author.name}`); continue; }
-      const processed = user.processed_message_ids || [];
-      if (messageId && processed.includes(messageId)) { log("SKIP", `already processed ${messageId}`); continue; }
-      processed.push(messageId);
-      upsertUser(users, item.author.name, { processed_message_ids: processed, replied: true });
-      if (isNegativeReply(item.body)) {
-        upsertUser(users, item.author.name, { closed: true, closed_reason: "negative_reply" });
-        log("NEGATIVE", `u/${item.author.name} -- closed`);
-        continue;
-      }
-      if (user.product === "DEVHIRE") {
-        log("NEEDS HUMAN", `u/${item.author.name} [DEVHIRE] replied -- CHECK YOUR REDDIT INBOX NOW`);
-        continue;
-      }
-      // MapZap closer -- fires ONCE only, fresh check before sending
-      const freshUser = getUser(loadUsers(), item.author.name);
-      if (freshUser?.closer_sent) {
-        log("NEEDS HUMAN", `u/${item.author.name} replied after closer -- CHECK YOUR REDDIT INBOX`);
-        continue;
-      }
-      log("REPLY", `u/${item.author.name} -- sending MapZap closer once`);
-      const closer = pick(MAPZAP_CLOSERS);
-      try {
-        // Mark closer_sent BEFORE sending to prevent race condition
-        upsertUser(users, item.author.name, {
-          reply_positive: true,
-          closer_sent: true,
-          closer_sent_at: new Date().toISOString(),
-          closer_template: closer.id
-        });
-        await reddit.composeMessage({
-          to: item.author.name,
-          subject: "lead gen tool",
-          text: closer.text
-        });
-        log("CLOSER SENT", `u/${item.author.name} | ${closer.id} -- bot done, human takes over`);
-        await sentWriter.writeRecords([{
-          time: new Date().toISOString(), username: item.author.name,
-          step: "CLOSER", templateId: closer.id,
-          subreddit: user.subreddit || "", leadType: user.leadType || "",
-          trigger: user.trigger || "", url: user.url || "",
-          product: "MAPZAP", note: "closer sent once -- hand off to human"
-        }]);
-      } catch (err) {
-        log("ERROR", `Closer failed u/${item.author.name}: ${err.message}`);
-      }
-    }
-    if (toMarkRead.length > 0) {
-      const chunkSize = 25;
-      for (let i = 0; i < toMarkRead.length; i += chunkSize) {
-        const chunk = toMarkRead.slice(i, i + chunkSize);
-        try {
-          await reddit.markMessagesAsRead(chunk);
-          log("INFO", `Marked ${chunk.length} message(s) as read`);
-        } catch (err) {
-          log("WARN", `markMessagesAsRead failed: ${err.message}`);
-        }
-      }
-    }
+    await reddit.getSubreddit(sub).submitSelfpost({
+      title: post.title,
+      text: post.text,
+    });
+    log("POSTED", `r/${sub} [${type}]`);
+    return "posted";
   } catch (err) {
-    log("ERROR", `Inbox check failed: ${err.message}`);
+    const msg = err.message || "";
+    if (
+      msg.includes("SUBREDDIT_NOTALLOWED") ||
+      msg.includes("BANNED_FROM_SUBREDDIT") ||
+      msg.includes("not allowed to post") ||
+      msg.includes("forbidden") ||
+      msg.includes("403") ||
+      msg.includes("FLAIR_REQUIRED") ||
+      msg.includes("flair") ||
+      msg.includes("SUBREDDIT_NOEXIST") ||
+      msg.includes("doesn't exist") ||
+      msg.includes("TITLE_REQUIREMENT") ||
+      msg.includes("title") ||
+      msg.includes("NO_SELFS") ||
+      msg.includes("text posts")
+    ) {
+      log("SKIP", `r/${sub} — blacklisting: ${msg.split(",")[0]}`);
+      return "banned";
+    }
+    if (msg.includes("RATELIMIT") || msg.includes("rate limit")) {
+      log("RATELIMIT", `r/${sub} — waiting 15 minutes`);
+      await sleep(15 * 60 * 1000);
+      return "ratelimit";
+    }
+    log("ERROR", `r/${sub}: ${msg}`);
+    return "error";
   }
 }
+
+async function runCycle() {
+  const banned = loadBanned();
+  const posted = loadPosted();
+
+  const devhireSubs = DEVHIRE_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
+  const mapzapSubs = MAPZAP_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
+
+  const queue = [
+    ...devhireSubs.map(s => ({ sub: s, type: "DEVHIRE" })),
+    ...mapzapSubs.map(s => ({ sub: s, type: "MAPZAP" })),
+  ];
+
+  const seen = new Set();
+  const deduped = queue.filter(item => {
+    if (seen.has(item.sub)) return false;
+    seen.add(item.sub);
+    return true;
+  });
+
+  log("INFO", `${deduped.length} subs to post to today`);
+
+  for (const item of deduped) {
+    const result = await postToSub(item.sub, item.type);
+
+    if (result === "banned") {
+      const banned = loadBanned();
+      if (!banned.includes(item.sub)) {
+        banned.push(item.sub);
+        saveBanned(banned);
+      }
+      continue;
+    }
+
+    if (result === "posted") {
+      const posted = loadPosted();
+      posted[item.sub] = new Date().toISOString();
+      savePosted(posted);
+      const delay = rand(MIN_DELAY_MS, MAX_DELAY_MS);
+      log("INFO", `Waiting ${Math.round(delay / 60000)}m before next post...`);
+      await sleep(delay);
+    }
+  }
+
+  log("INFO", "Daily cycle complete. Restarting tomorrow.");
+}
+
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet -- MapZap + DevHire Outreach Bot");
+  console.log("RedditPoster -- Daily Sub Poster");
   console.log("=".repeat(60));
-  setInterval(checkInboxAndFollowup, INBOX_POLL_MS);
+
   while (true) {
-    console.log(`\n[${new Date().toLocaleString()}] Starting outreach cycle...`);
-    await runOutreachCycle();
-    const cycleDelay = (6 + Math.floor(Math.random() * 3)) * 60 * 1000;
-    log("INFO", `Next cycle in ${Math.round(cycleDelay/60000)} minutes...`);
-    await sleep(cycleDelay);
+    await runCycle();
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0);
+    const msUntilTomorrow = tomorrow - now;
+    log("INFO", `Next cycle starts at 8am tomorrow. Sleeping ${Math.round(msUntilTomorrow / 3600000)}hrs.``);
+    await sleep(msUntilTomorrow);
   }
 })();

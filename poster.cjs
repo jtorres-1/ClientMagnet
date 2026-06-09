@@ -82,18 +82,11 @@ What I build:
 - AI integrations
 - Cold outreach systems
 
-Live work:
-- Restaurant site: https://casa-fuego-demo.netlify.app
-- Cleaning business: https://claudiascleaningla.com
-- Church site: https://iphavp.org
-- Lead scraper SaaS: https://mapzap.org
+Portfolio: https://casa-fuego-demo.netlify.app
 
 Flat fee, no hourly rates. 50% deposit upfront, 50% on delivery.
 
 Floor pricing: $500 websites, $800 automation.
-
-LinkedIn: https://www.linkedin.com/in/jesse-torres11/
-GitHub: https://github.com/jtorres-1
 
 DM me a scope and I will get back to you immediately.`
   },
@@ -102,7 +95,7 @@ DM me a scope and I will get back to you immediately.`
     text: `Python and Node.js developer available for freelance projects right now.
 
 I have built and shipped:
-- A live Google Maps lead scraper SaaS with Stripe payments (mapzap.org)
+- A live Google Maps lead scraper SaaS with Stripe payments
 - A cold email pipeline pushing 500 emails per day
 - A Reddit automation bot in production
 - Multiple business websites delivered in 48 hours
@@ -110,7 +103,6 @@ I have built and shipped:
 Tech stack: Python, Flask, Node.js, React, Puppeteer, PostgreSQL, Stripe, OpenAI API.
 
 Portfolio: https://casa-fuego-demo.netlify.app
-LinkedIn: https://www.linkedin.com/in/jesse-torres11/
 
 Flat fee only. No hourly. DM me what you need built.`
   },
@@ -120,19 +112,16 @@ Flat fee only. No hourly. DM me what you need built.`
 
 Specialties:
 - Web scraping and data pipelines
-- Automation bots (Reddit, Facebook, email)
+- Automation bots
 - AI integrations with OpenAI
 - Business websites in 48 hours
 - Cold outreach systems
 
-I build real production tools. Check my live SaaS: https://mapzap.org
-
 Flat fee. 48 hour delivery. $500 floor for websites, $800 for automation.
 
-DM me a scope.
-
 Portfolio: https://casa-fuego-demo.netlify.app
-GitHub: https://github.com/jtorres-1`
+
+DM me a scope.`
   },
 ];
 
@@ -149,9 +138,9 @@ Useful for:
 - Market research
 - Lead generation agencies
 
-$49 one time, no subscription.
+$49 one time, no subscription. First 5 leads free.
 
-Try it free first, no credit card needed: https://mapzap.org
+https://mapzap.org
 
 Happy to answer any questions.`
   },
@@ -167,13 +156,13 @@ Type a niche and city, get a CSV with:
 
 One time $49. No monthly fee. No limits on searches after you pay.
 
-Free trial available, no credit card: https://mapzap.org
+Free trial, no credit card needed.
 
-Works great for agencies, sales reps, recruiters, anyone doing cold outreach.`
+https://mapzap.org`
   },
   {
     title: "Tool I built for cold outreach prospecting: 100 leads in 60 seconds",
-    text: `Been doing cold outreach for a while and got tired of manually building lists so I built MapZap.
+    text: `Been doing cold outreach for a while and got tired of manually building lists so I built something to automate it.
 
 Enter any business type and city, get 100 leads as a downloadable CSV instantly. Name, phone, address, website.
 
@@ -183,9 +172,9 @@ Use cases:
 - Agency lead gen
 - Sales pipelines
 
-$49 flat, no subscription: https://mapzap.org
+$49 flat, no subscription. First 5 leads free so you can check data quality before buying.
 
-First 5 leads free so you can check the data quality before buying.`
+https://mapzap.org`
   },
 ];
 
@@ -289,7 +278,6 @@ async function runCycle() {
         banned.push(item.sub);
         saveBanned(banned);
       }
-      // No delay — immediately try next sub
       continue;
     }
 
@@ -301,8 +289,6 @@ async function runCycle() {
       log("INFO", `Waiting ${Math.round(delay / 60000)}m before next post...`);
       await sleep(delay);
     }
-
-    // error also gets no delay — immediately try next
   }
 
   log("INFO", "Daily cycle complete. Restarting tomorrow.");

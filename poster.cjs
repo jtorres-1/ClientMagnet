@@ -18,8 +18,7 @@ const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
 const DEVHIRE_SUBS = [
-  "jobbit",
-  "CodeForHire",
+  
   "slavelabour",
   "freelance_forhire",
   "webdevjobs",

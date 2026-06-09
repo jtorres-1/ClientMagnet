@@ -18,7 +18,6 @@ const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
 const DEVHIRE_SUBS = [
-  "forhire",
   "jobbit",
   "CodeForHire",
   "slavelabour",
@@ -241,9 +240,11 @@ async function postToSub(sub, type) {
       msg.includes("BANNED_FROM_SUBREDDIT") ||
       msg.includes("not allowed to post") ||
       msg.includes("forbidden") ||
-      msg.includes("403")
+      msg.includes("403") ||
+      msg.includes("FLAIR_REQUIRED") ||
+      msg.includes("flair")
     ) {
-      log("BANNED", `r/${sub} — adding to blacklist`);
+      log("SKIP", `r/${sub} — flair required or banned, blacklisting`);
       return "banned";
     }
     if (msg.includes("RATELIMIT") || msg.includes("rate limit")) {
@@ -268,7 +269,6 @@ async function runCycle() {
     ...mapzapSubs.map(s => ({ sub: s, type: "MAPZAP" })),
   ];
 
-  // Dedupe subs that appear in both lists
   const seen = new Set();
   const deduped = queue.filter(item => {
     if (seen.has(item.sub)) return false;
@@ -312,7 +312,6 @@ async function runCycle() {
 
   while (true) {
     await runCycle();
-    // Wait until next day midnight
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);

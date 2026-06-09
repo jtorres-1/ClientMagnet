@@ -18,56 +18,128 @@ const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
 const DEVHIRE_SUBS = [
-  "slavelabour",
-  "freelance_forhire",
-  "webdevjobs",
-  "WorkOnline",
   "PythonJobs",
   "reactjs",
-  "nodejs",
-  "webdev",
-  "Python",
-  "learnprogramming",
-  "startups",
-  "Entrepreneur",
-  "smallbusiness",
   "SideProject",
-  "indiehackers",
   "IMadeThis",
-  "programming",
   "softwareengineering",
   "cscareerquestions",
   "freelancing",
-  "digitalnomad",
   "RemoteWork",
+  "Flask",
+  "django",
+  "MachineLearningJobs",
+  "remotepython",
+  "jobboard",
+  "techjobs",
+  "nocode",
+  "ChatGPT",
+  "artificial",
+  "AutoGPT",
+  "LangChain",
+  "GPT",
+  "openai",
+  "ArtificialIntelligence",
+  "MachineLearning",
+  "datascience",
+  "dataengineering",
+  "devops",
+  "sysadmin",
+  "aws",
+  "cloudcomputing",
+  "javascript",
+  "typescript",
+  "vuejs",
+  "angular",
+  "svelte",
+  "nextjs",
+  "tailwindcss",
+  "graphql",
+  "mongodb",
+  "PostgreSQL",
+  "redis",
+  "docker",
+  "kubernetes",
+  "linux",
+  "raspberry_pi",
+  "homelab",
+  "selfhosted",
+  "webhosting",
+  "techsupport",
+  "ITCareerQuestions",
+  "cscareerquestionsEU",
+  "forhire",
 ];
 
 const MAPZAP_SUBS = [
-  "sales",
-  "coldemail",
-  "leadgeneration",
-  "digital_marketing",
-  "Emailmarketing",
-  "b2bmarketing",
   "agency",
-  "realtors",
-  "InsuranceAgent",
-  "ecommerce",
-  "dropship",
   "Flipping",
-  "msp",
-  "marketing",
-  "socialmedia",
-  "SEO",
   "Affiliatemarketing",
   "entrepreneurs",
-  "smallbusiness",
   "Business_Ideas",
   "passive_income",
   "hustle",
   "sidehustle",
+  "Emailmarketing",
+  "EntrepreneurRideAlong",
+  "sweatystartup",
+  "growmybusiness",
+  "juststart",
+  "copywriting",
+  "cold_email",
+  "automation",
+  "recruiting",
+  "realestateinvesting",
+  "Bookkeeping",
+  "InsuranceAgents",
+  "coldemail",
+  "smallbusiness",
   "Entrepreneur",
-  "startups",
+  "sales",
+  "leadgeneration",
+  "digital_marketing",
+  "b2bmarketing",
+  "realtors",
+  "InsuranceAgent",
+  "ecommerce",
+  "dropship",
+  "msp",
+  "marketing",
+  "socialmedia",
+  "SEO",
+  "content_marketing",
+  "PPC",
+  "FacebookAds",
+  "googleads",
+  "Wordpress",
+  "shopify",
+  "dropshipping",
+  "FulfillmentByAmazon",
+  "AmazonSeller",
+  "etsy",
+  "Ebay",
+  "Mercari",
+  "poshmark",
+  "streetwear",
+  "Flipping",
+  "reselling",
+  "churning",
+  "personalfinance",
+  "financialindependence",
+  "Fire",
+  "leanfire",
+  "fatfire",
+  "financialindependence",
+  "povertyfinance",
+  "Frugal",
+  "gig",
+  "TaskRabbit",
+  "doordash_drivers",
+  "UberDrivers",
+  "Lyft",
+  "AmazonFlexDrivers",
+  "InstacartShoppers",
+  "asktechsupport",
 ];
 
 const DEVHIRE_POSTS = [
@@ -81,7 +153,6 @@ What I build:
 - Automation bots
 - AI integrations
 - Cold outreach systems
-
 
 Flat fee, no hourly rates. 50% deposit upfront, 50% on delivery.
 
@@ -101,7 +172,6 @@ I have built and shipped:
 
 Tech stack: Python, Flask, Node.js, React, Puppeteer, PostgreSQL, Stripe, OpenAI API.
 
-
 Flat fee only. No hourly. DM me what you need built.`
   },
   {
@@ -116,7 +186,6 @@ Specialties:
 - Cold outreach systems
 
 Flat fee. 48 hour delivery. $500 floor for websites, $800 for automation.
-
 
 DM me a scope.`
   },
@@ -230,7 +299,9 @@ async function postToSub(sub, type) {
       msg.includes("SUBREDDIT_NOEXIST") ||
       msg.includes("doesn't exist") ||
       msg.includes("TITLE_REQUIREMENT") ||
-      msg.includes("title")
+      msg.includes("title") ||
+      msg.includes("NO_SELFS") ||
+      msg.includes("text posts")
     ) {
       log("SKIP", `r/${sub} — blacklisting: ${msg.split(",")[0]}`);
       return "banned";

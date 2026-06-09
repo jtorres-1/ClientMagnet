@@ -73,9 +73,6 @@ const sentWriter = createObjectCsvWriter({
 function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-/* =========================
-   MAPZAP OUTREACH MESSAGES
-========================= */
 const MAPZAP_MESSAGES = [
   {
     id: "MZ_1",
@@ -98,9 +95,6 @@ const MAPZAP_MESSAGES = [
     text: `thought this might help -- i built a lead scraper that pulls 100 local businesses from any city in 60 seconds\n\nCSV with name, phone, address. $49 one time, no monthly fee\n\nhttps://mapzap.org`
   }
 ];
-/* =========================
-   DEV HIRE OUTREACH MESSAGES
-========================= */
 const DEVHIRE_MESSAGES = [
   {
     id: "DH_1",
@@ -115,9 +109,6 @@ const DEVHIRE_MESSAGES = [
     text: `python dev here, based in LA, available now. i have live production projects including a google maps scraper, a cold email pipeline, and a reddit dm bot.\n\ni do websites, scrapers, automation bots, and ai integrations. 48 hour turnaround, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me what you need`
   }
 ];
-/* =========================
-   MAPZAP REPLY CLOSER
-========================= */
 const MAPZAP_CLOSERS = [
   {
     id: "RC_1",
@@ -128,9 +119,6 @@ const MAPZAP_CLOSERS = [
     text: `$49 once at https://mapzap.org -- type something like "dentists, Los Angeles" and you get 100 leads as a CSV with names, phones, and addresses in about 60 seconds\n\nno monthly fee`
   }
 ];
-/* =========================
-   LEAD SCORING
-========================= */
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
@@ -159,9 +147,6 @@ function loadLeads() {
       .on("error", () => resolve(arr));
   });
 }
-/* =========================
-   OUTREACH CYCLE
-========================= */
 async function runOutreachCycle() {
   const leads = await loadLeads();
   if (!leads.length) { log("INFO", "No leads found. Waiting for scraper..."); return; }
@@ -186,10 +171,15 @@ async function runOutreachCycle() {
     if (user?.closed) { log("SKIP", `closed u/${username} (${user.closed_reason})`); continue; }
     cyclesSeen.add(key);
     attempted++;
-    // Pick the right message based on product
     const tpl = product === "DEVHIRE" ? pick(DEVHIRE_MESSAGES) : pick(MAPZAP_MESSAGES);
     const subject = product === "DEVHIRE" ? "dev for hire" : "lead gen tool";
     try {
+      // Fresh check right before sending to prevent double sends
+      const freshUser = getUser(loadUsers(), username);
+      if (freshUser?.sent) {
+        log("SKIP", `already contacted u/${username} (fresh check)`);
+        continue;
+      }
       await reddit.composeMessage({ to: username, subject, text: tpl.text });
       confirmed++;
       log("SENT", `u/${username} | ${tpl.id} | [${product}] | score:${scoreLead(post)} | ${leadType}`);
@@ -218,9 +208,6 @@ async function runOutreachCycle() {
   }
   log("INFO", `Outreach cycle complete -- attempted ${attempted}, confirmed ${confirmed}`);
 }
-/* =========================
-   INBOX MONITOR
-========================= */
 async function checkInboxAndFollowup() {
   const users = loadUsers();
   const botUsername = (process.env.REDDIT_USERNAME || "").toLowerCase();
@@ -246,19 +233,26 @@ async function checkInboxAndFollowup() {
         log("NEGATIVE", `u/${item.author.name} -- closed`);
         continue;
       }
-      // DevHire replies always go to human -- no auto closer
       if (user.product === "DEVHIRE") {
         log("NEEDS HUMAN", `u/${item.author.name} [DEVHIRE] replied -- CHECK YOUR REDDIT INBOX NOW`);
         continue;
       }
-      // MapZap closer -- fires ONCE only
-      if (user.closer_sent) {
+      // MapZap closer -- fires ONCE only, fresh check before sending
+      const freshUser = getUser(loadUsers(), item.author.name);
+      if (freshUser?.closer_sent) {
         log("NEEDS HUMAN", `u/${item.author.name} replied after closer -- CHECK YOUR REDDIT INBOX`);
         continue;
       }
       log("REPLY", `u/${item.author.name} -- sending MapZap closer once`);
       const closer = pick(MAPZAP_CLOSERS);
       try {
+        // Mark closer_sent BEFORE sending to prevent race condition
+        upsertUser(users, item.author.name, {
+          reply_positive: true,
+          closer_sent: true,
+          closer_sent_at: new Date().toISOString(),
+          closer_template: closer.id
+        });
         await reddit.composeMessage({
           to: item.author.name,
           subject: "lead gen tool",
@@ -272,12 +266,6 @@ async function checkInboxAndFollowup() {
           trigger: user.trigger || "", url: user.url || "",
           product: "MAPZAP", note: "closer sent once -- hand off to human"
         }]);
-        upsertUser(users, item.author.name, {
-          reply_positive: true,
-          closer_sent: true,
-          closer_sent_at: new Date().toISOString(),
-          closer_template: closer.id
-        });
       } catch (err) {
         log("ERROR", `Closer failed u/${item.author.name}: ${err.message}`);
       }
@@ -298,9 +286,6 @@ async function checkInboxAndFollowup() {
     log("ERROR", `Inbox check failed: ${err.message}`);
   }
 }
-/* =========================
-   MAIN
-========================= */
 (async () => {
   console.log("=".repeat(60));
   console.log("ClientMagnet -- MapZap + DevHire Outreach Bot");

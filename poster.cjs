@@ -18,7 +18,6 @@ const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
 const DEVHIRE_SUBS = [
-  
   "slavelabour",
   "freelance_forhire",
   "webdevjobs",
@@ -73,7 +72,7 @@ const MAPZAP_SUBS = [
 
 const DEVHIRE_POSTS = [
   {
-    title: "[FOR HIRE] Python Developer in LA | Websites, Scrapers, Bots, AI Integrations | 48hr Delivery | Flat Fee",
+    title: "[offer] Python Developer in LA | Websites, Scrapers, Bots, AI Integrations | 48hr Delivery | Flat Fee",
     text: `Hey everyone, I am a Python developer based in Los Angeles available for immediate freelance work.
 
 What I build:
@@ -99,7 +98,7 @@ GitHub: https://github.com/jtorres-1
 DM me a scope and I will get back to you immediately.`
   },
   {
-    title: "[FOR HIRE] Full Stack Developer | Python, Node.js, React | Bots, Scrapers, Web Apps | 48hr Turnaround",
+    title: "[offer] Full Stack Developer | Python, Node.js, React | Bots, Scrapers, Web Apps | 48hr Turnaround",
     text: `Python and Node.js developer available for freelance projects right now.
 
 I have built and shipped:
@@ -116,7 +115,7 @@ LinkedIn: https://www.linkedin.com/in/jesse-torres11/
 Flat fee only. No hourly. DM me what you need built.`
   },
   {
-    title: "[FOR HIRE] Python Dev | Automation, Scrapers, AI, Websites | LA Based | Fast Delivery",
+    title: "[offer] Python Dev | Automation, Scrapers, AI, Websites | LA Based | Fast Delivery",
     text: `Available for freelance work immediately.
 
 Specialties:
@@ -241,9 +240,13 @@ async function postToSub(sub, type) {
       msg.includes("forbidden") ||
       msg.includes("403") ||
       msg.includes("FLAIR_REQUIRED") ||
-      msg.includes("flair")
+      msg.includes("flair") ||
+      msg.includes("SUBREDDIT_NOEXIST") ||
+      msg.includes("doesn't exist") ||
+      msg.includes("TITLE_REQUIREMENT") ||
+      msg.includes("title")
     ) {
-      log("SKIP", `r/${sub} — flair required or banned, blacklisting`);
+      log("SKIP", `r/${sub} — blacklisting: ${msg.split(",")[0]}`);
       return "banned";
     }
     if (msg.includes("RATELIMIT") || msg.includes("rate limit")) {
@@ -286,19 +289,20 @@ async function runCycle() {
         banned.push(item.sub);
         saveBanned(banned);
       }
+      // No delay — immediately try next sub
+      continue;
     }
 
     if (result === "posted") {
       const posted = loadPosted();
       posted[item.sub] = new Date().toISOString();
       savePosted(posted);
-    }
-
-    if (result !== "ratelimit") {
       const delay = rand(MIN_DELAY_MS, MAX_DELAY_MS);
       log("INFO", `Waiting ${Math.round(delay / 60000)}m before next post...`);
       await sleep(delay);
     }
+
+    // error also gets no delay — immediately try next
   }
 
   log("INFO", "Daily cycle complete. Restarting tomorrow.");

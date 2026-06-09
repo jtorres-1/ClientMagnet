@@ -17,8 +17,9 @@ const POSTED_PATH = path.join(__dirname, "logs", "posted_subs.json");
 const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
-// Only subs where hiring posts make sense
+// Verified for-hire and freelance subs that explicitly allow [FOR HIRE] posts and links
 const DEVHIRE_SUBS = [
+  // Core hiring subs -- explicitly allow for hire posts
   "forhire",
   "freelance_forhire",
   "slavelabour",
@@ -27,45 +28,101 @@ const DEVHIRE_SUBS = [
   "Jobs4Bitcoins",
   "HireaWriter",
   "hireadev",
+  "freelanceuk",
+  "FreelanceWriters",
+  "FreelanceDesigners",
+  // Dev specific hiring subs
   "PythonJobs",
   "webdevjobs",
   "MachineLearningJobs",
   "remotepython",
+  "techjobs",
+  "jobboard",
+  "WorkOnlineJobs",
+  // Remote work and freelance communities
   "RemoteWork",
   "digitalnomad",
   "freelancing",
+  "freelance",
+  "WorkFromHome",
+  "RemoteJobr",
+  // Side hustle and gig communities
+  "beermoney",
+  "sidehustle",
+  "gig",
+  // Dev communities with weekly hire threads
+  "learnpython",
+  "webdev",
+  "softwareengineering",
 ];
 
-// Only subs where business owners and sales people hang out
+// Business owner, sales, and marketing subs that allow tool sharing and links
 const MAPZAP_SUBS = [
+  // Small business and entrepreneur -- core audience
   "smallbusiness",
   "Entrepreneur",
   "EntrepreneurRideAlong",
   "sweatystartup",
   "growmybusiness",
-  "agency",
+  "startups",
+  "Business_Ideas",
+  "business",
+  "microsaas",
+  // Sales and lead gen -- perfect MapZap audience
   "sales",
   "leadgeneration",
+  "b2bsales",
+  "salesforce",
+  "salestechniques",
   "cold_email",
   "coldemail",
-  "b2bmarketing",
-  "digital_marketing",
   "Emailmarketing",
   "copywriting",
-  "msp",
+  "content_marketing",
+  // Marketing
+  "digital_marketing",
   "marketing",
+  "b2bmarketing",
+  "SEO",
+  "PPC",
+  "FacebookAds",
+  "googleads",
+  "socialmediamarketing",
+  // Agency and consulting
+  "agency",
+  "msp",
+  "consulting",
+  "recruiting",
+  // Real estate and insurance -- heavy cold outreach users
   "realestateinvesting",
+  "realestate",
   "InsuranceAgents",
   "realtors",
-  "recruiting",
-  "automation",
-  "sidehustle",
-  "hustle",
-  "Affiliatemarketing",
+  "Mortgages",
+  // Ecommerce and online business
   "shopify",
   "ecommerce",
+  "dropship",
   "AmazonSeller",
   "FulfillmentByAmazon",
+  "Flipping",
+  "reselling",
+  // Hustle and side income
+  "hustle",
+  "Affiliatemarketing",
+  "passive_income",
+  "automation",
+  // Niche business communities
+  "legaladvice",
+  "Dentistry",
+  "MedicalBilling",
+  "acupuncture",
+  "personaltraining",
+  "HomeImprovement",
+  "Plumbing",
+  "HVAC",
+  "Roofing",
+  "Landscaping",
 ];
 
 const DEVHIRE_POSTS = [
@@ -105,6 +162,18 @@ Flat fee. 48 hours. $500 floor for websites, $800 for automation.
 
 DM me what you need.`
   },
+  {
+    title: "[FOR HIRE] Full stack developer — Python, Node.js, React — automation, AI, web apps — LA based",
+    text: `Developer in LA available for freelance work this week.
+
+I build and ship fast. Recent production projects: a Google Maps SaaS scraper with Stripe billing, a cold outreach email pipeline pushing 500 emails per day, and automation bots.
+
+What I do: websites, scrapers, automation pipelines, AI integrations, bots.
+
+Flat fee. 48hr delivery. $500 websites, $800 automation.
+
+DM me a scope and I will tell you if I can build it.`
+  },
 ];
 
 const MAPZAP_POSTS = [
@@ -141,6 +210,18 @@ You type a business type and city, it hits Google Maps and returns 100 businesse
 $49 per month gets you unlimited searches. There is also a $99 per month Pro tier that includes business emails where available.
 
 Free preview with no credit card: https://mapzap.org`
+  },
+  {
+    title: "Stop building prospect lists by hand — built a tool that pulls 100 local business leads in 60 seconds",
+    text: `If you do cold outreach to local businesses you know how slow it is to manually find leads.
+
+I built MapZap to automate it. Type any niche and city, get 100 businesses as a CSV in about a minute. Name, phone number, address, website URL.
+
+Works for any niche — contractors, restaurants, dentists, real estate agents, insurance brokers, gyms, whatever you target.
+
+$49 per month unlimited searches. Free to try first, no card needed.
+
+https://mapzap.org`
   },
 ];
 

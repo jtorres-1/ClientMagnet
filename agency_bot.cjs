@@ -73,7 +73,6 @@ const sentWriter = createObjectCsvWriter({
 function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
 /* =========================
    MAPZAP OUTREACH MESSAGES
 ========================= */
@@ -84,7 +83,7 @@ const MAPZAP_MESSAGES = [
   },
   {
     id: "MZ_2",
-    text: `saw your post -- might be relevant\n\ni built mapzap, pulls 100 local business leads (name, phone, address) as a CSV in under a minute. $49 flat, no subscription\n\nhttps://mapzap.org`
+    text: `might be relevant\n\ni built mapzap, pulls 100 local business leads (name, phone, address) as a CSV in under a minute. $49 flat, no subscription\n\nhttps://mapzap.org`
   },
   {
     id: "MZ_3",
@@ -96,28 +95,26 @@ const MAPZAP_MESSAGES = [
   },
   {
     id: "MZ_5",
-    text: `random but saw your post and thought of this -- i built a lead scraper that pulls 100 local businesses from any city in 60 seconds\n\nCSV with name, phone, address. $49 one time, no monthly fee\n\nhttps://mapzap.org`
+    text: `thought this might help -- i built a lead scraper that pulls 100 local businesses from any city in 60 seconds\n\nCSV with name, phone, address. $49 one time, no monthly fee\n\nhttps://mapzap.org`
   }
 ];
-
 /* =========================
    DEV HIRE OUTREACH MESSAGES
 ========================= */
 const DEVHIRE_MESSAGES = [
   {
     id: "DH_1",
-    text: `saw your post. i'm a python developer based in LA available for immediate freelance work. i've built a live google maps scraper with stripe payments, a cold email pipeline pushing 500 emails per day, and a reddit automation bot in production. websites, scrapers, bots, ai integrations. 48 hour delivery, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me a scope`
+    text: `i'm a python developer based in LA available for immediate freelance work. i've built a live google maps scraper with stripe payments, a cold email pipeline pushing 500 emails per day, and a reddit automation bot in production. websites, scrapers, bots, ai integrations. 48 hour delivery, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me a scope`
   },
   {
     id: "DH_2",
-    text: `saw your post and i'm available. python developer in LA, i ship fast. built a google maps lead scraper with stripe, a 500 email per day cold outreach pipeline, and a reddit automation bot all in production.\n\nwebsites, scrapers, automation, ai integrations. flat fee, 48 hour delivery.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\nwhat do you need built`
+    text: `python developer in LA, available now, i ship fast. built a google maps lead scraper with stripe, a 500 email per day cold outreach pipeline, and a reddit automation bot all in production.\n\nwebsites, scrapers, automation, ai integrations. flat fee, 48 hour delivery.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\nwhat do you need built`
   },
   {
     id: "DH_3",
-    text: `your post caught my eye. python dev here, based in LA, available now. i have live production projects including a google maps scraper, a cold email pipeline, and a reddit dm bot.\n\ni do websites, scrapers, automation bots, and ai integrations. 48 hour turnaround, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me what you need`
+    text: `python dev here, based in LA, available now. i have live production projects including a google maps scraper, a cold email pipeline, and a reddit dm bot.\n\ni do websites, scrapers, automation bots, and ai integrations. 48 hour turnaround, flat fee.\n\nportfolio: https://casa-fuego-demo.netlify.app\nlinkedin: https://www.linkedin.com/in/jesse-torres11/\n\ndm me what you need`
   }
 ];
-
 /* =========================
    MAPZAP REPLY CLOSER
 ========================= */
@@ -131,7 +128,6 @@ const MAPZAP_CLOSERS = [
     text: `$49 once at https://mapzap.org -- type something like "dentists, Los Angeles" and you get 100 leads as a CSV with names, phones, and addresses in about 60 seconds\n\nno monthly fee`
   }
 ];
-
 /* =========================
    LEAD SCORING
 ========================= */
@@ -140,23 +136,18 @@ function scoreLead(p) {
   const t = (p.matchedTrigger || "").toLowerCase();
   const sub = (p.subreddit || "").toLowerCase();
   const product = (p.product || "").toUpperCase();
-
   if (product === "DEVHIRE") score += 15;
-
   if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
   else if (p.leadType === "HIGH_INTENT") score += 7;
   else if (p.leadType === "MEDIUM_INTENT_OWNER") score += 5;
   else score += 2;
-
   if (/need leads|buy leads|lead source|lead list|lead database/.test(t)) score += 5;
   if (/looking for (a |an )?(developer|dev|programmer)/.test(t)) score += 8;
   if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
   if (["forhire","slavelabour","jobs4bitcoins","WorkOnline","HireaWriter"].includes(sub)) score += 5;
   if (["sales","b2bsales","coldemail","coldcalling","leadgeneration"].includes(sub)) score += 5;
-
   return score;
 }
-
 function loadLeads() {
   return new Promise(resolve => {
     if (!fs.existsSync(leadsPath)) return resolve([]);
@@ -168,7 +159,6 @@ function loadLeads() {
       .on("error", () => resolve(arr));
   });
 }
-
 /* =========================
    OUTREACH CYCLE
 ========================= */
@@ -196,12 +186,11 @@ async function runOutreachCycle() {
     if (user?.closed) { log("SKIP", `closed u/${username} (${user.closed_reason})`); continue; }
     cyclesSeen.add(key);
     attempted++;
-
     // Pick the right message based on product
     const tpl = product === "DEVHIRE" ? pick(DEVHIRE_MESSAGES) : pick(MAPZAP_MESSAGES);
-
+    const subject = product === "DEVHIRE" ? "dev for hire" : "lead gen tool";
     try {
-      await reddit.composeMessage({ to: username, subject: "saw your post", text: tpl.text });
+      await reddit.composeMessage({ to: username, subject, text: tpl.text });
       confirmed++;
       log("SENT", `u/${username} | ${tpl.id} | [${product}] | score:${scoreLead(post)} | ${leadType}`);
       upsertUser(users, username, {
@@ -229,7 +218,6 @@ async function runOutreachCycle() {
   }
   log("INFO", `Outreach cycle complete -- attempted ${attempted}, confirmed ${confirmed}`);
 }
-
 /* =========================
    INBOX MONITOR
 ========================= */
@@ -273,7 +261,7 @@ async function checkInboxAndFollowup() {
       try {
         await reddit.composeMessage({
           to: item.author.name,
-          subject: "saw your post",
+          subject: "lead gen tool",
           text: closer.text
         });
         log("CLOSER SENT", `u/${item.author.name} | ${closer.id} -- bot done, human takes over`);
@@ -310,7 +298,6 @@ async function checkInboxAndFollowup() {
     log("ERROR", `Inbox check failed: ${err.message}`);
   }
 }
-
 /* =========================
    MAIN
 ========================= */

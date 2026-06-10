@@ -89,7 +89,27 @@ const MAPZAP_QUERIES = [
   "I need to reach local businesses",
 ];
 
-// Block sellers and non-buyers — but NOT too aggressively
+const CALLDONE_QUERIES = [
+  "I keep missing calls at my business",
+  "I miss calls when I'm busy",
+  "I need someone to answer my phones",
+  "I need a receptionist for my business",
+  "my business misses too many calls",
+  "I need an answering service",
+  "I lose customers because I miss calls",
+  "I need after hours call answering",
+  "I can't answer the phone while working",
+  "I need a virtual receptionist",
+  "I need call answering for my business",
+  "my small business needs a receptionist",
+  "I miss calls when I'm on the job",
+  "customers complain I don't answer",
+  "I need my calls answered 24/7",
+  "I need help answering my business calls",
+  "losing business from missed calls",
+  "I can't hire a receptionist",
+];
+
 const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|i am available|i('m| am) a (developer|designer|programmer|dev)|offering my services|available for hire|hire me|my rates|i build websites|i develop websites|i create websites|i code for|check out my work|starting at \$)\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become)\b/i;
@@ -105,6 +125,8 @@ const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|ope
 const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|someone to build|someone who can build|someone to fix|someone to code|someone to create|someone to automate)|want (a |an )?(developer|dev|programmer)|searching for (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make|fix|automate)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made|fixed|automated)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|need a (bot|scraper|tool|dashboard|app|site|website|extension|integration|api|mvp|saas) built)\b/i;
 
 const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know)\b/i;
+
+const callDoneIntentRegex = /\b(miss(ing)? calls|missed calls|can't answer|cannot answer|don't answer|no one answers|after hours calls|answering service|virtual receptionist|phone answering|call answering|receptionist for my|need someone to answer|calls go to voicemail|losing customers|lose customers|missed call|unanswered calls|phone coverage|24.7 answering|always available)\b/i;
 
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
@@ -141,6 +163,17 @@ function classify(post, forceProduct) {
     else if (isOwner) type = "MEDIUM_INTENT_OWNER";
     else type = "MEDIUM_INTENT";
     return { type, trigger: triggerMatch, product: "MAPZAP" };
+  }
+
+  if (forceProduct === "CALLDONE") {
+    const hasCallIntent = callDoneIntentRegex.test(combined);
+    if (!hasCallIntent) return null;
+    const isOwner = ownerRegex.test(combined);
+    const isFirstPerson = firstPersonBuyerRegex.test(combined);
+    if (!isOwner && !isFirstPerson) return null;
+    const triggerMatch = combined.match(callDoneIntentRegex)?.[0] || "missed calls";
+    const type = isOwner ? "CALLDONE_OWNER" : "CALLDONE_INTENT";
+    return { type, trigger: triggerMatch, product: "CALLDONE" };
   }
 
   return null;
@@ -199,6 +232,7 @@ async function scrape() {
   let leads = 0;
   leads += await searchGlobal(DEVHIRE_QUERIES, "DEVHIRE");
   leads += await searchGlobal(MAPZAP_QUERIES, "MAPZAP");
+  leads += await searchGlobal(CALLDONE_QUERIES, "CALLDONE");
   console.log(`Scrape complete -- leads found: ${leads}`);
 }
 

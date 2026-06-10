@@ -178,8 +178,24 @@ async function runCycle() {
         // Skip if post author is our bot
         if (post.author?.name?.toLowerCase() === (process.env.REDDIT_USERNAME || "").toLowerCase()) continue;
 
-        // Must have buyer intent in title + body
-        const combined = ((post.title || "") + " " + (post.selftext || "")).toLowerCase();
+        // Block obviously wrong subreddits
+        const BLOCK_SUBS = [
+          "autisticwithadhd","autism","adhd","mentalhealth","depression","anxiety",
+          "relationship_advice","relationships","amitheasshole","tifu","askreddit",
+          "gopro","gaming","politics","news","worldnews","funny","pics","videos",
+          "science","technology","history","books","movies","music","sports",
+          "fitness","loseit","food","cooking","travel","personalfinance",
+          "legaladvice","medical","health","parenting","teenagers","teenagers",
+          "teenagers","mildlyinteresting","oddlysatisfying","todayilearned",
+        ];
+        if (BLOCK_SUBS.some(b => subName?.toLowerCase().includes(b.toLowerCase()))) {
+          log("SKIP", `Blocked sub r/${subName}`);
+          continue;
+        }
+
+        // Must have buyer intent in title specifically
+        const titleLower = (post.title || "").toLowerCase();
+        const combined = (titleLower + " " + (post.selftext || "")).toLowerCase();
         const DEVHIRE_SIGNALS = [
           "hire", "hiring", "need a developer", "need a dev", "need someone to build",
           "need a website", "need a web", "need automation", "need a bot", "need a scraper",
@@ -195,9 +211,10 @@ async function runCycle() {
           "struggling to find", "how do i find", "where do i find",
         ];
         const signals = type === "DEVHIRE" ? DEVHIRE_SIGNALS : MAPZAP_SIGNALS;
-        const hasSignal = signals.some(s => combined.includes(s));
-        if (!hasSignal) {
-          log("SKIP", `No buyer signal in post by u/${post.author?.name}`);
+        const hasSignalInTitle = signals.some(s => titleLower.includes(s));
+        const hasSignal = hasSignalInTitle || signals.some(s => combined.includes(s));
+        if (!hasSignalInTitle) {
+          log("SKIP", `No buyer signal in title by u/${post.author?.name}`);
           continue;
         }
 

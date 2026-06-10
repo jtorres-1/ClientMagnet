@@ -172,24 +172,56 @@ async function runCycle() {
     ...MAPZAP_QUERIES.map(q => ({ query: q, type: "MAPZAP" })),
   ];
 
-  allQueries.sort(() => Math.random() - 0.5);
+  // Target subs directly — no global search noise
+  const SUB_TARGETS = [
+    { sub: "forhire", type: "DEVHIRE" },
+    { sub: "slavelabour", type: "DEVHIRE" },
+    { sub: "jobbit", type: "DEVHIRE" },
+    { sub: "WorkOnline", type: "DEVHIRE" },
+    { sub: "freelance_forhire", type: "DEVHIRE" },
+    { sub: "PythonJobs", type: "DEVHIRE" },
+    { sub: "webdevjobs", type: "DEVHIRE" },
+    { sub: "hireadev", type: "DEVHIRE" },
+    { sub: "Jobs4Bitcoins", type: "DEVHIRE" },
+    { sub: "RemoteWork", type: "DEVHIRE" },
+    { sub: "digitalnomad", type: "DEVHIRE" },
+    { sub: "freelancing", type: "DEVHIRE" },
+    { sub: "agency", type: "MAPZAP" },
+    { sub: "cold_email", type: "MAPZAP" },
+    { sub: "coldemail", type: "MAPZAP" },
+    { sub: "leadgeneration", type: "MAPZAP" },
+    { sub: "sales", type: "MAPZAP" },
+    { sub: "smallbusiness", type: "MAPZAP" },
+    { sub: "Entrepreneur", type: "MAPZAP" },
+    { sub: "EntrepreneurRideAlong", type: "MAPZAP" },
+    { sub: "sweatystartup", type: "MAPZAP" },
+    { sub: "growmybusiness", type: "MAPZAP" },
+    { sub: "digital_marketing", type: "MAPZAP" },
+    { sub: "marketing", type: "MAPZAP" },
+    { sub: "realtors", type: "MAPZAP" },
+    { sub: "InsuranceAgents", type: "MAPZAP" },
+    { sub: "msp", type: "MAPZAP" },
+  ];
 
-  for (const { query, type } of allQueries) {
+  SUB_TARGETS.sort(() => Math.random() - 0.5);
+
+  for (const { sub, type } of SUB_TARGETS) {
     if (commentsThisCycle >= MAX_COMMENTS_PER_CYCLE) {
       log("INFO", `Hit max comments. Stopping.`);
       break;
     }
 
-    log("SEARCH", `"${query}" [${type}]`);
+    // Skip if banned
+    if (banned.some(b => b.toLowerCase() === sub.toLowerCase())) {
+      log("SKIP", `Banned sub r/${sub}`);
+      continue;
+    }
+
+    log("SEARCH", `r/${sub} [${type}]`);
 
     try {
       await wait(2000);
-      const posts = await reddit.search({
-        query,
-        sort: "new",
-        time: "week",
-        limit: 100,
-      });
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 50 });
 
       for (const post of posts) {
         if (commentsThisCycle >= MAX_COMMENTS_PER_CYCLE) break;
@@ -262,7 +294,7 @@ async function runCycle() {
         await wait(rand(2000, 4000));
       }
     } catch (err) {
-      log("ERROR", `Search failed: ${err.message}`);
+      log("ERROR", `Sub fetch failed r/${sub}: ${err.message}`);
       await wait(15000);
     }
   }

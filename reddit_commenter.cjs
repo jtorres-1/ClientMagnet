@@ -17,10 +17,10 @@ if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 const BANNED_PATH = path.join(baseDir, "banned_subs.json");
 const COMMENTED_PATH = path.join(baseDir, "commented_posts.json");
 
-const CYCLE_INTERVAL_MS = 20 * 60 * 1000;
-const MIN_DELAY_MS = 4 * 60 * 1000;
-const MAX_DELAY_MS = 7 * 60 * 1000;
-const MAX_COMMENTS_PER_CYCLE = 15;
+const CYCLE_INTERVAL_MS = 10 * 60 * 1000;
+const MIN_DELAY_MS = 2 * 60 * 1000;
+const MAX_DELAY_MS = 4 * 60 * 1000;
+const MAX_COMMENTS_PER_CYCLE = 25;
 
 const DEVHIRE_QUERIES = [
   "I need a website for my business",

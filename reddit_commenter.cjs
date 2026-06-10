@@ -195,9 +195,37 @@ async function runCycle() {
         const combined = (titleLower + " " + (post.selftext || "")).toLowerCase();
 
         // Block FOR HIRE posts — people offering services not buying
-        const FOR_HIRE_BLOCK = ["[for hire]","[offering]","for hire","available for hire","hire me","my services","my rates","my portfolio","i am available","i'm available"];
+        const FOR_HIRE_BLOCK = [
+          "[for hire]","[offering]","for hire","available for hire","hire me",
+          "my services","my rates","my portfolio","i am available","i'm available",
+          "anyone need a website","anyone need a developer","anyone need a dev",
+          "i build websites","i build apps","i build bots","i make websites",
+          "i can build","i can help","i can create","i can develop","i can code",
+          "i do web","i do development","i do python","i do react",
+          "offering my","offering web","offering dev","offering services",
+          "i am a developer","i am a dev","i'm a developer","i'm a dev",
+          "i am a programmer","i'm a programmer","i am a web developer",
+          "looking for clients","looking for projects","looking for work",
+          "taking on clients","taking new clients","open for work",
+          "check out my work","check my portfolio","see my work",
+          "dm me for","message me for","contact me for",
+        ];
         if (FOR_HIRE_BLOCK.some(s => titleLower.includes(s))) {
           log("SKIP", `For hire post skipped r/${subName}`);
+          continue;
+        }
+        // Also check body for seller signals
+        const bodyLower = (post.selftext || "").toLowerCase();
+        const SELLER_BODY_BLOCK = [
+          "i am a developer","i'm a developer","i am a web developer",
+          "my portfolio","my github","my work","check out my",
+          "i build","i create","i develop","i code","i design",
+          "available for hire","open for work","looking for clients",
+          "taking on clients","my rate","my pricing","per hour","per project",
+        ];
+        const bodyIsSeller = SELLER_BODY_BLOCK.filter(s => bodyLower.includes(s)).length >= 2;
+        if (bodyIsSeller) {
+          log("SKIP", `Seller body signals in post by u/${post.author?.name}`);
           continue;
         }
         if (BLOCK_SUBS.some(b => subName?.toLowerCase().includes(b.toLowerCase()))) {

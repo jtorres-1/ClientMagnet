@@ -185,9 +185,20 @@ async function runCycle() {
           "gopro","gaming","politics","news","worldnews","funny","pics","videos",
           "science","technology","history","books","movies","music","sports",
           "fitness","loseit","food","cooking","travel","personalfinance",
-          "legaladvice","medical","health","parenting","teenagers","teenagers",
-          "teenagers","mildlyinteresting","oddlysatisfying","todayilearned",
+          "legaladvice","medical","health","parenting","teenagers",
+          "mildlyinteresting","oddlysatisfying","todayilearned",
+          "graphicdesignjobs","forhire","slavelabour","sidehustlesindia",
+          "sidehustlepaglu","designjobs","writingjobs","artjobs","photographyjobs",
+          "uxdesign","graphic_design","design","art","photography","illustration",
+          "freelancedesigners","freelancewriters","hireawriter","hireadesigner",
         ];
+
+        // Block FOR HIRE posts — people offering services not buying
+        const FOR_HIRE_BLOCK = ["[for hire]","[offering]","for hire","available for hire","hire me","my services","my rates","my portfolio","i am available","i'm available"];
+        if (FOR_HIRE_BLOCK.some(s => titleLower.includes(s))) {
+          log("SKIP", `For hire post skipped r/${subName}`);
+          continue;
+        }
         if (BLOCK_SUBS.some(b => subName?.toLowerCase().includes(b.toLowerCase()))) {
           log("SKIP", `Blocked sub r/${subName}`);
           continue;

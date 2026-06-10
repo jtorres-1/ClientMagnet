@@ -214,6 +214,18 @@ async function runCycle() {
           continue;
         }
 
+        // KEY FIX: verify query phrase in title OR body
+        const queryLower = query.toLowerCase();
+        const bodyLower = (post.selftext || "").toLowerCase();
+        const combined = titleLower + " " + bodyLower;
+        if (!combined.includes(queryLower)) {
+          continue;
+        }
+
+        // Also block clearly wrong subs not in block list
+        const EXTRA_BLOCK = ["sexpositive","relationship","dating","advice","women","men","askwomen","askmen","amiugly","confession","rant","venting","support","grief","mentalillness","bipolar","bpd","schizophrenia","ptsd","trauma","abuse","narcissist","divorce","breakup","ldr","polyamory","trueoffmychest","offmychest"];
+        if (EXTRA_BLOCK.some(b => subLower.includes(b))) continue;
+
         // Skip already commented
         const postId = post.id || post.name;
         if (commented[postId]) continue;

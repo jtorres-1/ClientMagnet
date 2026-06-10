@@ -187,7 +187,7 @@ async function runCycle() {
       const posts = await reddit.search({
         query,
         sort: "new",
-        time: "day",
+        time: "week",
         limit: 100,
       });
 

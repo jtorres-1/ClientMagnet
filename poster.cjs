@@ -17,9 +17,7 @@ const POSTED_PATH = path.join(__dirname, "logs", "posted_subs.json");
 const MIN_DELAY_MS = 10 * 60 * 1000;
 const MAX_DELAY_MS = 13 * 60 * 1000;
 
-// Verified for-hire and freelance subs that explicitly allow [FOR HIRE] posts and links
 const DEVHIRE_SUBS = [
-  // Core hiring subs -- explicitly allow for hire posts
   "forhire",
   "freelance_forhire",
   "slavelabour",
@@ -31,7 +29,6 @@ const DEVHIRE_SUBS = [
   "freelanceuk",
   "FreelanceWriters",
   "FreelanceDesigners",
-  // Dev specific hiring subs
   "PythonJobs",
   "webdevjobs",
   "MachineLearningJobs",
@@ -39,26 +36,21 @@ const DEVHIRE_SUBS = [
   "techjobs",
   "jobboard",
   "WorkOnlineJobs",
-  // Remote work and freelance communities
   "RemoteWork",
   "digitalnomad",
   "freelancing",
   "freelance",
   "WorkFromHome",
   "RemoteJobr",
-  // Side hustle and gig communities
   "beermoney",
   "sidehustle",
   "gig",
-  // Dev communities with weekly hire threads
   "learnpython",
   "webdev",
   "softwareengineering",
 ];
 
-// Business owner, sales, and marketing subs that allow tool sharing and links
 const MAPZAP_SUBS = [
-  // Small business and entrepreneur -- core audience
   "smallbusiness",
   "Entrepreneur",
   "EntrepreneurRideAlong",
@@ -68,7 +60,6 @@ const MAPZAP_SUBS = [
   "Business_Ideas",
   "business",
   "microsaas",
-  // Sales and lead gen -- perfect MapZap audience
   "sales",
   "leadgeneration",
   "b2bsales",
@@ -79,7 +70,6 @@ const MAPZAP_SUBS = [
   "Emailmarketing",
   "copywriting",
   "content_marketing",
-  // Marketing
   "digital_marketing",
   "marketing",
   "b2bmarketing",
@@ -88,18 +78,15 @@ const MAPZAP_SUBS = [
   "FacebookAds",
   "googleads",
   "socialmediamarketing",
-  // Agency and consulting
   "agency",
   "msp",
   "consulting",
   "recruiting",
-  // Real estate and insurance -- heavy cold outreach users
   "realestateinvesting",
   "realestate",
   "InsuranceAgents",
   "realtors",
   "Mortgages",
-  // Ecommerce and online business
   "shopify",
   "ecommerce",
   "dropship",
@@ -107,22 +94,42 @@ const MAPZAP_SUBS = [
   "FulfillmentByAmazon",
   "Flipping",
   "reselling",
-  // Hustle and side income
   "hustle",
   "Affiliatemarketing",
   "passive_income",
   "automation",
-  // Niche business communities
-  "legaladvice",
   "Dentistry",
   "MedicalBilling",
-  "acupuncture",
   "personaltraining",
   "HomeImprovement",
   "Plumbing",
   "HVAC",
   "Roofing",
   "Landscaping",
+];
+
+// CallDone subs — local business owners who miss calls
+const CALLDONE_SUBS = [
+  "smallbusiness",
+  "Entrepreneur",
+  "realtors",
+  "InsuranceAgents",
+  "Dentistry",
+  "HomeImprovement",
+  "Plumbing",
+  "HVAC",
+  "Roofing",
+  "Landscaping",
+  "personaltraining",
+  "restaurant",
+  "restaurantowners",
+  "salons",
+  "autorepair",
+  "legaladvice",
+  "MedicalBilling",
+  "EntrepreneurRideAlong",
+  "sweatystartup",
+  "agency",
 ];
 
 const DEVHIRE_POSTS = [
@@ -225,6 +232,49 @@ https://mapzap.org`
   },
 ];
 
+const CALLDONE_POSTS = [
+  {
+    title: "Built an AI receptionist that answers every call 24/7 — $500/month, live in 48 hours",
+    text: `If you run a business and miss calls when you are busy, on a job, or closed — this is for you.
+
+I built CallDone. It is an AI receptionist that answers every call to your business 24/7. It handles questions, captures caller info, books appointments, and texts you a full summary the second the call ends.
+
+Sounds like a real person. Trained on your specific business, hours, services, and FAQs.
+
+Call the demo line right now and hear it yourself: (563) 287-1146
+
+$500 per month. No setup fee. Live in 48 hours. Cancel anytime.
+
+https://calldone.org`
+  },
+  {
+    title: "Every missed call is a customer going to your competitor — built a fix for that",
+    text: `62% of callers will not leave a voicemail. They just call the next business on Google.
+
+I built CallDone to solve this. An AI receptionist that answers every call to your business 24/7 — while you are working, after hours, on weekends. Handles FAQs, captures leads, books appointments, texts you a summary after every call.
+
+Call (563) 287-1146 to hear the demo. It sounds like a real person on your team.
+
+No setup fee. $500 per month. Live in 48 hours or less.
+
+https://calldone.org`
+  },
+  {
+    title: "AI receptionist for small businesses — answers calls 24/7, captures leads, texts you summaries",
+    text: `Built this for small business owners who cannot always answer the phone.
+
+CallDone answers every incoming call to your business — 24 hours a day, 7 days a week. It handles common questions, takes messages, captures caller info, and sends you a text summary instantly after every call.
+
+Works for any business: restaurants, salons, contractors, real estate agents, dental offices, law firms, gyms, auto shops.
+
+Demo: call (563) 287-1146 and hear the AI answer live.
+
+$500 per month. No contracts. No setup fee. Live in 48 hours.
+
+https://calldone.org`
+  },
+];
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -259,7 +309,11 @@ function log(tag, msg) {
 }
 
 async function postToSub(sub, type) {
-  const post = type === "DEVHIRE" ? pick(DEVHIRE_POSTS) : pick(MAPZAP_POSTS);
+  let post;
+  if (type === "DEVHIRE") post = pick(DEVHIRE_POSTS);
+  else if (type === "CALLDONE") post = pick(CALLDONE_POSTS);
+  else post = pick(MAPZAP_POSTS);
+
   try {
     await reddit.getSubreddit(sub).submitSelfpost({
       title: post.title,
@@ -303,10 +357,12 @@ async function runCycle() {
 
   const devhireSubs = DEVHIRE_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
   const mapzapSubs = MAPZAP_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
+  const calldoneSubs = CALLDONE_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
 
   const queue = [
     ...devhireSubs.map(s => ({ sub: s, type: "DEVHIRE" })),
     ...mapzapSubs.map(s => ({ sub: s, type: "MAPZAP" })),
+    ...calldoneSubs.map(s => ({ sub: s, type: "CALLDONE" })),
   ];
 
   const seen = new Set();

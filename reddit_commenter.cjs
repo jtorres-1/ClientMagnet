@@ -22,66 +22,6 @@ const MIN_DELAY_MS = 2 * 60 * 1000;
 const MAX_DELAY_MS = 4 * 60 * 1000;
 const MAX_COMMENTS_PER_CYCLE = 25;
 
-const DEVHIRE_QUERIES = [
-  "looking for a developer",
-  "looking for a web developer",
-  "looking for a python developer",
-  "looking to hire a developer",
-  "want to hire a developer",
-  "need to hire a developer",
-  "need a developer for my",
-  "need a dev for my",
-  "need someone to build my website",
-  "need someone to build my app",
-  "need someone to build my",
-  "need help building my website",
-  "need help building my app",
-  "need a website for my business",
-  "need a website built",
-  "need my website built",
-  "need an app built",
-  "need a bot built",
-  "need a scraper built",
-  "need automation built",
-  "need a chatbot built",
-  "need a landing page built",
-  "need a shopify developer",
-  "need a wordpress developer",
-  "need a python developer",
-  "need a react developer",
-  "need a full stack developer",
-  "need a freelance developer",
-  "need a freelance dev",
-  "need a mvp built",
-  "need a saas built",
-  "need a developer this week",
-  "need a developer asap",
-  "where can I find a developer",
-  "recommend a developer",
-];
-
-const MAPZAP_QUERIES = [
-  "need more leads for my business",
-  "need local business leads",
-  "need a lead list",
-  "need more clients for my business",
-  "need more customers for my business",
-  "need prospects for my business",
-  "need to generate leads for my",
-  "how do I find leads for my business",
-  "how to get more clients for my",
-  "struggling to find clients",
-  "struggling to get leads",
-  "where to find business leads",
-  "how to build a prospect list",
-  "need outreach list",
-  "need cold outreach list",
-  "need more sales for my business",
-  "need more clients for my agency",
-  "how to grow my agency clients",
-  "need b2b leads",
-];
-
 const BLOCK_SUBS = [
   "autisticwithadhd","autism","adhd","mentalhealth","depression","anxiety",
   "relationship_advice","relationships","amitheasshole","tifu","askreddit",
@@ -98,11 +38,18 @@ const BLOCK_SUBS = [
   "webdesign","uxdesign","tiktok","instagram","twitter","youtube",
   "wallstreetbets","investing","stocks","cryptocurrency","bitcoin",
   "ethereum","nft","defi","web3","crypto","blockchain",
-  "freelancedesigners","freelancewriters","hireawriter","hireadesigner",
+  "freelancedesignjobs","paidonlinejobs","remotejobs",
   "programmers_forhire","youtubeeditorsforhire","imsuccessconnection",
   "darts","website_ideas","freelanceindia","shareailprompts","shareaiprompts",
-  "deadlock","deadlockcoaching","gaming","leagueoflegends","valorant",
+  "deadlock","deadlockcoaching","leagueoflegends","valorant",
   "csgo","cs2","fortnite","minecraft","roblox","apexlegends",
+  "sexpositive","relationship","dating","women","men","askwomen","askmen",
+  "confession","rant","venting","grief","bipolar","bpd","ptsd","trauma",
+  "abuse","narcissist","divorce","breakup","polyamory","offmychest",
+  "grafana","devops","kubernetes","docker","sysadmin","linux",
+  "homelab","selfhosted","datascience","machinelearning",
+  "artificialintelligence","openai","chatgpt","pathofexile","sffpc",
+  "indianrealestate","pmi_cpmai","imsuccessconnection",
 ];
 
 const FOR_HIRE_BLOCK = [
@@ -114,7 +61,7 @@ const FOR_HIRE_BLOCK = [
   "i am a developer","i am a dev","i'm a developer","i'm a dev",
   "looking for clients","looking for projects","looking for work",
   "taking on clients","open for work","available for work",
-  "review:","i used it","my results","30 days","i tested",
+  "review:","i used it","my results","30 days","i tested","vs ",
 ];
 
 const DEVHIRE_COMMENTS = [
@@ -131,6 +78,13 @@ const MAPZAP_COMMENTS = [
   `[mapzap.org](https://mapzap.org) might solve this. pulls 100 local business leads in 60 seconds from Google Maps. CSV with name, phone, address, website. $49/month unlimited searches, free to try first`,
   `i built a tool for this — [mapzap.org](https://mapzap.org). type any business type and city, get 100 leads as a CSV in 60 seconds. $49/month unlimited, no card needed for preview`,
   `built [mapzap.org](https://mapzap.org) for this exact problem. 100 local business leads from Google Maps in 60 seconds as a downloadable CSV. $49/month unlimited searches, free preview available`,
+];
+
+const CALLDONE_COMMENTS = [
+  `this might help — built [calldone.org](https://calldone.org), an AI receptionist that answers every call to your business 24/7. handles FAQs, captures leads, texts you a summary after each call. $500/month, live in 48hrs. call the demo: (563) 287-1146`,
+  `calldone.org might solve this. AI receptionist that answers your business calls 24/7, handles questions, captures caller info, texts you instantly. $500/month no setup fee. hear it live: (563) 287-1146`,
+  `built [calldone.org](https://calldone.org) for exactly this. AI answers every call 24/7, trained on your business, sounds like a real person. $500/month, cancel anytime, live in 48 hours. demo: (563) 287-1146`,
+  `i built an AI receptionist that handles this — [calldone.org](https://calldone.org). answers every call 24/7, captures leads, books appointments, texts you a summary. $500/month no contracts. call (563) 287-1146 to hear it`,
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -167,13 +121,8 @@ async function runCycle() {
   const commented = loadCommented();
   let commentsThisCycle = 0;
 
-  const allQueries = [
-    ...DEVHIRE_QUERIES.map(q => ({ query: q, type: "DEVHIRE" })),
-    ...MAPZAP_QUERIES.map(q => ({ query: q, type: "MAPZAP" })),
-  ];
-
-  // Target subs directly — no global search noise
   const SUB_TARGETS = [
+    // DEVHIRE subs
     { sub: "forhire", type: "DEVHIRE" },
     { sub: "slavelabour", type: "DEVHIRE" },
     { sub: "jobbit", type: "DEVHIRE" },
@@ -186,6 +135,7 @@ async function runCycle() {
     { sub: "RemoteWork", type: "DEVHIRE" },
     { sub: "digitalnomad", type: "DEVHIRE" },
     { sub: "freelancing", type: "DEVHIRE" },
+    // MAPZAP subs
     { sub: "agency", type: "MAPZAP" },
     { sub: "cold_email", type: "MAPZAP" },
     { sub: "coldemail", type: "MAPZAP" },
@@ -201,17 +151,37 @@ async function runCycle() {
     { sub: "realtors", type: "MAPZAP" },
     { sub: "InsuranceAgents", type: "MAPZAP" },
     { sub: "msp", type: "MAPZAP" },
+    // CALLDONE subs
+    { sub: "smallbusiness", type: "CALLDONE" },
+    { sub: "Entrepreneur", type: "CALLDONE" },
+    { sub: "realtors", type: "CALLDONE" },
+    { sub: "InsuranceAgents", type: "CALLDONE" },
+    { sub: "EntrepreneurRideAlong", type: "CALLDONE" },
+    { sub: "sweatystartup", type: "CALLDONE" },
+    { sub: "Plumbing", type: "CALLDONE" },
+    { sub: "HVAC", type: "CALLDONE" },
+    { sub: "Landscaping", type: "CALLDONE" },
+    { sub: "HomeImprovement", type: "CALLDONE" },
+    { sub: "agency", type: "CALLDONE" },
   ];
 
-  SUB_TARGETS.sort(() => Math.random() - 0.5);
+  // Deduplicate — if a sub appears for multiple products pick one randomly
+  const seen = new Map();
+  for (const item of SUB_TARGETS) {
+    if (!seen.has(item.sub)) {
+      seen.set(item.sub, item);
+    } else if (Math.random() > 0.5) {
+      seen.set(item.sub, item);
+    }
+  }
+  const deduped = Array.from(seen.values()).sort(() => Math.random() - 0.5);
 
-  for (const { sub, type } of SUB_TARGETS) {
+  for (const { sub, type } of deduped) {
     if (commentsThisCycle >= MAX_COMMENTS_PER_CYCLE) {
       log("INFO", `Hit max comments. Stopping.`);
       break;
     }
 
-    // Skip if banned
     if (banned.some(b => b.toLowerCase() === sub.toLowerCase())) {
       log("SKIP", `Banned sub r/${sub}`);
       continue;
@@ -231,50 +201,32 @@ async function runCycle() {
         const titleLower = (post.title || "").toLowerCase();
         const subLower = subName.toLowerCase();
 
-        // Skip banned subs
         if (banned.some(b => b.toLowerCase() === subLower)) continue;
+        if (BLOCK_SUBS.some(b => subLower.includes(b))) continue;
+        if (FOR_HIRE_BLOCK.some(s => titleLower.includes(s))) continue;
 
-        // Skip blocked subs
-        if (BLOCK_SUBS.some(b => subLower.includes(b.toLowerCase()))) {
-          log("SKIP", `Blocked sub r/${subName}`);
-          continue;
-        }
-
-        // Skip for hire / review / unrelated posts
-        if (FOR_HIRE_BLOCK.some(s => titleLower.includes(s))) {
-          log("SKIP", `Filtered title r/${subName}`);
-          continue;
-        }
-
-        // Query match via Reddit search is sufficient targeting
-
-        // Also block clearly wrong subs not in block list
-        const EXTRA_BLOCK = ["sexpositive","relationship","dating","advice","women","men","askwomen","askmen","amiugly","confession","rant","venting","support","grief","mentalillness","bipolar","bpd","schizophrenia","ptsd","trauma","abuse","narcissist","divorce","breakup","ldr","polyamory","trueoffmychest","offmychest"];
-        if (EXTRA_BLOCK.some(b => subLower.includes(b))) continue;
-
-        // Skip already commented
         const postId = post.id || post.name;
         if (commented[postId]) continue;
 
-        // Skip bot's own posts
         if (post.author?.name?.toLowerCase() === (process.env.REDDIT_USERNAME || "").toLowerCase()) continue;
 
-        // Verify post title actually contains buyer intent words
-        const BUYER_WORDS = ["need","looking","want","hire","hiring","help","build","find","get","where","how","recommend","suggest"];
+        // Require buyer intent word in title
+        const BUYER_WORDS = ["need","looking","want","hire","hiring","help","build","find","get","where","how","recommend","suggest","miss","missed","answer","phone","call","receptionist"];
         const hasBuyerWord = BUYER_WORDS.some(w => titleLower.includes(w));
-        if (!hasBuyerWord) {
-          log("SKIP", `No buyer word in title: "${titleLower.substring(0,50)}"`);
-          continue;
-        }
+        if (!hasBuyerWord) continue;
 
-        const commentText = type === "DEVHIRE" ? pick(DEVHIRE_COMMENTS) : pick(MAPZAP_COMMENTS);
+        // Pick comment based on type
+        let commentText;
+        if (type === "DEVHIRE") commentText = pick(DEVHIRE_COMMENTS);
+        else if (type === "CALLDONE") commentText = pick(CALLDONE_COMMENTS);
+        else commentText = pick(MAPZAP_COMMENTS);
 
         try {
           await post.reply(commentText);
           commented[postId] = new Date().toISOString();
           saveCommented(commented);
           commentsThisCycle++;
-          log("COMMENTED", `r/${subName} — "${titleLower.substring(0, 60)}"`);
+          log("COMMENTED", `r/${subName} [${type}] — "${titleLower.substring(0, 60)}"`);
           log("INFO", `${commentsThisCycle}/${MAX_COMMENTS_PER_CYCLE} comments. Waiting ${Math.round(MIN_DELAY_MS/60000)} to ${Math.round(MAX_DELAY_MS/60000)}min...`);
           await sleep(rand(MIN_DELAY_MS, MAX_DELAY_MS));
         } catch (err) {

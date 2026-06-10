@@ -22,7 +22,6 @@ const MIN_DELAY_MS = 2 * 60 * 1000;
 const MAX_DELAY_MS = 4 * 60 * 1000;
 const MAX_COMMENTS_PER_CYCLE = 25;
 
-// Buyer intent queries only — query match IS the filter
 const DEVHIRE_QUERIES = [
   "looking for a developer",
   "looking for a web developer",
@@ -58,7 +57,6 @@ const DEVHIRE_QUERIES = [
   "need a developer this week",
   "need a developer asap",
   "where can I find a developer",
-  "how do I find a good developer",
   "recommend a developer",
 ];
 
@@ -78,14 +76,12 @@ const MAPZAP_QUERIES = [
   "how to build a prospect list",
   "need outreach list",
   "need cold outreach list",
-  "how to find local businesses to contact",
   "need more sales for my business",
   "need more clients for my agency",
   "how to grow my agency clients",
   "need b2b leads",
 ];
 
-// Block subs that are clearly wrong audience
 const BLOCK_SUBS = [
   "autisticwithadhd","autism","adhd","mentalhealth","depression","anxiety",
   "relationship_advice","relationships","amitheasshole","tifu","askreddit",
@@ -104,11 +100,11 @@ const BLOCK_SUBS = [
   "ethereum","nft","defi","web3","crypto","blockchain",
   "freelancedesigners","freelancewriters","hireawriter","hireadesigner",
   "programmers_forhire","youtubeeditorsforhire","imsuccessconnection",
-  "darts","petiteFitness","ukhealthinssupport","legaladviceuk",
-  "website_ideas","freelanceindia",
+  "darts","website_ideas","freelanceindia","shareailprompts","shareaiprompts",
+  "deadlock","deadlockcoaching","gaming","leagueoflegends","valorant",
+  "csgo","cs2","fortnite","minecraft","roblox","apexlegends",
 ];
 
-// Block posts where OP is offering services
 const FOR_HIRE_BLOCK = [
   "[for hire]","[offering]","for hire","available for hire","hire me",
   "my services","my rates","my portfolio","i am available","i'm available",
@@ -118,6 +114,7 @@ const FOR_HIRE_BLOCK = [
   "i am a developer","i am a dev","i'm a developer","i'm a dev",
   "looking for clients","looking for projects","looking for work",
   "taking on clients","open for work","available for work",
+  "review:","i used it","my results","30 days","i tested",
 ];
 
 const DEVHIRE_COMMENTS = [
@@ -179,7 +176,7 @@ async function runCycle() {
 
   for (const { query, type } of allQueries) {
     if (commentsThisCycle >= MAX_COMMENTS_PER_CYCLE) {
-      log("INFO", `Hit max comments (${MAX_COMMENTS_PER_CYCLE}). Stopping cycle.`);
+      log("INFO", `Hit max comments. Stopping.`);
       break;
     }
 
@@ -198,21 +195,22 @@ async function runCycle() {
         if (commentsThisCycle >= MAX_COMMENTS_PER_CYCLE) break;
         if (!post.author || !isFresh(post)) continue;
 
-        const subName = post.subreddit?.display_name || post.subreddit;
+        const subName = post.subreddit?.display_name || post.subreddit || "";
         const titleLower = (post.title || "").toLowerCase();
+        const subLower = subName.toLowerCase();
 
         // Skip banned subs
-        if (banned.some(b => b.toLowerCase() === subName?.toLowerCase())) continue;
+        if (banned.some(b => b.toLowerCase() === subLower)) continue;
 
         // Skip blocked subs
-        if (BLOCK_SUBS.some(b => subName?.toLowerCase().includes(b.toLowerCase()))) {
+        if (BLOCK_SUBS.some(b => subLower.includes(b.toLowerCase()))) {
           log("SKIP", `Blocked sub r/${subName}`);
           continue;
         }
 
-        // Skip for hire posts
+        // Skip for hire / review / unrelated posts
         if (FOR_HIRE_BLOCK.some(s => titleLower.includes(s))) {
-          log("SKIP", `For hire post r/${subName}`);
+          log("SKIP", `Filtered title r/${subName}`);
           continue;
         }
 
@@ -220,8 +218,16 @@ async function runCycle() {
         const postId = post.id || post.name;
         if (commented[postId]) continue;
 
-        // Skip if post author is our bot
+        // Skip bot's own posts
         if (post.author?.name?.toLowerCase() === (process.env.REDDIT_USERNAME || "").toLowerCase()) continue;
+
+        // Verify post title actually contains buyer intent words
+        const BUYER_WORDS = ["need","looking","want","hire","hiring","help","build","find","get","where","how","recommend","suggest"];
+        const hasBuyerWord = BUYER_WORDS.some(w => titleLower.includes(w));
+        if (!hasBuyerWord) {
+          log("SKIP", `No buyer word in title: "${titleLower.substring(0,50)}"`);
+          continue;
+        }
 
         const commentText = type === "DEVHIRE" ? pick(DEVHIRE_COMMENTS) : pick(MAPZAP_COMMENTS);
 
@@ -230,27 +236,27 @@ async function runCycle() {
           commented[postId] = new Date().toISOString();
           saveCommented(commented);
           commentsThisCycle++;
-          log("COMMENTED", `r/${subName} — u/${post.author?.name} — "${titleLower.substring(0, 60)}"`);
+          log("COMMENTED", `r/${subName} — "${titleLower.substring(0, 60)}"`);
           log("INFO", `${commentsThisCycle}/${MAX_COMMENTS_PER_CYCLE} comments. Waiting ${Math.round(MIN_DELAY_MS/60000)} to ${Math.round(MAX_DELAY_MS/60000)}min...`);
           await sleep(rand(MIN_DELAY_MS, MAX_DELAY_MS));
         } catch (err) {
           const msg = err.message || "";
           if (msg.includes("SUBREDDIT_NOTALLOWED") || msg.includes("BANNED") || msg.includes("forbidden") || msg.includes("403")) {
-            log("BANNED", `r/${subName} — adding to banned list`);
+            log("BANNED", `r/${subName}`);
             const b = loadBanned();
             if (!b.includes(subName)) { b.push(subName); fs.writeFileSync(BANNED_PATH, JSON.stringify(b, null, 2)); }
           } else if (msg.includes("RATELIMIT") || msg.includes("rate limit")) {
-            log("RATELIMIT", `Waiting 15 minutes...`);
+            log("RATELIMIT", `Waiting 15min...`);
             await sleep(15 * 60 * 1000);
           } else {
-            log("ERROR", `Comment failed: ${msg}`);
+            log("ERROR", `${msg}`);
           }
         }
 
         await wait(rand(2000, 4000));
       }
     } catch (err) {
-      log("ERROR", `Search failed for "${query}": ${err.message}`);
+      log("ERROR", `Search failed: ${err.message}`);
       await wait(15000);
     }
   }
@@ -262,7 +268,6 @@ async function runCycle() {
   console.log("=".repeat(60));
   console.log("RedditCommenter -- Global Comment Bot");
   console.log("=".repeat(60));
-
   while (true) {
     await runCycle();
     log("INFO", `Next cycle in ${Math.round(CYCLE_INTERVAL_MS / 60000)} minutes.`);

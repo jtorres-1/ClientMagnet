@@ -82,19 +82,19 @@ const MAPZAP_QUERIES = [
 ];
 
 const DEVHIRE_COMMENTS = [
-  `python dev in LA here, i build websites, scrapers, automation bots, and AI integrations. flat fee, 48 hour delivery. recent work: mapzap.org (live SaaS) and claudiascleaningla.com. DM me a scope`,
-  `i can help with this. python developer in LA, available now. websites, scrapers, bots, AI integrations. flat fee only, 48hr delivery. built mapzap.org and claudiascleaningla.com as recent examples. DM me what you need`,
+  `python dev in LA here, i build websites, scrapers, automation bots, and AI integrations. flat fee, 48 hour delivery. recent work: [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com). DM me a scope`,
+  `i can help with this. python developer in LA, available now. websites, scrapers, bots, AI integrations. flat fee only, 48hr delivery. built [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com) as recent examples. DM me what you need`,
   `python dev available this week. i build websites, automation bots, scrapers, AI integrations. flat fee, 48 hour turnaround. DM me a scope and i'll tell you if i can build it`,
   `this is exactly what i do. python and node.js developer in LA. websites, scrapers, bots, AI integrations, 48hr delivery, flat fee. $500 websites, $800 automation. DM me`,
   `available for this. python dev, LA based. built live production tools including a google maps SaaS and automation pipelines. flat fee, 48hr delivery. DM me what you need built`,
 ];
 
 const MAPZAP_COMMENTS = [
-  `this might help, built mapzap.org, pulls 100 local business leads from Google Maps in 60 seconds as a CSV. name, phone, address, website. $49/month unlimited searches, free preview no card needed`,
-  `built something for exactly this — mapzap.org scrapes 100 local businesses from Google Maps in 60 seconds. type a niche and city, get a CSV instantly. $49/month unlimited, free preview available`,
-  `mapzap.org might solve this. pulls 100 local business leads in 60 seconds from Google Maps. CSV with name, phone, address, website. $49/month unlimited searches, free to try first`,
-  `i built a tool for this, mapzap.org. type any business type and city, get 100 leads as a CSV in 60 seconds. name, phone, address, website. $49/month unlimited, no card needed for preview`,
-  `built mapzap.org for this exact problem. 100 local business leads from Google Maps in 60 seconds as a downloadable CSV. $49/month unlimited searches, free preview available at mapzap.org`,
+  `this might help, built [mapzap.org](https://mapzap.org), pulls 100 local business leads from Google Maps in 60 seconds as a CSV. name, phone, address, website. $49/month unlimited searches, free preview no card needed`,
+  `built something for exactly this — [mapzap.org](https://mapzap.org) scrapes 100 local businesses from Google Maps in 60 seconds. type a niche and city, get a CSV instantly. $49/month unlimited, free preview available`,
+  `[mapzap.org](https://mapzap.org) might solve this. pulls 100 local business leads in 60 seconds from Google Maps. CSV with name, phone, address, website. $49/month unlimited searches, free to try first`,
+  `i built a tool for this, [mapzap.org](https://mapzap.org). type any business type and city, get 100 leads as a CSV in 60 seconds. name, phone, address, website. $49/month unlimited, no card needed for preview`,
+  `built [mapzap.org](https://mapzap.org) for this exact problem. 100 local business leads from Google Maps in 60 seconds as a downloadable CSV. $49/month unlimited searches, free preview available at [mapzap.org](https://mapzap.org)`,
 ];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

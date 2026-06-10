@@ -1,4 +1,4 @@
-// agency_bot.cjs -- ClientMagnet MapZap + DevHire Outreach
+// agency_bot.cjs -- ClientMagnet MapZap + DevHire + CallDone Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -94,21 +94,48 @@ const DEVHIRE_MESSAGES = [
   }
 ];
 
+const CALLDONE_MESSAGES = [
+  {
+    id: "CD_1",
+    text: `this might help -- i built an AI receptionist called CallDone that answers every call 24/7, handles questions, and texts you a summary after each call. $500/month, live in 48 hours, no setup fee.\n\ncall the demo line right now and hear it yourself: (563) 287-1146\n\nhttps://calldone.org`
+  },
+  {
+    id: "CD_2",
+    text: `might be relevant -- built an AI phone receptionist that answers calls 24/7 for local businesses. handles FAQs, captures leads, books appointments, and texts you a summary instantly. $500/month flat, no contracts, live in 48 hours.\n\nfree demo: call (563) 287-1146\n\nhttps://calldone.org`
+  },
+  {
+    id: "CD_3",
+    text: `sounds like CallDone could help -- it's an AI receptionist that answers every call 24/7 so you never miss a customer. trained on your business, handles questions and bookings, texts you after every call. $500/month, no setup fee, cancel anytime.\n\nhear it live: (563) 287-1146\n\nhttps://calldone.org`
+  },
+  {
+    id: "CD_4",
+    text: `built something for exactly this -- CallDone answers every call to your business 24/7. sounds like a real person, handles FAQs, captures caller info, texts you a summary. $500/month, live in 48 hours.\n\ncall (563) 287-1146 to hear the demo\n\nhttps://calldone.org`
+  },
+  {
+    id: "CD_5",
+    text: `this is exactly what CallDone solves -- AI receptionist that answers your business calls 24/7, captures leads, handles common questions, and sends you a text summary after every call. no setup fee, $500/month, cancel anytime.\n\ndemo: (563) 287-1146 -- https://calldone.org`
+  }
+];
+
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
   const sub = (p.subreddit || "").toLowerCase();
   const product = (p.product || "MAPZAP").toUpperCase();
   if (product === "DEVHIRE") score += 15;
+  if (product === "CALLDONE") score += 12;
   if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
+  else if (p.leadType === "CALLDONE_OWNER") score += 10;
   else if (p.leadType === "HIGH_INTENT") score += 7;
+  else if (p.leadType === "CALLDONE_INTENT") score += 7;
   else if (p.leadType === "MEDIUM_INTENT_OWNER") score += 5;
   else score += 2;
   if (/need leads|buy leads|lead source|lead list|lead database/.test(t)) score += 5;
   if (/looking for (a |an )?(developer|dev|programmer)/.test(t)) score += 8;
+  if (/missed calls|missing calls|answering service|receptionist/.test(t)) score += 8;
   if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
   if (["forhire","slavelabour","jobs4bitcoins","WorkOnline","HireaWriter"].includes(sub)) score += 5;
-  if (["sales","b2bsales","coldemail","coldcalling","leadgeneration"].includes(sub)) score += 5;
+  if (["sales","b2bsales","coldemail","coldcalling","leadgeneration","smallbusiness","realtors"].includes(sub)) score += 5;
   return score;
 }
 
@@ -148,8 +175,19 @@ async function runOutreachCycle() {
     if (user?.closed) { log("SKIP", `closed u/${username} (${user.closed_reason})`); continue; }
     cyclesSeen.add(key);
     attempted++;
-    const tpl = product === "DEVHIRE" ? pick(DEVHIRE_MESSAGES) : pick(MAPZAP_MESSAGES);
-    const subject = product === "DEVHIRE" ? "dev for hire" : "lead gen tool";
+
+    let tpl, subject;
+    if (product === "DEVHIRE") {
+      tpl = pick(DEVHIRE_MESSAGES);
+      subject = "dev for hire";
+    } else if (product === "CALLDONE") {
+      tpl = pick(CALLDONE_MESSAGES);
+      subject = "AI receptionist for your business";
+    } else {
+      tpl = pick(MAPZAP_MESSAGES);
+      subject = "lead gen tool";
+    }
+
     try {
       const freshUser = getUser(loadUsers(), username);
       if (freshUser?.sent) {
@@ -195,7 +233,6 @@ async function checkInbox() {
       toMarkRead.push(item);
       const sender = item.author.name.toLowerCase();
       if (sender === botUsername) continue;
-      // Just log replies — human handles everything
       log("REPLY", `u/${item.author.name} replied -- CHECK YOUR REDDIT INBOX NOW`);
     }
     if (toMarkRead.length > 0) {
@@ -217,7 +254,7 @@ async function checkInbox() {
 
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet -- MapZap + DevHire Outreach Bot");
+  console.log("ClientMagnet -- MapZap + DevHire + CallDone Outreach Bot");
   console.log("=".repeat(60));
   setInterval(checkInbox, INBOX_POLL_MS);
   while (true) {

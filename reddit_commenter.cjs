@@ -23,60 +23,66 @@ const MAX_DELAY_MS = 4 * 60 * 1000;
 const MAX_COMMENTS_PER_CYCLE = 25;
 
 const DEVHIRE_QUERIES = [
-  "need a developer",
-  "need a dev",
-  "need a web developer",
-  "need a python developer",
-  "need a programmer",
-  "need a website built",
-  "need my website built",
-  "need a website for my business",
-  "need someone to build",
-  "need someone to code",
+  // Direct hiring posts
   "looking for a developer",
+  "looking for a web developer",
+  "looking for a python developer",
   "looking to hire a developer",
   "want to hire a developer",
+  "need to hire a developer",
+  // Problem statements that lead to hiring
+  "how much does it cost to build a website",
+  "how much to build an app",
+  "how do I build a website for my business",
+  "should I hire a developer",
+  "where to find a developer",
+  "how to find a good developer",
+  "my website is broken",
   "need help with my website",
-  "need an app built",
-  "need a mobile app built",
-  "need a bot built",
-  "need a scraper built",
-  "need automation built",
-  "need a landing page built",
-  "need a shopify store",
-  "need a wordpress site",
-  "need a react developer",
-  "need a full stack developer",
-  "need a mvp built",
-  "need a saas built",
-  "need a chatbot built",
-  "need ai integration",
-  "need a discord bot",
-  "need a chrome extension",
-  "need a freelance developer",
+  "need help building my website",
+  "need help building my app",
+  "need help automating",
+  "how to automate my business",
+  "looking for technical cofounder",
+  "need technical help",
+  "need a developer for my startup",
+  "need a developer for my business",
+  "how to build a chatbot",
+  "need to build a bot",
+  "need to scrape data",
+  "need to build an api",
+  "need a website for my startup",
+  "need a website for my company",
+  "need someone to build my website",
+  "need someone to build my app",
+  "need someone to build my bot",
+  "how to build a saas",
+  "need to build an mvp",
 ];
 
 const MAPZAP_QUERIES = [
-  "need leads",
-  "need more leads",
-  "find leads",
-  "get leads",
-  "business leads",
-  "lead generation",
-  "need clients",
-  "find clients",
-  "get clients",
-  "more customers",
-  "find customers",
-  "prospect list",
-  "outreach list",
-  "local business leads",
-  "lead list",
-  "cold outreach leads",
+  // Direct need statements
+  "need more leads for my business",
+  "need local business leads",
+  "need a lead list",
+  "need more clients for my business",
+  "need more customers for my business",
+  // Problem statements
+  "how do I find leads for my business",
+  "how to get more clients",
+  "how to find more customers",
   "struggling to find clients",
-  "need more sales",
-  "b2b leads",
-  "sales leads",
+  "struggling to get leads",
+  "how to generate leads for my business",
+  "where to find business leads",
+  "how to build a prospect list",
+  "how to do cold outreach",
+  "need outreach list",
+  "how to find local businesses",
+  "how to contact local businesses",
+  "need more sales for my business",
+  "how to grow my agency",
+  "need more clients for my agency",
 ];
 
 const DEVHIRE_COMMENTS = [
@@ -267,9 +273,10 @@ async function runCycle() {
         ];
         const signals = type === "DEVHIRE" ? DEVHIRE_SIGNALS : MAPZAP_SIGNALS;
         const hasSignalInTitle = signals.some(s => titleLower.includes(s));
-        const hasSignal = hasSignalInTitle || signals.some(s => combined.includes(s));
-        if (!hasSignalInTitle) {
-          log("SKIP", `No buyer signal in title by u/${post.author?.name}`);
+        const hasSignalInBody = signals.some(s => combined.includes(s));
+        const hasSignal = hasSignalInTitle || hasSignalInBody;
+        if (!hasSignal) {
+          log("SKIP", `No buyer signal in post by u/${post.author?.name}`);
           continue;
         }
 

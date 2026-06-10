@@ -178,6 +178,29 @@ async function runCycle() {
         // Skip if post author is our bot
         if (post.author?.name?.toLowerCase() === (process.env.REDDIT_USERNAME || "").toLowerCase()) continue;
 
+        // Must have buyer intent in title + body
+        const combined = ((post.title || "") + " " + (post.selftext || "")).toLowerCase();
+        const DEVHIRE_SIGNALS = [
+          "hire", "hiring", "need a developer", "need a dev", "need someone to build",
+          "need a website", "need a web", "need automation", "need a bot", "need a scraper",
+          "need a programmer", "need a coder", "looking for a developer", "looking for a dev",
+          "looking to hire", "budget", "willing to pay", "will pay", "paid", "paying",
+          "how much", "quote", "freelancer", "contractor", "commission", "bounty",
+        ];
+        const MAPZAP_SIGNALS = [
+          "need leads", "need more leads", "need clients", "need more clients",
+          "need customers", "need more customers", "need prospects", "lead list",
+          "lead generation", "find businesses", "find clients", "find customers",
+          "cold outreach", "outreach list", "prospect list", "business leads",
+          "struggling to find", "how do i find", "where do i find",
+        ];
+        const signals = type === "DEVHIRE" ? DEVHIRE_SIGNALS : MAPZAP_SIGNALS;
+        const hasSignal = signals.some(s => combined.includes(s));
+        if (!hasSignal) {
+          log("SKIP", `No buyer signal in post by u/${post.author?.name}`);
+          continue;
+        }
+
         const commentText = type === "DEVHIRE" ? pick(DEVHIRE_COMMENTS) : pick(MAPZAP_COMMENTS);
 
         try {

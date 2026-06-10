@@ -252,15 +252,3 @@ async function scrape() {
   }
 })();
 // Injected high-intent MapZap competitor queries
-const COMPETITOR_QUERIES = [
-  "Apollo.io too expensive",
-  "ZoomInfo too expensive",
-  "looking for cheaper alternative to Apollo",
-  "cancel Apollo subscription",
-  "Apollo alternative for small business",
-  "cheap lead generation tool",
-  "affordable prospecting tool",
-  "Google Maps lead scraper",
-  "local business lead generation tool",
-  "alternative to ZoomInfo",
-];

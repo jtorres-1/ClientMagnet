@@ -208,18 +208,37 @@ async function runCycle() {
         }
 
         const DEVHIRE_SIGNALS = [
-          "hire", "hiring", "need a developer", "need a dev", "need someone to build",
-          "need a website", "need a web", "need automation", "need a bot", "need a scraper",
-          "need a programmer", "need a coder", "looking for a developer", "looking for a dev",
-          "looking to hire", "budget", "willing to pay", "will pay", "paid", "paying",
-          "how much", "quote", "freelancer", "contractor", "commission", "bounty",
+          "need a developer", "need a dev", "need a web developer", "need a web dev",
+          "need a python developer", "need a python dev", "need a full stack",
+          "need someone to build", "need someone to code", "need someone to create",
+          "need a website built", "need a website for my", "need a website made",
+          "need a website designed", "need a landing page built", "need a landing page",
+          "need an app built", "need a mobile app", "need a web app built",
+          "need a bot built", "need a scraper built", "need automation built",
+          "need a shopify", "need a wordpress", "need a react developer",
+          "need a programmer", "need a coder", "need a freelance dev",
+          "looking for a developer", "looking for a dev", "looking for a programmer",
+          "looking for a web developer", "looking to hire a developer",
+          "looking to hire a dev", "hiring a developer", "hiring a dev",
+          "hiring a programmer", "want to hire a developer", "want to hire a dev",
+          "need help building my website", "need help building a website",
+          "need help building my app", "need my website built",
+          "need my app built", "need a saas built", "need a mvp built",
+          "need a dashboard built", "need api integration", "need a chrome extension",
+          "need a discord bot", "need a telegram bot", "need a chatbot built",
+          "need ai integration", "need an ai tool built",
         ];
         const MAPZAP_SIGNALS = [
-          "need leads", "need more leads", "need clients", "need more clients",
-          "need customers", "need more customers", "need prospects", "lead list",
-          "lead generation", "find businesses", "find clients", "find customers",
-          "cold outreach", "outreach list", "prospect list", "business leads",
-          "struggling to find", "how do i find", "where do i find",
+          "need leads for my business", "need more leads for my business",
+          "need local business leads", "need a lead list", "need business leads",
+          "need more clients for my business", "need more customers for my business",
+          "need prospects for my business", "need to generate leads",
+          "need to find local businesses", "need phone numbers for businesses",
+          "need to contact local businesses", "struggling to find clients",
+          "struggling to find customers", "how do i find leads",
+          "where do i find leads", "how to get more clients",
+          "need cold outreach list", "need a prospect list",
+          "need to find more customers", "need to find more clients",
         ];
         const signals = type === "DEVHIRE" ? DEVHIRE_SIGNALS : MAPZAP_SIGNALS;
         const hasSignalInTitle = signals.some(s => titleLower.includes(s));

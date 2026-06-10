@@ -214,11 +214,9 @@ async function runCycle() {
           continue;
         }
 
-        // KEY FIX: verify query phrase in title OR body
+        // KEY FIX: verify query phrase appears in TITLE only
         const queryLower = query.toLowerCase();
-        const bodyLower = (post.selftext || "").toLowerCase();
-        const combined = titleLower + " " + bodyLower;
-        if (!combined.includes(queryLower)) {
+        if (!titleLower.includes(queryLower)) {
           continue;
         }
 

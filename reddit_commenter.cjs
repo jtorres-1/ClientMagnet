@@ -214,11 +214,7 @@ async function runCycle() {
           continue;
         }
 
-        // KEY FIX: verify query phrase appears in TITLE only
-        const queryLower = query.toLowerCase();
-        if (!titleLower.includes(queryLower)) {
-          continue;
-        }
+        // Query match via Reddit search is sufficient targeting
 
         // Also block clearly wrong subs not in block list
         const EXTRA_BLOCK = ["sexpositive","relationship","dating","advice","women","men","askwomen","askmen","amiugly","confession","rant","venting","support","grief","mentalillness","bipolar","bpd","schizophrenia","ptsd","trauma","abuse","narcissist","divorce","breakup","ldr","polyamory","trueoffmychest","offmychest"];

@@ -192,6 +192,9 @@ async function runCycle() {
           "uxdesign","graphic_design","design","art","photography","illustration",
           "freelancedesigners","freelancewriters","hireawriter","hireadesigner",
         ];
+        // Must have buyer intent in title specifically
+        const titleLower = (post.title || "").toLowerCase();
+        const combined = (titleLower + " " + (post.selftext || "")).toLowerCase();
 
         // Block FOR HIRE posts — people offering services not buying
         const FOR_HIRE_BLOCK = ["[for hire]","[offering]","for hire","available for hire","hire me","my services","my rates","my portfolio","i am available","i'm available"];
@@ -204,9 +207,6 @@ async function runCycle() {
           continue;
         }
 
-        // Must have buyer intent in title specifically
-        const titleLower = (post.title || "").toLowerCase();
-        const combined = (titleLower + " " + (post.selftext || "")).toLowerCase();
         const DEVHIRE_SIGNALS = [
           "hire", "hiring", "need a developer", "need a dev", "need someone to build",
           "need a website", "need a web", "need automation", "need a bot", "need a scraper",

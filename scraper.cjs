@@ -87,6 +87,15 @@ const MAPZAP_QUERIES = [
   "I need to find local business owners",
   "I need a list of businesses",
   "I need to reach local businesses",
+  "Apollo too expensive",
+  "ZoomInfo too expensive",
+  "looking for cheaper lead tool",
+  "Apollo alternative",
+  "cancel Apollo",
+  "affordable alternative to Apollo",
+  "cheap prospecting tool",
+  "local business leads cheap",
+  "Google Maps scraper leads",
 ];
 
 const CALLDONE_QUERIES = [
@@ -242,3 +251,16 @@ async function scrape() {
     await wait(5 * 60 * 1000);
   }
 })();
+// Injected high-intent MapZap competitor queries
+const COMPETITOR_QUERIES = [
+  "Apollo.io too expensive",
+  "ZoomInfo too expensive",
+  "looking for cheaper alternative to Apollo",
+  "cancel Apollo subscription",
+  "Apollo alternative for small business",
+  "cheap lead generation tool",
+  "affordable prospecting tool",
+  "Google Maps lead scraper",
+  "local business lead generation tool",
+  "alternative to ZoomInfo",
+];

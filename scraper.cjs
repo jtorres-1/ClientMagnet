@@ -239,6 +239,6 @@ async function scrape() {
 (async () => {
   while (true) {
     await scrape();
-    await wait(20 * 60 * 1000);
+    await wait(5 * 60 * 1000);
   }
 })();

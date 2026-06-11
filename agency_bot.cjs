@@ -1,4 +1,4 @@
-// agency_bot.cjs -- ClientMagnet MapZap + DevHire + CallDone Outreach
+// agency_bot.cjs -- ClientMagnet MapZap + DevHire + CallDone + AgencyHire Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -117,13 +117,34 @@ const CALLDONE_MESSAGES = [
   }
 ];
 
+const AGENCYHIRE_MESSAGES = [
+  {
+    id: "AH_1",
+    text: `i built an automated outreach system that sends 1000+ targeted messages per day across Reddit, Facebook, Discord, and X to your ideal clients. runs 24/7, finds buyers actively looking for your service, DMs them automatically.\n\ni deploy the full stack on your accounts in 48 hours. $1,500 flat fee to set up, $500/month retainer to keep it running.\n\nproof it works: https://mapzap.org (built and marketed entirely with this system)\n\ndeposit to start: https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d\n\ndm me if you want to see exactly how it works`
+  },
+  {
+    id: "AH_2",
+    text: `this might solve your client acquisition problem -- i run an outreach automation stack that hits Reddit, Facebook, Discord, and X simultaneously. finds people actively looking for your service and messages them automatically. 1000+ targeted contacts per day.\n\nset it up on your agency in 48 hours for $1,500 flat. $500/month to maintain. you own it.\n\nbuilt and proved on my own products: https://mapzap.org\n\nstart here: https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`
+  },
+  {
+    id: "AH_3",
+    text: `scaling agency outreach is exactly what i built this for -- automated system across Reddit, Facebook, Discord, and X. targets your niche, sends 1000+ messages per day to verified buyers, runs while you sleep.\n\n$1,500 to deploy on your accounts, 48 hour delivery. $500/month retainer after that.\n\nlive proof: https://mapzap.org\n\ndeposit link: https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d\n\ndm me a scope`
+  },
+  {
+    id: "AH_4",
+    text: `i automate what you're doing manually for your clients -- full outreach stack across Reddit, Facebook, Discord, and X. finds buyers, messages them, runs 24/7 in the background.\n\ndeploy it on your agency for $1,500 flat, live in 48 hours. $500/month to keep it running after that.\n\nproof: https://mapzap.org (marketed entirely with this stack)\n\nhttps://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`
+  }
+];
+
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
   const sub = (p.subreddit || "").toLowerCase();
   const product = (p.product || "MAPZAP").toUpperCase();
+  if (product === "AGENCYHIRE") score += 20;
   if (product === "DEVHIRE") score += 15;
   if (product === "CALLDONE") score += 12;
+  if (p.leadType === "AGENCYHIRE_INTENT") score += 15;
   if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
   else if (p.leadType === "CALLDONE_OWNER") score += 10;
   else if (p.leadType === "HIGH_INTENT") score += 7;
@@ -133,9 +154,11 @@ function scoreLead(p) {
   if (/need leads|buy leads|lead source|lead list|lead database/.test(t)) score += 5;
   if (/looking for (a |an )?(developer|dev|programmer)/.test(t)) score += 8;
   if (/missed calls|missing calls|answering service|receptionist/.test(t)) score += 8;
+  if (/agency|smma|scale my agency|get clients for my agency/.test(t)) score += 10;
   if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
   if (["forhire","slavelabour","jobs4bitcoins","WorkOnline","HireaWriter"].includes(sub)) score += 5;
   if (["sales","b2bsales","coldemail","coldcalling","leadgeneration","smallbusiness","realtors"].includes(sub)) score += 5;
+  if (["agency","digital_marketing","PPC","Entrepreneur","Affiliatemarketing"].includes(sub)) score += 8;
   return score;
 }
 
@@ -177,7 +200,10 @@ async function runOutreachCycle() {
     attempted++;
 
     let tpl, subject;
-    if (product === "DEVHIRE") {
+    if (product === "AGENCYHIRE") {
+      tpl = pick(AGENCYHIRE_MESSAGES);
+      subject = "automated outreach system for your agency";
+    } else if (product === "DEVHIRE") {
       tpl = pick(DEVHIRE_MESSAGES);
       subject = "dev for hire";
     } else if (product === "CALLDONE") {
@@ -254,7 +280,7 @@ async function checkInbox() {
 
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet -- MapZap + DevHire + CallDone Outreach Bot");
+  console.log("ClientMagnet -- MapZap + DevHire + CallDone + AgencyHire Outreach Bot");
   console.log("=".repeat(60));
   setInterval(checkInbox, INBOX_POLL_MS);
   while (true) {

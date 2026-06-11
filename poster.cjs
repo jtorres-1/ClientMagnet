@@ -108,7 +108,6 @@ const MAPZAP_SUBS = [
   "Landscaping",
 ];
 
-// CallDone subs — local business owners who miss calls
 const CALLDONE_SUBS = [
   "smallbusiness",
   "Entrepreneur",
@@ -130,6 +129,29 @@ const CALLDONE_SUBS = [
   "EntrepreneurRideAlong",
   "sweatystartup",
   "agency",
+];
+
+const AGENCYHIRE_SUBS = [
+  "agency",
+  "digital_marketing",
+  "PPC",
+  "Entrepreneur",
+  "EntrepreneurRideAlong",
+  "marketing",
+  "b2bmarketing",
+  "socialmediamarketing",
+  "content_marketing",
+  "copywriting",
+  "Affiliatemarketing",
+  "smallbusiness",
+  "startups",
+  "microsaas",
+  "automation",
+  "sales",
+  "b2bsales",
+  "leadgeneration",
+  "consulting",
+  "msp",
 ];
 
 const DEVHIRE_POSTS = [
@@ -275,6 +297,47 @@ https://calldone.org`
   },
 ];
 
+const AGENCYHIRE_POSTS = [
+  {
+    title: "Built an automated outreach system that sends 1000+ targeted messages per day — taking 2 agency clients this week",
+    text: `If you run an agency and do outreach manually, this is worth reading.
+
+I built a 7-channel automated outreach system that runs 24/7 across Reddit, Facebook, Discord, and X. It finds people actively looking for your service and messages them automatically. 1000+ targeted contacts per day.
+
+I use it for my own products and it works. Proof: https://mapzap.org — built and marketed entirely with this system.
+
+Taking 2 clients this week to deploy the full stack on their accounts. 48 hour setup. $1,500 flat fee, $500/month retainer after that.
+
+DM me if you want to see exactly how it works. Deposit to get started: https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`
+  },
+  {
+    title: "Automate your agency outreach — 1000+ targeted messages per day across Reddit, Facebook, Discord, X",
+    text: `Running an agency means constant outreach. Most agency owners do it manually or pay someone to do it. Neither scales.
+
+I built an automated system that handles it entirely. Finds buyers in your niche, messages them across 4 platforms simultaneously, runs while you sleep.
+
+Deployed on my own products: https://mapzap.org
+
+Setup: $1,500 flat, 48 hour delivery. Monthly retainer: $500 to keep it running and optimized.
+
+Taking a limited number of agency clients this week. DM me a scope.
+
+Start here: https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`
+  },
+  {
+    title: "Stop doing cold outreach manually — built a system that automates it across 4 platforms simultaneously",
+    text: `Cold outreach is the backbone of most agencies but doing it manually kills your time.
+
+I built a full automation stack: Reddit DMs, Facebook group commenting, Discord server posting, X engagement replies. All running 24/7, targeting your niche, sending 1000+ messages per day to verified buyers.
+
+Proof it works: https://mapzap.org — I marketed this entirely with the system.
+
+I deploy it on your accounts in 48 hours. $1,500 flat fee. $500/month retainer.
+
+DM me if interested. https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`
+  },
+];
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -312,6 +375,7 @@ async function postToSub(sub, type) {
   let post;
   if (type === "DEVHIRE") post = pick(DEVHIRE_POSTS);
   else if (type === "CALLDONE") post = pick(CALLDONE_POSTS);
+  else if (type === "AGENCYHIRE") post = pick(AGENCYHIRE_POSTS);
   else post = pick(MAPZAP_POSTS);
 
   try {
@@ -358,11 +422,13 @@ async function runCycle() {
   const devhireSubs = DEVHIRE_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
   const mapzapSubs = MAPZAP_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
   const calldoneSubs = CALLDONE_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
+  const agencyhireSubs = AGENCYHIRE_SUBS.filter(s => !banned.includes(s) && !wasPostedToday(posted, s));
 
   const queue = [
     ...devhireSubs.map(s => ({ sub: s, type: "DEVHIRE" })),
     ...mapzapSubs.map(s => ({ sub: s, type: "MAPZAP" })),
     ...calldoneSubs.map(s => ({ sub: s, type: "CALLDONE" })),
+    ...agencyhireSubs.map(s => ({ sub: s, type: "AGENCYHIRE" })),
   ];
 
   const seen = new Set();

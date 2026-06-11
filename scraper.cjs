@@ -98,6 +98,23 @@ const MAPZAP_QUERIES = [
   "Google Maps scraper leads",
 ];
 
+const AGENCYHIRE_QUERIES = [
+  "I need more clients for my agency",
+  "struggling to get clients for my agency",
+  "how to scale my agency",
+  "need outreach for my smma",
+  "how to automate my agency outreach",
+  "agency owner need more leads",
+  "smma struggling to find clients",
+  "how to get clients for smma",
+  "marketing agency need more customers",
+  "need to scale my marketing agency",
+  "agency outreach not working",
+  "how do i get clients for my digital agency",
+  "need help growing my agency",
+  "automate client outreach for agency",
+];
+
 const CALLDONE_QUERIES = [
   "I keep missing calls at my business",
   "I miss calls when I'm busy",
@@ -137,6 +154,8 @@ const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have 
 
 const callDoneIntentRegex = /\b(miss(ing)? calls|missed calls|can't answer|cannot answer|don't answer|no one answers|after hours calls|answering service|virtual receptionist|phone answering|call answering|receptionist for my|need someone to answer|calls go to voicemail|losing customers|lose customers|missed call|unanswered calls|phone coverage|24.7 answering|always available)\b/i;
 
+const agencyHireRegex = /\b(my agency|my smma|our agency|run an agency|own an agency|digital agency|marketing agency|outreach agency|scale my agency|grow my agency|get clients for my agency|agency clients|smma clients|automate outreach|client acquisition for agency|agency fulfillment|agency owner)\b/i;
+
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
   return ageHours <= 24;
@@ -172,6 +191,15 @@ function classify(post, forceProduct) {
     else if (isOwner) type = "MEDIUM_INTENT_OWNER";
     else type = "MEDIUM_INTENT";
     return { type, trigger: triggerMatch, product: "MAPZAP" };
+  }
+
+  if (forceProduct === "AGENCYHIRE") {
+    const hasAgencyIntent = agencyHireRegex.test(combined);
+    if (!hasAgencyIntent) return null;
+    const isFirstPerson = firstPersonBuyerRegex.test(combined);
+    if (!isFirstPerson) return null;
+    const triggerMatch = combined.match(agencyHireRegex)?.[0] || "agency";
+    return { type: "AGENCYHIRE_INTENT", trigger: triggerMatch, product: "AGENCYHIRE" };
   }
 
   if (forceProduct === "CALLDONE") {
@@ -242,6 +270,7 @@ async function scrape() {
   leads += await searchGlobal(DEVHIRE_QUERIES, "DEVHIRE");
   leads += await searchGlobal(MAPZAP_QUERIES, "MAPZAP");
   leads += await searchGlobal(CALLDONE_QUERIES, "CALLDONE");
+  leads += await searchGlobal(AGENCYHIRE_QUERIES, "AGENCYHIRE");
   console.log(`Scrape complete -- leads found: ${leads}`);
 }
 
@@ -251,4 +280,4 @@ async function scrape() {
     await wait(5 * 60 * 1000);
   }
 })();
-// Injected high-intent MapZap competitor queries
+

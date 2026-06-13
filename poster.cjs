@@ -21,22 +21,17 @@ const DEVHIRE_SUBS = [
   "Jobs4Bitcoins",
   "PythonJobs",
   "remotepython",
-  "freelancing",
-  "WorkFromHome",
-  "RemoteJobr",
-  "learnpython",
-  "softwareengineering",
   "programmingJobs",
   "cscareerquestions",
   "experienceddevs",
   "reactjs",
   "django",
   "node",
+  "learnpython",
 ];
 
 const MAPZAP_SUBS = [
   "growmybusiness",
-  "Business_Ideas",
   "microsaas",
   "b2bsales",
   "Emailmarketing",
@@ -46,10 +41,6 @@ const MAPZAP_SUBS = [
   "FulfillmentByAmazon",
   "Flipping",
   "reselling",
-  "Affiliatemarketing",
-  "passive_income",
-  "EntrepreneurRideAlong",
-  "sweatystartup",
   "juststart",
   "saas",
   "indiebiz",
@@ -62,23 +53,12 @@ const CALLDONE_SUBS = [
   "salons",
   "autorepair",
   "legaladvice",
-  "EntrepreneurRideAlong",
-  "sweatystartup",
-  "HomeImprovement",
-  "Plumbing",
-  "HVAC",
-  "Roofing",
-  "Landscaping",
-  "personaltraining",
-  "Dentistry",
-  "MedicalBilling",
+  "acupuncture",
 ];
 
 const AGENCYHIRE_SUBS = [
   "PPC",
-  "EntrepreneurRideAlong",
   "socialmediamarketing",
-  "Affiliatemarketing",
   "microsaas",
   "b2bsales",
   "growmybusiness",
@@ -88,9 +68,6 @@ const AGENCYHIRE_SUBS = [
 ];
 
 const AUTOSUB_SUBS = [
-  "Entrepreneur",
-  "EntrepreneurRideAlong",
-  "smallbusiness",
   "microsaas",
   "saas",
   "indiebiz",
@@ -98,11 +75,10 @@ const AUTOSUB_SUBS = [
   "nocode",
   "growmybusiness",
   "juststart",
-  "Affiliatemarketing",
-  "passive_income",
-  "digitalnomad",
-  "freelancing",
-  "WorkFromHome",
+  "b2bsales",
+  "socialmediamarketing",
+  "Emailmarketing",
+  "PPC",
 ];
 
 const DEVHIRE_POSTS = [
@@ -208,20 +184,6 @@ No setup fee. $500 per month. Live in 48 hours or less.
 
 https://calldone.org`
   },
-  {
-    title: "AI receptionist for small businesses, answers calls 24/7, captures leads, texts you summaries",
-    text: `Built this for small business owners who cannot always answer the phone.
-
-CallDone answers every incoming call to your business 24 hours a day, 7 days a week. It handles common questions, takes messages, captures caller info, and sends you a text summary instantly after every call.
-
-Works for any business: restaurants, salons, contractors, real estate agents, dental offices, law firms, gyms, auto shops.
-
-Demo: call (563) 287-1146 and hear the AI answer live.
-
-$500 per month. No contracts. No setup fee. Live in 48 hours.
-
-https://calldone.org`
-  },
 ];
 
 const AGENCYHIRE_POSTS = [
@@ -262,7 +224,7 @@ I built AutoSub. You connect your Reddit account, set your offer and target keyw
 
 Runs 24/7. Live dashboard showing DMs sent and replies received. Cancel anytime.
 
-$47 per month. Try it at autosub.mooo.com`
+$47 per month. autosub.mooo.com`
   },
   {
     title: "Stop doing Reddit DM outreach manually, built a tool that does it automatically",

@@ -58,30 +58,36 @@ const FOR_HIRE_BLOCK = [
   "review:","i used it","my results","30 days","i tested","vs ",
 ];
 const DEVHIRE_COMMENTS = [
-  `python dev in LA here — i build websites, scrapers, automation bots, and AI integrations. flat fee, 48 hour delivery. recent work: [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com). DM me a scope`,
+  `python dev in LA here. i build websites, scrapers, automation bots, and AI integrations. flat fee, 48 hour delivery. recent work: [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com). DM me a scope`,
   `i can help with this. python developer in LA, available now. websites, scrapers, bots, AI integrations. flat fee only, 48hr delivery. built [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com). DM me what you need`,
   `python dev available this week. i build websites, automation bots, scrapers, AI integrations. flat fee, 48 hour turnaround. DM me a scope`,
   `this is exactly what i do. python and node.js developer in LA. websites, scrapers, bots, AI integrations, 48hr delivery, flat fee. $500 websites, $800 automation. DM me`,
   `available for this. python dev, LA based. built live production tools including a google maps SaaS and automation pipelines. flat fee, 48hr delivery. DM me what you need built`,
 ];
 const MAPZAP_COMMENTS = [
-  `this might help — built [mapzap.org](https://mapzap.org), pulls 100 local business leads from Google Maps in 60 seconds as a CSV. name, phone, address, website. $49/month unlimited searches, free preview no card needed`,
-  `built something for exactly this — [mapzap.org](https://mapzap.org) scrapes 100 local businesses from Google Maps in 60 seconds. type a niche and city, get a CSV instantly. $49/month unlimited, free preview available`,
+  `this might help. built [mapzap.org](https://mapzap.org), pulls 100 local business leads from Google Maps in 60 seconds as a CSV. name, phone, address, website. $49/month unlimited searches, free preview no card needed`,
+  `built something for exactly this. [mapzap.org](https://mapzap.org) scrapes 100 local businesses from Google Maps in 60 seconds. type a niche and city, get a CSV instantly. $49/month unlimited, free preview available`,
   `[mapzap.org](https://mapzap.org) might solve this. pulls 100 local business leads in 60 seconds from Google Maps. CSV with name, phone, address, website. $49/month unlimited searches, free to try first`,
-  `i built a tool for this — [mapzap.org](https://mapzap.org). type any business type and city, get 100 leads as a CSV in 60 seconds. $49/month unlimited, no card needed for preview`,
+  `i built a tool for this. [mapzap.org](https://mapzap.org). type any business type and city, get 100 leads as a CSV in 60 seconds. $49/month unlimited, no card needed for preview`,
   `built [mapzap.org](https://mapzap.org) for this exact problem. 100 local business leads from Google Maps in 60 seconds as a downloadable CSV. $49/month unlimited searches, free preview available`,
 ];
 const CALLDONE_COMMENTS = [
-  `this might help — built [calldone.org](https://calldone.org), an AI receptionist that answers every call to your business 24/7. handles FAQs, captures leads, texts you a summary after each call. $500/month, live in 48hrs. call the demo: (563) 287-1146`,
+  `this might help. built [calldone.org](https://calldone.org), an AI receptionist that answers every call to your business 24/7. handles FAQs, captures leads, texts you a summary after each call. $500/month, live in 48hrs. call the demo: (563) 287-1146`,
   `calldone.org might solve this. AI receptionist that answers your business calls 24/7, handles questions, captures caller info, texts you instantly. $500/month no setup fee. hear it live: (563) 287-1146`,
   `built [calldone.org](https://calldone.org) for exactly this. AI answers every call 24/7, trained on your business, sounds like a real person. $500/month, cancel anytime, live in 48 hours. demo: (563) 287-1146`,
-  `i built an AI receptionist that handles this — [calldone.org](https://calldone.org). answers every call 24/7, captures leads, books appointments, texts you a summary. $500/month no contracts. call (563) 287-1146 to hear it`,
+  `i built an AI receptionist that handles this. [calldone.org](https://calldone.org). answers every call 24/7, captures leads, books appointments, texts you a summary. $500/month no contracts. call (563) 287-1146 to hear it`,
 ];
 const AGENCYHIRE_COMMENTS = [
-  `i automate exactly this — built an outreach system that sends 1000+ targeted messages per day across Reddit, Facebook, Discord, and X to your ideal clients. deploy it on your agency in 48 hours for $1,500 flat. $500/month retainer after. proof: [mapzap.org](https://mapzap.org). DM me`,
-  `this is solvable with automation — i run an outreach stack that hits Reddit, Facebook, Discord, and X simultaneously. 1000+ messages per day to verified buyers in your niche. $1,500 setup, 48hr delivery, $500/month retainer. https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
-  `built an automated outreach system for exactly this — Reddit DMs, Facebook group comments, Discord posts, X replies, all 24/7 targeting your niche. $1,500 flat to set up, $500/month to maintain. works while you sleep. DM me a scope`,
-  `scale your agency outreach without hiring — i deploy a full automated system on your accounts. Reddit, Facebook, Discord, X. 1000+ targeted messages per day. $1,500 flat, $500/month retainer. proof: [mapzap.org](https://mapzap.org). https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
+  `i automate exactly this. built an outreach system that sends 1000+ targeted messages per day across Reddit, Facebook, Discord, and X to your ideal clients. deploy it on your agency in 48 hours for $1,500 flat. $500/month retainer after. proof: [mapzap.org](https://mapzap.org). DM me`,
+  `this is solvable with automation. i run an outreach stack that hits Reddit, Facebook, Discord, and X simultaneously. 1000+ messages per day to verified buyers in your niche. $1,500 setup, 48hr delivery, $500/month retainer. https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
+  `built an automated outreach system for exactly this. Reddit DMs, Facebook group comments, Discord posts, X replies, all 24/7 targeting your niche. $1,500 flat to set up, $500/month to maintain. works while you sleep. DM me a scope`,
+  `scale your agency outreach without hiring. i deploy a full automated system on your accounts. Reddit, Facebook, Discord, X. 1000+ targeted messages per day. $1,500 flat, $500/month retainer. proof: [mapzap.org](https://mapzap.org). https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
+];
+const AUTOSUB_COMMENTS = [
+  `this might help. built [AutoSub](https://autosub.mooo.com), it automates your Reddit outreach. connect your Reddit account, set your keywords and offer, it finds people posting about needing what you sell and DMs them automatically 24/7. $47/month, cancel anytime`,
+  `built something for exactly this. [AutoSub](https://autosub.mooo.com) scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. 200+ targeted messages per day, live dashboard. $47/month at autosub.mooo.com`,
+  `AutoSub solves this. you connect your Reddit account, set your offer and target keywords, it runs 24/7 finding buyers and DMing them automatically. $47/month. autosub.mooo.com`,
+  `i built [AutoSub](https://autosub.mooo.com) for this. automated Reddit DM outreach. set it up once and it finds people looking for what you sell and messages them automatically. $47/month, no setup fee`,
 ];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -110,61 +116,54 @@ async function runCycle() {
   const commented = loadCommented();
   let commentsThisCycle = 0;
   const SUB_TARGETS = [
-    { sub: "forhire", type: "DEVHIRE" },
-    { sub: "slavelabour", type: "DEVHIRE" },
-    { sub: "jobbit", type: "DEVHIRE" },
-    { sub: "WorkOnline", type: "DEVHIRE" },
-    { sub: "freelance_forhire", type: "DEVHIRE" },
-    { sub: "PythonJobs", type: "DEVHIRE" },
-    { sub: "webdevjobs", type: "DEVHIRE" },
-    { sub: "hireadev", type: "DEVHIRE" },
     { sub: "Jobs4Bitcoins", type: "DEVHIRE" },
-    { sub: "RemoteWork", type: "DEVHIRE" },
-    { sub: "digitalnomad", type: "DEVHIRE" },
-    { sub: "freelancing", type: "DEVHIRE" },
-    { sub: "agency", type: "MAPZAP" },
-    { sub: "cold_email", type: "MAPZAP" },
-    { sub: "coldemail", type: "MAPZAP" },
-    { sub: "leadgeneration", type: "MAPZAP" },
-    { sub: "sales", type: "MAPZAP" },
-    { sub: "smallbusiness", type: "MAPZAP" },
-    { sub: "Entrepreneur", type: "MAPZAP" },
-    { sub: "EntrepreneurRideAlong", type: "MAPZAP" },
-    { sub: "sweatystartup", type: "MAPZAP" },
+    { sub: "PythonJobs", type: "DEVHIRE" },
+    { sub: "remotepython", type: "DEVHIRE" },
+    { sub: "programmingJobs", type: "DEVHIRE" },
+    { sub: "cscareerquestions", type: "DEVHIRE" },
+    { sub: "experienceddevs", type: "DEVHIRE" },
+    { sub: "reactjs", type: "DEVHIRE" },
+    { sub: "django", type: "DEVHIRE" },
+    { sub: "node", type: "DEVHIRE" },
+    { sub: "learnpython", type: "DEVHIRE" },
     { sub: "growmybusiness", type: "MAPZAP" },
-    { sub: "digital_marketing", type: "MAPZAP" },
-    { sub: "marketing", type: "MAPZAP" },
-    { sub: "realtors", type: "MAPZAP" },
-    { sub: "InsuranceAgents", type: "MAPZAP" },
-    { sub: "msp", type: "MAPZAP" },
-    { sub: "smallbusiness", type: "CALLDONE" },
-    { sub: "Entrepreneur", type: "CALLDONE" },
-    { sub: "realtors", type: "CALLDONE" },
-    { sub: "InsuranceAgents", type: "CALLDONE" },
-    { sub: "EntrepreneurRideAlong", type: "CALLDONE" },
-    { sub: "sweatystartup", type: "CALLDONE" },
-    { sub: "Plumbing", type: "CALLDONE" },
-    { sub: "HVAC", type: "CALLDONE" },
-    { sub: "Landscaping", type: "CALLDONE" },
-    { sub: "HomeImprovement", type: "CALLDONE" },
-    { sub: "agency", type: "CALLDONE" },
-    { sub: "agency", type: "AGENCYHIRE" },
-    { sub: "digital_marketing", type: "AGENCYHIRE" },
+    { sub: "microsaas", type: "MAPZAP" },
+    { sub: "b2bsales", type: "MAPZAP" },
+    { sub: "Emailmarketing", type: "MAPZAP" },
+    { sub: "socialmediamarketing", type: "MAPZAP" },
+    { sub: "PPC", type: "MAPZAP" },
+    { sub: "Mortgages", type: "MAPZAP" },
+    { sub: "FulfillmentByAmazon", type: "MAPZAP" },
+    { sub: "Flipping", type: "MAPZAP" },
+    { sub: "reselling", type: "MAPZAP" },
+    { sub: "juststart", type: "MAPZAP" },
+    { sub: "saas", type: "MAPZAP" },
+    { sub: "indiebiz", type: "MAPZAP" },
+    { sub: "nocode", type: "MAPZAP" },
+    { sub: "sideproject", type: "MAPZAP" },
+    { sub: "restaurantowners", type: "CALLDONE" },
+    { sub: "salons", type: "CALLDONE" },
+    { sub: "autorepair", type: "CALLDONE" },
+    { sub: "acupuncture", type: "CALLDONE" },
     { sub: "PPC", type: "AGENCYHIRE" },
-    { sub: "Entrepreneur", type: "AGENCYHIRE" },
-    { sub: "EntrepreneurRideAlong", type: "AGENCYHIRE" },
-    { sub: "marketing", type: "AGENCYHIRE" },
-    { sub: "b2bmarketing", type: "AGENCYHIRE" },
     { sub: "socialmediamarketing", type: "AGENCYHIRE" },
-    { sub: "Affiliatemarketing", type: "AGENCYHIRE" },
-    { sub: "startups", type: "AGENCYHIRE" },
     { sub: "microsaas", type: "AGENCYHIRE" },
-    { sub: "automation", type: "AGENCYHIRE" },
-    { sub: "sales", type: "AGENCYHIRE" },
     { sub: "b2bsales", type: "AGENCYHIRE" },
-    { sub: "leadgeneration", type: "AGENCYHIRE" },
-    { sub: "consulting", type: "AGENCYHIRE" },
-    { sub: "msp", type: "AGENCYHIRE" },
+    { sub: "growmybusiness", type: "AGENCYHIRE" },
+    { sub: "saas", type: "AGENCYHIRE" },
+    { sub: "indiebiz", type: "AGENCYHIRE" },
+    { sub: "juststart", type: "AGENCYHIRE" },
+    { sub: "microsaas", type: "AUTOSUB" },
+    { sub: "saas", type: "AUTOSUB" },
+    { sub: "indiebiz", type: "AUTOSUB" },
+    { sub: "sideproject", type: "AUTOSUB" },
+    { sub: "nocode", type: "AUTOSUB" },
+    { sub: "growmybusiness", type: "AUTOSUB" },
+    { sub: "juststart", type: "AUTOSUB" },
+    { sub: "b2bsales", type: "AUTOSUB" },
+    { sub: "socialmediamarketing", type: "AUTOSUB" },
+    { sub: "Emailmarketing", type: "AUTOSUB" },
+    { sub: "PPC", type: "AUTOSUB" },
   ];
   const seen = new Map();
   for (const item of SUB_TARGETS) {
@@ -207,13 +206,14 @@ async function runCycle() {
         if (type === "DEVHIRE") commentText = pick(DEVHIRE_COMMENTS);
         else if (type === "CALLDONE") commentText = pick(CALLDONE_COMMENTS);
         else if (type === "AGENCYHIRE") commentText = pick(AGENCYHIRE_COMMENTS);
+        else if (type === "AUTOSUB") commentText = pick(AUTOSUB_COMMENTS);
         else commentText = pick(MAPZAP_COMMENTS);
         try {
           await post.reply(commentText);
           commented[postId] = new Date().toISOString();
           saveCommented(commented);
           commentsThisCycle++;
-          log("COMMENTED", `r/${subName} [${type}] — "${titleLower.substring(0, 60)}"`);
+          log("COMMENTED", `r/${subName} [${type}] "${titleLower.substring(0, 60)}"`);
           log("INFO", `${commentsThisCycle}/${MAX_COMMENTS_PER_CYCLE} comments. Waiting ${Math.round(MIN_DELAY_MS/60000)} to ${Math.round(MAX_DELAY_MS/60000)}min...`);
           await sleep(rand(MIN_DELAY_MS, MAX_DELAY_MS));
         } catch (err) {

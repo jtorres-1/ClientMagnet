@@ -1,4 +1,4 @@
-// agency_bot.cjs -- ClientMagnet MapZap + DevHire + CallDone + AgencyHire Outreach
+// agency_bot.cjs -- ClientMagnet MapZap + DevHire + CallDone + AgencyHire + AutoSub Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -136,15 +136,32 @@ const AGENCYHIRE_MESSAGES = [
   }
 ];
 
+const AUTOSUB_MESSAGES = [
+  {
+    id: "AS_1",
+    text: `saw your post and thought this might help\n\ni built AutoSub -- it finds people on Reddit who need what you sell and DMs them automatically 24/7. you set your offer and keywords once, it runs forever.\n\n$47/month, live in 48 hours. try it free at autosub.mooo.com`
+  },
+  {
+    id: "AS_2",
+    text: `not sure if this helps but i built a tool called AutoSub for exactly this\n\nit scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. runs 24/7 while you sleep. 200+ targeted messages per day.\n\n$47/month, no setup fee. autosub.mooo.com`
+  },
+  {
+    id: "AS_3",
+    text: `this might solve your outreach problem\n\nAutoSub finds people on Reddit actively looking for what you sell and DMs them automatically. you connect your Reddit account, set your keywords and offer, it runs 24/7.\n\n$47/month, cancel anytime. autosub.mooo.com`
+  }
+];
+
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
   const sub = (p.subreddit || "").toLowerCase();
   const product = (p.product || "MAPZAP").toUpperCase();
   if (product === "AGENCYHIRE") score += 20;
+  if (product === "AUTOSUB") score += 18;
   if (product === "DEVHIRE") score += 15;
   if (product === "CALLDONE") score += 12;
   if (p.leadType === "AGENCYHIRE_INTENT") score += 15;
+  if (p.leadType === "AUTOSUB_INTENT") score += 14;
   if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
   else if (p.leadType === "CALLDONE_OWNER") score += 10;
   else if (p.leadType === "HIGH_INTENT") score += 7;
@@ -155,10 +172,12 @@ function scoreLead(p) {
   if (/looking for (a |an )?(developer|dev|programmer)/.test(t)) score += 8;
   if (/missed calls|missing calls|answering service|receptionist/.test(t)) score += 8;
   if (/agency|smma|scale my agency|get clients for my agency/.test(t)) score += 10;
+  if (/automate|outreach|dms|reddit marketing/.test(t)) score += 10;
   if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
   if (["forhire","slavelabour","jobs4bitcoins","WorkOnline","HireaWriter"].includes(sub)) score += 5;
   if (["sales","b2bsales","coldemail","coldcalling","leadgeneration","smallbusiness","realtors"].includes(sub)) score += 5;
   if (["agency","digital_marketing","PPC","Entrepreneur","Affiliatemarketing"].includes(sub)) score += 8;
+  if (["Entrepreneur","agency","Freelance","smallbusiness","marketing"].includes(sub)) score += 6;
   return score;
 }
 
@@ -203,6 +222,9 @@ async function runOutreachCycle() {
     if (product === "AGENCYHIRE") {
       tpl = pick(AGENCYHIRE_MESSAGES);
       subject = "automated outreach system for your agency";
+    } else if (product === "AUTOSUB") {
+      tpl = pick(AUTOSUB_MESSAGES);
+      subject = "automate your Reddit outreach";
     } else if (product === "DEVHIRE") {
       tpl = pick(DEVHIRE_MESSAGES);
       subject = "dev for hire";
@@ -280,7 +302,7 @@ async function checkInbox() {
 
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet -- MapZap + DevHire + CallDone + AgencyHire Outreach Bot");
+  console.log("ClientMagnet -- MapZap + DevHire + CallDone + AgencyHire + AutoSub Outreach Bot");
   console.log("=".repeat(60));
   setInterval(checkInbox, INBOX_POLL_MS);
   while (true) {

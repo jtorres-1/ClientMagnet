@@ -136,25 +136,34 @@ const CALLDONE_QUERIES = [
   "I can't hire a receptionist",
 ];
 
+const AUTOSUB_QUERIES = [
+  "I need to automate my outreach",
+  "how do I get more clients on Reddit",
+  "cold outreach not working",
+  "I spend too much time on outreach",
+  "looking for outreach automation",
+  "how to automate Reddit marketing",
+  "need to scale my outreach",
+  "how to send more DMs",
+  "agency owner need more clients",
+  "I need to automate my marketing",
+  "how to get clients on Reddit",
+  "Reddit outreach strategy",
+  "automate lead generation",
+  "I need more leads fast",
+];
+
 const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|i am available|i('m| am) a (developer|designer|programmer|dev)|offering my services|available for hire|hire me|my rates|i build websites|i develop websites|i create websites|i code for|check out my work|starting at \$)\b/i;
-
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become)\b/i;
-
 const spamRegex = /\b(buy now|limited offer|discount code|promo code|affiliate link)\b/i;
-
 const highIntentRegex = /\b(need leads|need more leads|where (do i|can i) (find|get) leads|how (do i|to) get (more )?(leads|clients|customers)|looking for leads|finding leads|lead source|buy leads|purchase leads|lead list|lead database|list of (businesses|contacts|clients)|build a list|prospect list|contact list|where to find (businesses|clients|customers|prospects)|how to find (businesses|clients|customers|prospects)|outreach list|cold list|email list of|phone list|scraping (leads|businesses|contacts)|data for outreach|getting clients|acquire clients|find (local |new |more )?(clients|customers|businesses)|generate leads|lead generation (tool|software|service))\b/i;
-
 const mediumIntentRegex = /\b(struggling to get clients|can't find clients|hard to find customers|need more business|grow my (business|agency|practice)|scale my (business|agency)|client acquisition|new clients|outreach strategy|cold outreach|prospecting strategy|building a pipeline|sales pipeline)\b/i;
-
 const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|marketer|realtor|agent|broker)\b/i;
-
 const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|someone to build|someone who can build|someone to fix|someone to code|someone to create|someone to automate)|want (a |an )?(developer|dev|programmer)|searching for (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make|fix|automate)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made|fixed|automated)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|need a (bot|scraper|tool|dashboard|app|site|website|extension|integration|api|mvp|saas) built)\b/i;
-
 const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know)\b/i;
-
 const callDoneIntentRegex = /\b(miss(ing)? calls|missed calls|can't answer|cannot answer|don't answer|no one answers|after hours calls|answering service|virtual receptionist|phone answering|call answering|receptionist for my|need someone to answer|calls go to voicemail|losing customers|lose customers|missed call|unanswered calls|phone coverage|24.7 answering|always available)\b/i;
-
 const agencyHireRegex = /\b(my agency|my smma|our agency|run an agency|own an agency|digital agency|marketing agency|outreach agency|scale my agency|grow my agency|get clients for my agency|agency clients|smma clients|automate outreach|client acquisition for agency|agency fulfillment|agency owner)\b/i;
+const autoSubIntentRegex = /\b(automate (my )?(outreach|dms|messaging|marketing)|Reddit (outreach|dms|marketing)|outreach automation|too much time (on|doing) outreach|scale (my )?(outreach|dms)|send more (dms|messages)|automated (dms|outreach|messages)|get (more )?clients (on|from|via) Reddit|cold outreach (not working|strategy|tips)|lead generation (automation|tool)|automate lead gen)\b/i;
 
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
@@ -211,6 +220,16 @@ function classify(post, forceProduct) {
     const triggerMatch = combined.match(callDoneIntentRegex)?.[0] || "missed calls";
     const type = isOwner ? "CALLDONE_OWNER" : "CALLDONE_INTENT";
     return { type, trigger: triggerMatch, product: "CALLDONE" };
+  }
+
+  if (forceProduct === "AUTOSUB") {
+    const hasAutoSubIntent = autoSubIntentRegex.test(combined);
+    const hasMedIntent = mediumIntentRegex.test(combined);
+    if (!hasAutoSubIntent && !hasMedIntent) return null;
+    const isFirstPerson = firstPersonBuyerRegex.test(combined);
+    if (!isFirstPerson) return null;
+    const triggerMatch = combined.match(autoSubIntentRegex)?.[0] || "outreach";
+    return { type: "AUTOSUB_INTENT", trigger: triggerMatch, product: "AUTOSUB" };
   }
 
   return null;
@@ -271,6 +290,7 @@ async function scrape() {
   leads += await searchGlobal(MAPZAP_QUERIES, "MAPZAP");
   leads += await searchGlobal(CALLDONE_QUERIES, "CALLDONE");
   leads += await searchGlobal(AGENCYHIRE_QUERIES, "AGENCYHIRE");
+  leads += await searchGlobal(AUTOSUB_QUERIES, "AUTOSUB");
   console.log(`Scrape complete -- leads found: ${leads}`);
 }
 
@@ -280,4 +300,3 @@ async function scrape() {
     await wait(5 * 60 * 1000);
   }
 })();
-

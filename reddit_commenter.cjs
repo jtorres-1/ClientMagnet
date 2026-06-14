@@ -58,36 +58,36 @@ const FOR_HIRE_BLOCK = [
   "review:","i used it","my results","30 days","i tested","vs ",
 ];
 const DEVHIRE_COMMENTS = [
-  `python dev in LA here. i build websites, scrapers, automation bots, and AI integrations. flat fee, 48 hour delivery. recent work: [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com). DM me a scope`,
-  `i can help with this. python developer in LA, available now. websites, scrapers, bots, AI integrations. flat fee only, 48hr delivery. built [mapzap.org](https://mapzap.org) and [claudiascleaningla.com](https://claudiascleaningla.com). DM me what you need`,
+  `python dev in LA here. i build websites, scrapers, automation bots, and AI integrations. flat fee, 48 hour delivery. recent work: [mapzap.org]([mapzap.org](https://mapzap.org)) and [claudiascleaningla.com]([claudiascleaningla.com](https://claudiascleaningla.com)). DM me a scope`,
+  `i can help with this. python developer in LA, available now. websites, scrapers, bots, AI integrations. flat fee only, 48hr delivery. built [mapzap.org]([mapzap.org](https://mapzap.org)) and [claudiascleaningla.com]([claudiascleaningla.com](https://claudiascleaningla.com)). DM me what you need`,
   `python dev available this week. i build websites, automation bots, scrapers, AI integrations. flat fee, 48 hour turnaround. DM me a scope`,
   `this is exactly what i do. python and node.js developer in LA. websites, scrapers, bots, AI integrations, 48hr delivery, flat fee. $500 websites, $800 automation. DM me`,
   `available for this. python dev, LA based. built live production tools including a google maps SaaS and automation pipelines. flat fee, 48hr delivery. DM me what you need built`,
 ];
 const MAPZAP_COMMENTS = [
-  `this might help. built [mapzap.org](https://mapzap.org), pulls 100 local business leads from Google Maps in 60 seconds as a CSV. name, phone, address, website. $49/month unlimited searches, free preview no card needed`,
-  `built something for exactly this. [mapzap.org](https://mapzap.org) scrapes 100 local businesses from Google Maps in 60 seconds. type a niche and city, get a CSV instantly. $49/month unlimited, free preview available`,
-  `[mapzap.org](https://mapzap.org) might solve this. pulls 100 local business leads in 60 seconds from Google Maps. CSV with name, phone, address, website. $49/month unlimited searches, free to try first`,
-  `i built a tool for this. [mapzap.org](https://mapzap.org). type any business type and city, get 100 leads as a CSV in 60 seconds. $49/month unlimited, no card needed for preview`,
-  `built [mapzap.org](https://mapzap.org) for this exact problem. 100 local business leads from Google Maps in 60 seconds as a downloadable CSV. $49/month unlimited searches, free preview available`,
+  `this might help. built [mapzap.org]([mapzap.org](https://mapzap.org)), pulls 100 local business leads from Google Maps in 60 seconds as a CSV. name, phone, address, website. $49/month unlimited searches, free preview no card needed`,
+  `built something for exactly this. [mapzap.org]([mapzap.org](https://mapzap.org)) scrapes 100 local businesses from Google Maps in 60 seconds. type a niche and city, get a CSV instantly. $49/month unlimited, free preview available`,
+  `[mapzap.org]([mapzap.org](https://mapzap.org)) might solve this. pulls 100 local business leads in 60 seconds from Google Maps. CSV with name, phone, address, website. $49/month unlimited searches, free to try first`,
+  `i built a tool for this. [mapzap.org]([mapzap.org](https://mapzap.org)). type any business type and city, get 100 leads as a CSV in 60 seconds. $49/month unlimited, no card needed for preview`,
+  `built [mapzap.org]([mapzap.org](https://mapzap.org)) for this exact problem. 100 local business leads from Google Maps in 60 seconds as a downloadable CSV. $49/month unlimited searches, free preview available`,
 ];
 const CALLDONE_COMMENTS = [
-  `this might help. built [calldone.org](https://calldone.org), an AI receptionist that answers every call to your business 24/7. handles FAQs, captures leads, texts you a summary after each call. $500/month, live in 48hrs. call the demo: (563) 287-1146`,
+  `this might help. built [calldone.org]([calldone.org](https://calldone.org)), an AI receptionist that answers every call to your business 24/7. handles FAQs, captures leads, texts you a summary after each call. $500/month, live in 48hrs. call the demo: (563) 287-1146`,
   `calldone.org might solve this. AI receptionist that answers your business calls 24/7, handles questions, captures caller info, texts you instantly. $500/month no setup fee. hear it live: (563) 287-1146`,
-  `built [calldone.org](https://calldone.org) for exactly this. AI answers every call 24/7, trained on your business, sounds like a real person. $500/month, cancel anytime, live in 48 hours. demo: (563) 287-1146`,
-  `i built an AI receptionist that handles this. [calldone.org](https://calldone.org). answers every call 24/7, captures leads, books appointments, texts you a summary. $500/month no contracts. call (563) 287-1146 to hear it`,
+  `built [calldone.org]([calldone.org](https://calldone.org)) for exactly this. AI answers every call 24/7, trained on your business, sounds like a real person. $500/month, cancel anytime, live in 48 hours. demo: (563) 287-1146`,
+  `i built an AI receptionist that handles this. [calldone.org]([calldone.org](https://calldone.org)). answers every call 24/7, captures leads, books appointments, texts you a summary. $500/month no contracts. call (563) 287-1146 to hear it`,
 ];
 const AGENCYHIRE_COMMENTS = [
-  `i automate exactly this. built an outreach system that sends 1000+ targeted messages per day across Reddit, Facebook, Discord, and X to your ideal clients. deploy it on your agency in 48 hours for $1,500 flat. $500/month retainer after. proof: [mapzap.org](https://mapzap.org). DM me`,
+  `i automate exactly this. built an outreach system that sends 1000+ targeted messages per day across Reddit, Facebook, Discord, and X to your ideal clients. deploy it on your agency in 48 hours for $1,500 flat. $500/month retainer after. proof: [mapzap.org]([mapzap.org](https://mapzap.org)). DM me`,
   `this is solvable with automation. i run an outreach stack that hits Reddit, Facebook, Discord, and X simultaneously. 1000+ messages per day to verified buyers in your niche. $1,500 setup, 48hr delivery, $500/month retainer. https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
   `built an automated outreach system for exactly this. Reddit DMs, Facebook group comments, Discord posts, X replies, all 24/7 targeting your niche. $1,500 flat to set up, $500/month to maintain. works while you sleep. DM me a scope`,
-  `scale your agency outreach without hiring. i deploy a full automated system on your accounts. Reddit, Facebook, Discord, X. 1000+ targeted messages per day. $1,500 flat, $500/month retainer. proof: [mapzap.org](https://mapzap.org). https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
+  `scale your agency outreach without hiring. i deploy a full automated system on your accounts. Reddit, Facebook, Discord, X. 1000+ targeted messages per day. $1,500 flat, $500/month retainer. proof: [mapzap.org]([mapzap.org](https://mapzap.org)). https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
 ];
 const AUTOSUB_COMMENTS = [
-  `this might help. built [AutoSub](https://autosub.online), it automates your Reddit outreach. connect your Reddit account, set your keywords and offer, it finds people posting about needing what you sell and DMs them automatically 24/7. $47/month, cancel anytime`,
-  `built something for exactly this. [AutoSub](https://autosub.online) scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. 200+ targeted messages per day, live dashboard. $47/month at autosub.online`,
-  `AutoSub solves this. you connect your Reddit account, set your offer and target keywords, it runs 24/7 finding buyers and DMing them automatically. $47/month. autosub.online`,
-  `i built [AutoSub](https://autosub.online) for this. automated Reddit DM outreach. set it up once and it finds people looking for what you sell and messages them automatically. $47/month, no setup fee`,
+  `this might help. built [AutoSub]([autosub.online](https://autosub.online)), it automates your Reddit outreach. connect your Reddit account, set your keywords and offer, it finds people posting about needing what you sell and DMs them automatically 24/7. $47/month, cancel anytime`,
+  `built something for exactly this. [AutoSub]([autosub.online](https://autosub.online)) scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. 200+ targeted messages per day, live dashboard. $47/month at [autosub.online](https://autosub.online)`,
+  `AutoSub solves this. you connect your Reddit account, set your offer and target keywords, it runs 24/7 finding buyers and DMing them automatically. $47/month. [autosub.online](https://autosub.online)`,
+  `i built [AutoSub]([autosub.online](https://autosub.online)) for this. automated Reddit DM outreach. set it up once and it finds people looking for what you sell and messages them automatically. $47/month, no setup fee`,
 ];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -240,7 +240,7 @@ async function runCycle() {
 }
 (async () => {
   console.log("=".repeat(60));
-  console.log("RedditCommenter -- Global Comment Bot");
+  console.log("RedditCommenter Global Comment Bot");
   console.log("=".repeat(60));
   while (true) {
     await runCycle();

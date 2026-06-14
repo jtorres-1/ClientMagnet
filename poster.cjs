@@ -129,7 +129,7 @@ MapZap pulls 100 local businesses from Google Maps in about 60 seconds. Type a b
 
 $49 per month, unlimited searches. Free preview before you pay, no card required.
 
-https://mapzap.org
+[mapzap.org](https://mapzap.org)
 
 Happy to answer questions.`
   },
@@ -143,7 +143,7 @@ Use cases: cold callers, agencies building client lists, freelancers finding loc
 
 $49 per month, unlimited searches. Try 5 leads free first.
 
-https://mapzap.org`
+[mapzap.org](https://mapzap.org)`
   },
   {
     title: "MapZap pulls 100 local business leads from Google Maps in 60 seconds, $49/month unlimited searches",
@@ -153,7 +153,7 @@ You type a business type and city, it hits Google Maps and returns 100 businesse
 
 $49 per month gets you unlimited searches.
 
-Free preview with no credit card: https://mapzap.org`
+Free preview with no credit card: [mapzap.org](https://mapzap.org)`
   },
 ];
 
@@ -170,7 +170,7 @@ Call the demo line right now and hear it yourself: (563) 287-1146
 
 $500 per month. No setup fee. Live in 48 hours. Cancel anytime.
 
-https://calldone.org`
+[calldone.org](https://calldone.org)`
   },
   {
     title: "Every missed call is a customer going to your competitor, built a fix for that",
@@ -182,7 +182,7 @@ Call (563) 287-1146 to hear the demo.
 
 No setup fee. $500 per month. Live in 48 hours or less.
 
-https://calldone.org`
+[calldone.org](https://calldone.org)`
   },
 ];
 
@@ -193,7 +193,7 @@ const AGENCYHIRE_POSTS = [
 
 I built a 7-channel automated outreach system that runs 24/7 across Reddit, Facebook, Discord, and X. It finds people actively looking for your service and messages them automatically. 1000+ targeted contacts per day.
 
-I use it for my own products and it works. Proof: https://mapzap.org built and marketed entirely with this system.
+I use it for my own products and it works. Proof: [mapzap.org](https://mapzap.org) built and marketed entirely with this system.
 
 Taking 2 clients this week to deploy the full stack on their accounts. 48 hour setup. $1,500 flat fee, $500/month retainer after that.
 
@@ -205,7 +205,7 @@ DM me if you want to see exactly how it works. Deposit to get started: https://b
 
 I built an automated system that handles it entirely. Finds buyers in your niche, messages them across 4 platforms simultaneously, runs while you sleep.
 
-Deployed on my own products: https://mapzap.org
+Deployed on my own products: [mapzap.org](https://mapzap.org)
 
 Setup: $1,500 flat, 48 hour delivery. Monthly retainer: $500 to keep it running and optimized.
 
@@ -224,7 +224,7 @@ I built AutoSub. You connect your Reddit account, set your offer and target keyw
 
 Runs 24/7. Live dashboard showing DMs sent and replies received. Cancel anytime.
 
-$47 per month. autosub.online`
+$47 per month. [autosub.online](https://autosub.online)`
   },
   {
     title: "Stop doing Reddit DM outreach manually, built a tool that does it automatically",
@@ -234,7 +234,7 @@ Built AutoSub to fix it. It scrapes Reddit globally for posts matching your buye
 
 Works for any niche. Agency owners, freelancers, SaaS founders, service businesses.
 
-$47 per month at autosub.online`
+$47 per month at [autosub.online](https://autosub.online)`
   },
   {
     title: "AutoSub, automated Reddit DM outreach, connect your account, set keywords, it runs 24/7",
@@ -244,7 +244,7 @@ AutoSub finds people actively posting about needing what you sell and DMs them a
 
 200+ targeted DMs per day. Live dashboard. Pause anytime.
 
-$47 per month. autosub.online`
+$47 per month. [autosub.online](https://autosub.online)`
   },
 ];
 
@@ -380,7 +380,7 @@ async function runCycle() {
 
 (async () => {
   console.log("=".repeat(60));
-  console.log("RedditPoster -- Daily Sub Poster");
+  console.log("RedditPoster Daily Sub Poster");
   console.log("=".repeat(60));
 
   while (true) {

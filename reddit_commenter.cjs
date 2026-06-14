@@ -84,10 +84,10 @@ const AGENCYHIRE_COMMENTS = [
   `scale your agency outreach without hiring. i deploy a full automated system on your accounts. Reddit, Facebook, Discord, X. 1000+ targeted messages per day. $1,500 flat, $500/month retainer. proof: [mapzap.org](https://mapzap.org). https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d`,
 ];
 const AUTOSUB_COMMENTS = [
-  `this might help. built [AutoSub](https://autosub.mooo.com), it automates your Reddit outreach. connect your Reddit account, set your keywords and offer, it finds people posting about needing what you sell and DMs them automatically 24/7. $47/month, cancel anytime`,
-  `built something for exactly this. [AutoSub](https://autosub.mooo.com) scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. 200+ targeted messages per day, live dashboard. $47/month at autosub.mooo.com`,
-  `AutoSub solves this. you connect your Reddit account, set your offer and target keywords, it runs 24/7 finding buyers and DMing them automatically. $47/month. autosub.mooo.com`,
-  `i built [AutoSub](https://autosub.mooo.com) for this. automated Reddit DM outreach. set it up once and it finds people looking for what you sell and messages them automatically. $47/month, no setup fee`,
+  `this might help. built [AutoSub](https://autosub.online), it automates your Reddit outreach. connect your Reddit account, set your keywords and offer, it finds people posting about needing what you sell and DMs them automatically 24/7. $47/month, cancel anytime`,
+  `built something for exactly this. [AutoSub](https://autosub.online) scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. 200+ targeted messages per day, live dashboard. $47/month at autosub.online`,
+  `AutoSub solves this. you connect your Reddit account, set your offer and target keywords, it runs 24/7 finding buyers and DMing them automatically. $47/month. autosub.online`,
+  `i built [AutoSub](https://autosub.online) for this. automated Reddit DM outreach. set it up once and it finds people looking for what you sell and messages them automatically. $47/month, no setup fee`,
 ];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;

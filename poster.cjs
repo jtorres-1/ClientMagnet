@@ -224,7 +224,7 @@ I built AutoSub. You connect your Reddit account, set your offer and target keyw
 
 Runs 24/7. Live dashboard showing DMs sent and replies received. Cancel anytime.
 
-$47 per month. autosub.mooo.com`
+$47 per month. autosub.online`
   },
   {
     title: "Stop doing Reddit DM outreach manually, built a tool that does it automatically",
@@ -234,7 +234,7 @@ Built AutoSub to fix it. It scrapes Reddit globally for posts matching your buye
 
 Works for any niche. Agency owners, freelancers, SaaS founders, service businesses.
 
-$47 per month at autosub.mooo.com`
+$47 per month at autosub.online`
   },
   {
     title: "AutoSub, automated Reddit DM outreach, connect your account, set keywords, it runs 24/7",
@@ -244,7 +244,7 @@ AutoSub finds people actively posting about needing what you sell and DMs them a
 
 200+ targeted DMs per day. Live dashboard. Pause anytime.
 
-$47 per month. autosub.mooo.com`
+$47 per month. autosub.online`
   },
 ];
 

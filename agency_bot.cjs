@@ -139,15 +139,15 @@ const AGENCYHIRE_MESSAGES = [
 const AUTOSUB_MESSAGES = [
   {
     id: "AS_1",
-    text: `saw your post and thought this might help\n\ni built AutoSub -- it finds people on Reddit who need what you sell and DMs them automatically 24/7. you set your offer and keywords once, it runs forever.\n\n$47/month, live in 48 hours. try it free at autosub.mooo.com`
+    text: `saw your post and thought this might help\n\ni built AutoSub -- it finds people on Reddit who need what you sell and DMs them automatically 24/7. you set your offer and keywords once, it runs forever.\n\n$47/month, live in 48 hours. try it free at autosub.online`
   },
   {
     id: "AS_2",
-    text: `not sure if this helps but i built a tool called AutoSub for exactly this\n\nit scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. runs 24/7 while you sleep. 200+ targeted messages per day.\n\n$47/month, no setup fee. autosub.mooo.com`
+    text: `not sure if this helps but i built a tool called AutoSub for exactly this\n\nit scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. runs 24/7 while you sleep. 200+ targeted messages per day.\n\n$47/month, no setup fee. autosub.online`
   },
   {
     id: "AS_3",
-    text: `this might solve your outreach problem\n\nAutoSub finds people on Reddit actively looking for what you sell and DMs them automatically. you connect your Reddit account, set your keywords and offer, it runs 24/7.\n\n$47/month, cancel anytime. autosub.mooo.com`
+    text: `this might solve your outreach problem\n\nAutoSub finds people on Reddit actively looking for what you sell and DMs them automatically. you connect your Reddit account, set your keywords and offer, it runs 24/7.\n\n$47/month, cancel anytime. autosub.online`
   }
 ];
 

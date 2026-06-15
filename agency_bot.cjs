@@ -139,15 +139,23 @@ const AGENCYHIRE_MESSAGES = [
 const AUTOSUB_MESSAGES = [
   {
     id: "AS_1",
-    text: `saw your post and thought this might help\n\ni built AutoSub it finds people on Reddit who need what you sell and DMs them automatically 24/7. you set your offer and keywords once, it runs forever.\n\n$47/month, live in 48 hours. try it free at [autosub.online](https://autosub.online)`
+    text: `hey saw your post\n\ni built a tool that connects to your Reddit account and automatically DMs people who are looking for what you sell. you set your keywords once and it runs 24/7 while you sleep.\n\n200+ targeted DMs per day. $19.99/month. [autosub.online](https://autosub.online)`
   },
   {
     id: "AS_2",
-    text: `not sure if this helps but i built a tool called AutoSub for exactly this\n\nit scrapes Reddit globally for posts matching your buyer keywords and sends your DM automatically. runs 24/7 while you sleep. 200+ targeted messages per day.\n\n$47/month, no setup fee. [autosub.online](https://autosub.online)`
+    text: `hey quick question\n\nhow are you currently doing outreach on Reddit? i built something that automates it completely. finds posts from people actively looking for your service and DMs them for you around the clock.\n\ntakes 5 minutes to set up. $19.99/month. [autosub.online](https://autosub.online)`
   },
   {
     id: "AS_3",
-    text: `this might solve your outreach problem\n\nAutoSub finds people on Reddit actively looking for what you sell and DMs them automatically. you connect your Reddit account, set your keywords and offer, it runs 24/7.\n\n$47/month, cancel anytime. [autosub.online](https://autosub.online)`
+    text: `saw your post\n\ni built AutoSub, it connects to your Reddit account, you type in your keywords and offer once, and it finds buyers posting on Reddit and DMs them automatically 24/7.\n\nno manual work. $19.99/month. [autosub.online](https://autosub.online)`
+  },
+  {
+    id: "AS_4",
+    text: `this might help\n\nbeen using a bot i built to send 200+ targeted Reddit DMs per day on autopilot. it finds people actively posting about needing what you sell and messages them automatically.\n\n$19.99/month, cancel anytime. [autosub.online](https://autosub.online)`
+  },
+  {
+    id: "AS_5",
+    text: `hey\n\ni built a Reddit outreach tool that runs 24/7. you connect your account, set what you sell and your target keywords, and it finds buyers and DMs them automatically while you sleep.\n\n$19.99/month. [autosub.online](https://autosub.online)`
   }
 ];
 

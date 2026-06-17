@@ -98,42 +98,29 @@ const MAPZAP_QUERIES = [
   "Google Maps scraper leads",
 ];
 
-const AGENCYHIRE_QUERIES = [
-  "I need more clients for my agency",
-  "struggling to get clients for my agency",
-  "how to scale my agency",
-  "need outreach for my smma",
-  "how to automate my agency outreach",
-  "agency owner need more leads",
-  "smma struggling to find clients",
-  "how to get clients for smma",
-  "marketing agency need more customers",
-  "need to scale my marketing agency",
-  "agency outreach not working",
-  "how do i get clients for my digital agency",
-  "need help growing my agency",
-  "automate client outreach for agency",
-];
-
-const CALLDONE_QUERIES = [
-  "I keep missing calls at my business",
-  "I miss calls when I'm busy",
-  "I need someone to answer my phones",
-  "I need a receptionist for my business",
-  "my business misses too many calls",
-  "I need an answering service",
-  "I lose customers because I miss calls",
-  "I need after hours call answering",
-  "I can't answer the phone while working",
-  "I need a virtual receptionist",
-  "I need call answering for my business",
-  "my small business needs a receptionist",
-  "I miss calls when I'm on the job",
-  "customers complain I don't answer",
-  "I need my calls answered 24/7",
-  "I need help answering my business calls",
-  "losing business from missed calls",
-  "I can't hire a receptionist",
+const FLOWMATE_QUERIES = [
+  "I keep losing leads because I respond too slow",
+  "I forget to follow up with leads",
+  "I need to follow up with leads faster",
+  "my business is too slow to respond to leads",
+  "I miss leads because I'm busy on the job",
+  "I need automatic lead follow up",
+  "I lose customers because I don't respond fast enough",
+  "I need to text leads automatically",
+  "how do I respond to leads faster",
+  "I need a system to follow up with leads",
+  "my leads go cold because I don't respond in time",
+  "I need an automated follow up system",
+  "I keep forgetting to text back leads",
+  "I need to automate my lead follow up",
+  "contractor losing leads to slow response",
+  "plumber losing leads to slow response",
+  "HVAC company losing leads",
+  "I respond to leads too late",
+  "need GoHighLevel alternative",
+  "GoHighLevel too expensive",
+  "I need instant lead response",
+  "how to never miss a lead again",
 ];
 
 const AUTOSUB_QUERIES = [
@@ -158,11 +145,10 @@ const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applyin
 const spamRegex = /\b(buy now|limited offer|discount code|promo code|affiliate link)\b/i;
 const highIntentRegex = /\b(need leads|need more leads|where (do i|can i) (find|get) leads|how (do i|to) get (more )?(leads|clients|customers)|looking for leads|finding leads|lead source|buy leads|purchase leads|lead list|lead database|list of (businesses|contacts|clients)|build a list|prospect list|contact list|where to find (businesses|clients|customers|prospects)|how to find (businesses|clients|customers|prospects)|outreach list|cold list|email list of|phone list|scraping (leads|businesses|contacts)|data for outreach|getting clients|acquire clients|find (local |new |more )?(clients|customers|businesses)|generate leads|lead generation (tool|software|service))\b/i;
 const mediumIntentRegex = /\b(struggling to get clients|can't find clients|hard to find customers|need more business|grow my (business|agency|practice)|scale my (business|agency)|client acquisition|new clients|outreach strategy|cold outreach|prospecting strategy|building a pipeline|sales pipeline)\b/i;
-const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|marketer|realtor|agent|broker)\b/i;
-const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|someone to build|someone who can build|someone to fix|someone to code|someone to create|someone to automate)|want (a |an )?(developer|dev|programmer)|searching for (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make|fix|automate)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made|fixed|automated)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|need a (bot|scraper|tool|dashboard|app|site|website|extension|integration|api|mvp|saas) built)\b/i;
+const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|marketer|realtor|agent|broker|contractor|plumber|electrician|roofer)\b/i;
+const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|python(\sdeveloper)?|engineer|freelancer|web developer|full stack developer|react developer)|hiring (a |an )?(developer|dev|programmer|coder|python|engineer|freelancer)|need (a |an )?(developer|dev|programmer|coder|python dev|engineer|freelancer|website|web developer|app|mobile app|chatbot|bot|scraper|landing page|shopify store|wordpress site|tool|dashboard|saas|database|chrome extension|discord bot|telegram bot|api integration|ai integration|ai tool|mvp|automation|web app)|need (someone|anyone) to (build|create|develop|code|make|fix|automate|design|scrape)|want (a |an )?(developer|dev|programmer|website|app)|searching for (a |an )?(developer|dev|programmer)|anyone (available|able to|can) (build|create|develop|code|make|fix|automate)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made|fixed|automated|designed|scraped)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|need a (bot|scraper|tool|dashboard|app|site|website|extension|integration|api|mvp|saas) built)\b/i;
 const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know)\b/i;
-const callDoneIntentRegex = /\b(miss(ing)? calls|missed calls|can't answer|cannot answer|don't answer|no one answers|after hours calls|answering service|virtual receptionist|phone answering|call answering|receptionist for my|need someone to answer|calls go to voicemail|losing customers|lose customers|missed call|unanswered calls|phone coverage|24.7 answering|always available)\b/i;
-const agencyHireRegex = /\b(my agency|my smma|our agency|run an agency|own an agency|digital agency|marketing agency|outreach agency|scale my agency|grow my agency|get clients for my agency|agency clients|smma clients|automate outreach|client acquisition for agency|agency fulfillment|agency owner)\b/i;
+const flowMateIntentRegex = /\b(lose(s)? leads|losing leads|leads (go|going) cold|respond(ing)? (too )?(slow|late)|slow to respond|follow up (with leads|faster|automatically)|forget to (follow up|text back)|miss(ing)? leads|automatic(ally)? (text|respond|follow up)|instant lead response|never miss a lead|GoHighLevel|automated follow up|lead response (time|speed))\b/i;
 const autoSubIntentRegex = /\b(automate (my )?(outreach|dms|messaging|marketing)|Reddit (outreach|dms|marketing)|outreach automation|too much time (on|doing) outreach|scale (my )?(outreach|dms)|send more (dms|messages)|automated (dms|outreach|messages)|get (more )?clients (on|from|via) Reddit|cold outreach (not working|strategy|tips)|lead generation (automation|tool)|automate lead gen)\b/i;
 
 function isFresh(post) {
@@ -202,24 +188,15 @@ function classify(post, forceProduct) {
     return { type, trigger: triggerMatch, product: "MAPZAP" };
   }
 
-  if (forceProduct === "AGENCYHIRE") {
-    const hasAgencyIntent = agencyHireRegex.test(combined);
-    if (!hasAgencyIntent) return null;
-    const isFirstPerson = firstPersonBuyerRegex.test(combined);
-    if (!isFirstPerson) return null;
-    const triggerMatch = combined.match(agencyHireRegex)?.[0] || "agency";
-    return { type: "AGENCYHIRE_INTENT", trigger: triggerMatch, product: "AGENCYHIRE" };
-  }
-
-  if (forceProduct === "CALLDONE") {
-    const hasCallIntent = callDoneIntentRegex.test(combined);
-    if (!hasCallIntent) return null;
+  if (forceProduct === "FLOWMATE") {
+    const hasFlowMateIntent = flowMateIntentRegex.test(combined);
+    if (!hasFlowMateIntent) return null;
     const isOwner = ownerRegex.test(combined);
     const isFirstPerson = firstPersonBuyerRegex.test(combined);
     if (!isOwner && !isFirstPerson) return null;
-    const triggerMatch = combined.match(callDoneIntentRegex)?.[0] || "missed calls";
-    const type = isOwner ? "CALLDONE_OWNER" : "CALLDONE_INTENT";
-    return { type, trigger: triggerMatch, product: "CALLDONE" };
+    const triggerMatch = combined.match(flowMateIntentRegex)?.[0] || "slow follow up";
+    const type = isOwner ? "FLOWMATE_OWNER" : "FLOWMATE_INTENT";
+    return { type, trigger: triggerMatch, product: "FLOWMATE" };
   }
 
   if (forceProduct === "AUTOSUB") {
@@ -288,8 +265,7 @@ async function scrape() {
   let leads = 0;
   leads += await searchGlobal(DEVHIRE_QUERIES, "DEVHIRE");
   leads += await searchGlobal(MAPZAP_QUERIES, "MAPZAP");
-  leads += await searchGlobal(CALLDONE_QUERIES, "CALLDONE");
-  leads += await searchGlobal(AGENCYHIRE_QUERIES, "AGENCYHIRE");
+  leads += await searchGlobal(FLOWMATE_QUERIES, "FLOWMATE");
   leads += await searchGlobal(AUTOSUB_QUERIES, "AUTOSUB");
   console.log(`Scrape complete -- leads found: ${leads}`);
 }

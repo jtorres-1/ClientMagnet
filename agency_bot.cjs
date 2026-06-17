@@ -1,4 +1,4 @@
-// agency_bot.cjs ClientMagnet MapZap + DevHire + CallDone + AgencyHire + AutoSub Outreach
+// agency_bot.cjs ClientMagnet MapZap + DevHire + FlowMate + AutoSub Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -22,7 +22,6 @@ const MAX_DMS_PER_CYCLE = 80;
 const MIN_DELAY_MS      = 2 * 60 * 1000;
 const MAX_DELAY_MS      = 4 * 60 * 1000;
 const INBOX_POLL_MS     = 60 * 1000;
-
 function loadUsers() {
   if (!fs.existsSync(usersPath)) return {};
   try { return JSON.parse(fs.readFileSync(usersPath, "utf8")); }
@@ -55,30 +54,28 @@ const sentWriter = createObjectCsvWriter({
 function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
 const MAPZAP_MESSAGES = [
   {
     id: "MZ_1",
-    text: `not sure if this helps but i built a tool that pulls 100 local business leads as a CSV in about 60 seconds\n\nyou type a business type and city, it returns names, phone numbers, addresses, and websites. $49 per month, unlimited searches. free preview at mapzap.org no card needed\n\n[mapzap.org](https://mapzap.org)`
+    text: `not sure if this helps but i built a tool that pulls 100 local business leads as a CSV in about 60 seconds, emails included where available\n\nyou type a business type and city, it returns names, phone numbers, addresses, websites, and emails. $19.99 per month, unlimited searches. free preview at mapzap.org no card needed\n\n[mapzap.org](https://mapzap.org)`
   },
   {
     id: "MZ_2",
-    text: `might be relevant\n\ni built mapzap, pulls 100 local business leads (name, phone, address, website) as a CSV in under a minute. $49 per month unlimited searches, free preview available\n\n[mapzap.org](https://mapzap.org)`
+    text: `might be relevant\n\ni built mapzap, pulls 100 local business leads (name, phone, address, website, email where available) as a CSV in under a minute. $19.99 per month unlimited searches, free preview available\n\n[mapzap.org](https://mapzap.org)`
   },
   {
     id: "MZ_3",
-    text: `this might save you some time built a tool that scrapes 100 local business leads in 60 seconds\n\ntype a niche and city, get a CSV with names, phones, addresses, websites. $49 per month unlimited\n\n[mapzap.org](https://mapzap.org)`
+    text: `this might save you some time built a tool that scrapes 100 local business leads in 60 seconds\n\ntype a niche and city, get a CSV with names, phones, addresses, websites, and emails. $19.99 per month unlimited\n\n[mapzap.org](https://mapzap.org)`
   },
   {
     id: "MZ_4",
-    text: `building lead lists manually is a nightmare i built something that does it in 60 seconds\n\n100 local businesses, names, phone numbers, addresses, websites, CSV download. $49 per month unlimited searches, cancel anytime\n\n[mapzap.org](https://mapzap.org)`
+    text: `building lead lists manually is a nightmare i built something that does it in 60 seconds\n\n100 local businesses, names, phone numbers, addresses, websites, emails where available, CSV download. $19.99 per month unlimited searches, cancel anytime\n\n[mapzap.org](https://mapzap.org)`
   },
   {
     id: "MZ_5",
-    text: `thought this might help i built a lead scraper that pulls 100 local businesses from any city in 60 seconds\n\nCSV with name, phone, address, website. $49 per month unlimited searches, free preview no card needed\n\n[mapzap.org](https://mapzap.org)`
+    text: `thought this might help i built a lead scraper that pulls 100 local businesses from any city in 60 seconds\n\nCSV with name, phone, address, website, email. $19.99 per month unlimited searches, free preview no card needed\n\n[mapzap.org](https://mapzap.org)`
   }
 ];
-
 const DEVHIRE_MESSAGES = [
   {
     id: "DH_1",
@@ -93,49 +90,28 @@ const DEVHIRE_MESSAGES = [
     text: `python dev here, based in LA, available now. i have live production projects including mapzap.org (google maps lead scraper SaaS), a cold email pipeline, and a reddit dm bot.\n\ni do websites, scrapers, automation bots, and ai integrations. 48 hour turnaround, flat fee.\n\nrecent work: [claudiascleaningla.com](https://claudiascleaningla.com) and [mapzap.org](https://mapzap.org)\n\ndm me what you need`
   }
 ];
-
-const CALLDONE_MESSAGES = [
+const FLOWMATE_MESSAGES = [
   {
-    id: "CD_1",
-    text: `this might help i built an AI receptionist called CallDone that answers every call 24/7, handles questions, and texts you a summary after each call. $500/month, live in 48 hours, no setup fee.\n\ncall the demo line right now and hear it yourself: (563) 287-1146\n\n[calldone.org](https://calldone.org)`
+    id: "FM_1",
+    text: `saw your post this is a common one. roughly 78% of customers go with whoever responds first, so if a lead sits for even 10 minutes you're probably losing it to a competitor\n\ni built flowmate, it automatically texts and emails every new lead within 60 seconds, runs 24/7, you never touch it. think of it like a GoHighLevel setup but i build and run it for you\n\nfirst month is $297 to test it, then $797/month if you keep it\n\n[flowmate.live](https://flowmate.live)`
   },
   {
-    id: "CD_2",
-    text: `might be relevant built an AI phone receptionist that answers calls 24/7 for local businesses. handles FAQs, captures leads, books appointments, and texts you a summary instantly. $500/month flat, no contracts, live in 48 hours.\n\nfree demo: call (563) 287-1146\n\n[calldone.org](https://calldone.org)`
+    id: "FM_2",
+    text: `this is exactly what flowmate solves. most businesses lose leads simply because they respond too slow, studies show whoever replies first wins the customer most of the time\n\ni set up an automation that texts and emails every new lead within 60 seconds, runs in the background forever, no software for you to learn\n\n$297 first month, $797/month after that if it's working for you\n\n[flowmate.live](https://flowmate.live)`
   },
   {
-    id: "CD_3",
-    text: `sounds like CallDone could help it's an AI receptionist that answers every call 24/7 so you never miss a customer. trained on your business, handles questions and bookings, texts you after every call. $500/month, no setup fee, cancel anytime.\n\nhear it live: (563) 287-1146\n\n[calldone.org](https://calldone.org)`
+    id: "FM_3",
+    text: `built something for exactly this. flowmate automatically follows up with every new lead within 60 seconds by text and email, so you stop losing business to whoever calls back first\n\ni build it and run it, you don't touch anything. $297 for the first month, $797/month ongoing\n\n[flowmate.live](https://flowmate.live)`
   },
   {
-    id: "CD_4",
-    text: `built something for exactly this CallDone answers every call to your business 24/7. sounds like a real person, handles FAQs, captures caller info, texts you a summary. $500/month, live in 48 hours.\n\ncall (563) 287-1146 to hear the demo\n\n[calldone.org](https://calldone.org)`
+    id: "FM_4",
+    text: `if you're getting leads from ads or google and not responding instantly, you're losing most of them. i built flowmate to fix exactly that, auto texts and emails every new lead in under 60 seconds, 24/7\n\nno software to learn, i set it up and run it for you. $297 first month, $797/month after\n\n[flowmate.live](https://flowmate.live)`
   },
   {
-    id: "CD_5",
-    text: `this is exactly what CallDone solves AI receptionist that answers your business calls 24/7, captures leads, handles common questions, and sends you a text summary after every call. no setup fee, $500/month, cancel anytime.\n\ndemo: (563) 287-1146 [calldone.org](https://calldone.org)`
+    id: "FM_5",
+    text: `this is a lead response problem, not a marketing problem. i build done for you automations that text and email every new lead within 60 seconds so you're always first to respond\n\nruns 24/7 in the background, nothing for you to manage. $297 to try the first month, $797/month after\n\n[flowmate.live](https://flowmate.live)`
   }
 ];
-
-const AGENCYHIRE_MESSAGES = [
-  {
-    id: "AH_1",
-    text: `i built an automated outreach system that sends 1000+ targeted messages per day across Reddit, Facebook, Discord, and X to your ideal clients. runs 24/7, finds buyers actively looking for your service, DMs them automatically.\n\ni deploy the full stack on your accounts in 48 hours. $1,500 flat fee to set up, $500/month retainer to keep it running.\n\nproof it works: [mapzap.org](https://mapzap.org) (built and marketed entirely with this system)\n\ndeposit to start: [pay deposit here](https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d)\n\ndm me if you want to see exactly how it works`
-  },
-  {
-    id: "AH_2",
-    text: `this might solve your client acquisition problem i run an outreach automation stack that hits Reddit, Facebook, Discord, and X simultaneously. finds people actively looking for your service and messages them automatically. 1000+ targeted contacts per day.\n\nset it up on your agency in 48 hours for $1,500 flat. $500/month to maintain. you own it.\n\nbuilt and proved on my own products: [mapzap.org](https://mapzap.org)\n\nstart here: [pay deposit here](https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d)`
-  },
-  {
-    id: "AH_3",
-    text: `scaling agency outreach is exactly what i built this for automated system across Reddit, Facebook, Discord, and X. targets your niche, sends 1000+ messages per day to verified buyers, runs while you sleep.\n\n$1,500 to deploy on your accounts, 48 hour delivery. $500/month retainer after that.\n\nlive proof: [mapzap.org](https://mapzap.org)\n\ndeposit link: [pay deposit here](https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d)\n\ndm me a scope`
-  },
-  {
-    id: "AH_4",
-    text: `i automate what you're doing manually for your clients full outreach stack across Reddit, Facebook, Discord, and X. finds buyers, messages them, runs 24/7 in the background.\n\ndeploy it on your agency for $1,500 flat, live in 48 hours. $500/month to keep it running after that.\n\nproof: [mapzap.org](https://mapzap.org) (marketed entirely with this stack)\n\n[pay deposit here](https://buy.stripe.com/9B6eVd7vteL23kedQ22Ry0d)`
-  }
-];
-
 const AUTOSUB_MESSAGES = [
   {
     id: "AS_1",
@@ -158,37 +134,33 @@ const AUTOSUB_MESSAGES = [
     text: `hey\n\ni built a Reddit outreach tool that runs 24/7. you connect your account, set what you sell and your target keywords, and it finds buyers and DMs them automatically while you sleep.\n\n$19.99/month. [autosub.online](https://autosub.online)`
   }
 ];
-
 function scoreLead(p) {
   let score = 0;
   const t = (p.matchedTrigger || "").toLowerCase();
   const sub = (p.subreddit || "").toLowerCase();
   const product = (p.product || "MAPZAP").toUpperCase();
-  if (product === "AGENCYHIRE") score += 20;
+  if (product === "FLOWMATE") score += 22;
   if (product === "AUTOSUB") score += 18;
   if (product === "DEVHIRE") score += 15;
-  if (product === "CALLDONE") score += 12;
-  if (p.leadType === "AGENCYHIRE_INTENT") score += 15;
+  if (p.leadType === "FLOWMATE_OWNER") score += 16;
+  else if (p.leadType === "FLOWMATE_INTENT") score += 12;
   if (p.leadType === "AUTOSUB_INTENT") score += 14;
   if (p.leadType === "HIGH_INTENT_OWNER") score += 10;
-  else if (p.leadType === "CALLDONE_OWNER") score += 10;
   else if (p.leadType === "HIGH_INTENT") score += 7;
-  else if (p.leadType === "CALLDONE_INTENT") score += 7;
   else if (p.leadType === "MEDIUM_INTENT_OWNER") score += 5;
   else score += 2;
   if (/need leads|buy leads|lead source|lead list|lead database/.test(t)) score += 5;
   if (/looking for (a |an )?(developer|dev|programmer)/.test(t)) score += 8;
-  if (/missed calls|missing calls|answering service|receptionist/.test(t)) score += 8;
-  if (/agency|smma|scale my agency|get clients for my agency/.test(t)) score += 10;
+  if (/lose(s)? leads|losing leads|leads (go|going) cold|respond(ing)? (too )?(slow|late)|slow to respond|follow up|forget to|miss(ing)? leads|never miss a lead|GoHighLevel/.test(t)) score += 10;
   if (/automate|outreach|dms|reddit marketing/.test(t)) score += 10;
   if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
   if (["forhire","slavelabour","jobs4bitcoins","WorkOnline","HireaWriter"].includes(sub)) score += 5;
   if (["sales","b2bsales","coldemail","coldcalling","leadgeneration","smallbusiness","realtors"].includes(sub)) score += 5;
   if (["agency","digital_marketing","PPC","Entrepreneur","Affiliatemarketing"].includes(sub)) score += 8;
   if (["Entrepreneur","agency","Freelance","smallbusiness","marketing"].includes(sub)) score += 6;
+  if (["plumbing","HVAC","electricians","Roofing","Contractors","smallbusiness","Construction"].includes(sub)) score += 8;
   return score;
 }
-
 function loadLeads() {
   return new Promise(resolve => {
     if (!fs.existsSync(leadsPath)) return resolve([]);
@@ -200,7 +172,6 @@ function loadLeads() {
       .on("error", () => resolve(arr));
   });
 }
-
 async function runOutreachCycle() {
   const leads = await loadLeads();
   if (!leads.length) { log("INFO", "No leads found. Waiting for scraper..."); return; }
@@ -225,25 +196,20 @@ async function runOutreachCycle() {
     if (user?.closed) { log("SKIP", `closed u/${username} (${user.closed_reason})`); continue; }
     cyclesSeen.add(key);
     attempted++;
-
     let tpl, subject;
-    if (product === "AGENCYHIRE") {
-      tpl = pick(AGENCYHIRE_MESSAGES);
-      subject = "automated outreach system for your agency";
+    if (product === "FLOWMATE") {
+      tpl = pick(FLOWMATE_MESSAGES);
+      subject = "stop losing leads to slow follow up";
     } else if (product === "AUTOSUB") {
       tpl = pick(AUTOSUB_MESSAGES);
       subject = "automate your Reddit outreach";
     } else if (product === "DEVHIRE") {
       tpl = pick(DEVHIRE_MESSAGES);
       subject = "dev for hire";
-    } else if (product === "CALLDONE") {
-      tpl = pick(CALLDONE_MESSAGES);
-      subject = "AI receptionist for your business";
     } else {
       tpl = pick(MAPZAP_MESSAGES);
       subject = "lead gen tool";
     }
-
     try {
       const freshUser = getUser(loadUsers(), username);
       if (freshUser?.sent) {
@@ -277,7 +243,6 @@ async function runOutreachCycle() {
   }
   log("INFO", `Outreach cycle complete attempted ${attempted}, confirmed ${confirmed}`);
 }
-
 async function checkInbox() {
   const botUsername = (process.env.REDDIT_USERNAME || "").toLowerCase();
   try {
@@ -307,10 +272,9 @@ async function checkInbox() {
     log("ERROR", `Inbox check failed: ${err.message}`);
   }
 }
-
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet MapZap + DevHire + CallDone + AgencyHire + AutoSub Outreach Bot");
+  console.log("ClientMagnet MapZap + DevHire + FlowMate + AutoSub Outreach Bot");
   console.log("=".repeat(60));
   setInterval(checkInbox, INBOX_POLL_MS);
   while (true) {

@@ -392,14 +392,22 @@ async function runOutreachCycle() {
   const leads = await loadLeads();
   if (!leads.length) { log("INFO", "No leads found. Waiting for scraper..."); return; }
 
-  leads.sort((a, b) => scoreLead(b) - scoreLead(a));
+  // Deduplicate leads by username before sorting
+  const seenUsernames = new Set();
+  const dedupedLeads = leads.filter(p => {
+    const k = (p.username || "").trim().toLowerCase();
+    if (!k || seenUsernames.has(k)) return false;
+    seenUsernames.add(k);
+    return true;
+  });
+  dedupedLeads.sort((a, b) => scoreLead(b) - scoreLead(a));
 
   const users      = loadUsers();
   const target     = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
   const cyclesSeen = new Set();
   let attempted = 0, confirmed = 0;
 
-  for (const post of leads) {
+  for (const post of dedupedLeads) {
     if (attempted >= target) { log("INFO", `Cycle target reached (${target} DMs).`); break; }
 
     const username  = (post.username || "").trim();

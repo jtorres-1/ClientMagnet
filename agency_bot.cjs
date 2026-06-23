@@ -267,7 +267,7 @@ async function runOutreachCycle() {
     if (product === "LOCKEDIN") {
       tpl = pick(LOCKEDIN_MESSAGES);
       subject = "this might help";
- else if (product === "DEVHIRE") {
+    } else if (product === "DEVHIRE") {
       if (leadType === "DEV_HIRE_BOT") {
         tpl = pick(DEVHIRE_BOT_MESSAGES);
         subject = "bot and automation dev for hire";

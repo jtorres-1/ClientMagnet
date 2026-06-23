@@ -23,9 +23,7 @@ function prependLead(file, rowObj) {
 }
 
 // ─── DEVHIRE QUERIES ─────────────────────────────────────────────────────────
-// Focused on buyers who need bots, automation, scrapers, and custom tools built
 const DEVHIRE_QUERIES = [
-  // Bot and automation specific
   "I need a booking bot built",
   "I need a bot built",
   "I need a scraper built",
@@ -52,7 +50,6 @@ const DEVHIRE_QUERIES = [
   "I need a SaaS built",
   "I need a dashboard built",
   "I need someone to build my MVP",
-  // General dev hire buyer intent
   "I need to hire a developer",
   "I need a developer for my project",
   "I need a freelancer to build",
@@ -69,39 +66,6 @@ const DEVHIRE_QUERIES = [
   "I need a landing page built",
   "I need a mobile app built",
   "I need a database built",
-];
-
-// ─── MAPZAP QUERIES ──────────────────────────────────────────────────────────
-const MAPZAP_QUERIES = [
-  "I need leads for my business",
-  "I need more clients for my business",
-  "I need local business leads",
-  "I need a lead list",
-  "how do I find leads for my business",
-  "I'm struggling to find clients",
-  "I need more customers for my business",
-  "I need business leads",
-  "how do I get more clients",
-  "I need to find more customers",
-  "I need prospects for my business",
-  "I need to generate leads",
-  "I need to find businesses in my area",
-  "I need a list of local contractors",
-  "I need phone numbers for businesses",
-  "I need to contact local businesses",
-  "I need restaurant owner contacts",
-  "I need to find local business owners",
-  "I need a list of businesses",
-  "I need to reach local businesses",
-  "Apollo too expensive",
-  "ZoomInfo too expensive",
-  "looking for cheaper lead tool",
-  "Apollo alternative",
-  "cancel Apollo",
-  "affordable alternative to Apollo",
-  "cheap prospecting tool",
-  "local business leads cheap",
-  "Google Maps scraper leads",
 ];
 
 // ─── FLOWMATE QUERIES ─────────────────────────────────────────────────────────
@@ -130,26 +94,36 @@ const FLOWMATE_QUERIES = [
   "how to never miss a lead again",
 ];
 
-// ─── AUTOSUB QUERIES ──────────────────────────────────────────────────────────
-const AUTOSUB_QUERIES = [
-  "I need to automate my outreach",
-  "how do I get more clients on Reddit",
-  "cold outreach not working",
-  "I spend too much time on outreach",
-  "looking for outreach automation",
-  "how to automate Reddit marketing",
-  "need to scale my outreach",
-  "how to send more DMs",
-  "agency owner need more clients",
-  "I need to automate my marketing",
-  "how to get clients on Reddit",
-  "Reddit outreach strategy",
-  "automate lead generation",
-  "I need more leads fast",
+// ─── LOCKEDIN QUERIES ─────────────────────────────────────────────────────────
+const LOCKEDIN_QUERIES = [
+  "I waste so much time figuring out what to do first",
+  "I can't stick to a schedule",
+  "I have too many tasks and don't know where to start",
+  "I spend my whole morning planning and never get anything done",
+  "I'm so unproductive I don't know why",
+  "I struggle to manage my time",
+  "I can't get anything done during the day",
+  "how do I stop wasting my mornings",
+  "I have no structure to my day",
+  "I need help organizing my day",
+  "I feel overwhelmed with everything I need to do",
+  "I can never finish my to do list",
+  "my days feel chaotic and unproductive",
+  "I need to be more productive but don't know how",
+  "I procrastinate all day and get nothing done",
+  "I have ADHD and can't organize my tasks",
+  "I struggle with time blocking",
+  "I can never follow through with my schedule",
+  "I need a better morning routine",
+  "how to actually be productive",
+  "I set goals but never follow through",
+  "I feel like I'm always busy but getting nothing done",
+  "I need to plan my day better",
+  "how to stop wasting time every morning",
+  "I lose hours just deciding what to work on",
 ];
 
 // ─── BLOCK FILTERS ────────────────────────────────────────────────────────────
-// Block anyone who is a developer offering services, not buying
 const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|\[available\]|i am available|i('m| am) a (developer|designer|programmer|dev|coder|engineer|freelancer)|offering my services|available for hire|hire me|my rates|i build websites|i develop websites|i create websites|i code for|check out my work|starting at \$|portfolio|years of experience|i have experience|i specialize in|my skills include|i can build|i can develop|i can create|i can help you build|dm me if you need|feel free to dm|looking for (clients|projects|work|opportunities)|open to (work|projects|clients)|taking on (clients|projects)|accepting (clients|projects)|available for (projects|work|freelance)|i do (freelance|contract)|contract developer|remote developer|senior developer|junior developer|full stack developer available|react developer available|python developer available)\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become|learning to code|trying to learn|beginner developer|new to programming|studying programming)\b/i;
@@ -157,23 +131,14 @@ const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applyin
 const spamRegex = /\b(buy now|limited offer|discount code|promo code|affiliate link)\b/i;
 
 // ─── INTENT REGEXES ──────────────────────────────────────────────────────────
-const highIntentRegex = /\b(need leads|need more leads|where (do i|can i) (find|get) leads|how (do i|to) get (more )?(leads|clients|customers)|looking for leads|finding leads|lead source|buy leads|purchase leads|lead list|lead database|list of (businesses|contacts|clients)|build a list|prospect list|contact list|where to find (businesses|clients|customers|prospects)|how to find (businesses|clients|customers|prospects)|outreach list|cold list|email list of|phone list|scraping (leads|businesses|contacts)|data for outreach|getting clients|acquire clients|find (local |new |more )?(clients|customers|businesses)|generate leads|lead generation (tool|software|service))\b/i;
-
-const mediumIntentRegex = /\b(struggling to get clients|can't find clients|hard to find customers|need more business|grow my (business|agency|practice)|scale my (business|agency)|client acquisition|new clients|outreach strategy|cold outreach|prospecting strategy|building a pipeline|sales pipeline)\b/i;
-
-const ownerRegex = /\b(my (business|agency|company|firm|practice)|i (run|own|operate|manage)|we (run|own|operate)|owner|founder|operator|freelancer|consultant|sales rep|marketer|realtor|agent|broker|contractor|plumber|electrician|roofer)\b/i;
-
-// Bot/automation buyer regex - must match BUYING intent not offering
 const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|engineer|freelancer|bot developer|automation developer)|hiring (a |an )?(developer|dev|programmer|coder|engineer|freelancer)|need (a |an )?(developer|dev|programmer|coder|engineer|freelancer|website|web developer|app|mobile app|chatbot|bot|scraper|landing page|tool|dashboard|saas|database|chrome extension|discord bot|telegram bot|api integration|ai integration|ai tool|mvp|automation|web app)|need (someone|anyone) to (build|create|develop|code|make|fix|automate|scrape)|want (a |an )?(developer|dev|programmer|website|app|bot|scraper|automation)|searching for (a |an )?(developer|dev|programmer|bot developer)|anyone (available|able to|can) (build|create|develop|code|make|fix|automate)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made|fixed|automated|scraped)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|need a (bot|scraper|tool|dashboard|app|site|website|extension|integration|api|mvp|saas|automation) (built|fixed|created|developed)|broken bot|bot broke|bot stopped working|automation broke|automation stopped working|scraper broke|scraper stopped working|fix my bot|fix my script|fix my automation|fix my scraper)\b/i;
 
-// Extra filter to confirm first-person buyer language
 const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know|we need|our (company|business|team) needs)\b/i;
 
 const flowMateIntentRegex = /\b(lose(s)? leads|losing leads|leads (go|going) cold|respond(ing)? (too )?(slow|late)|slow to respond|follow up (with leads|faster|automatically)|forget to (follow up|text back)|miss(ing)? leads|automatic(ally)? (text|respond|follow up)|instant lead response|never miss a lead|GoHighLevel|automated follow up|lead response (time|speed))\b/i;
 
-const autoSubIntentRegex = /\b(automate (my )?(outreach|dms|messaging|marketing)|Reddit (outreach|dms|marketing)|outreach automation|too much time (on|doing) outreach|scale (my )?(outreach|dms)|send more (dms|messages)|automated (dms|outreach|messages)|get (more )?clients (on|from|via) Reddit|cold outreach (not working|strategy|tips)|lead generation (automation|tool)|automate lead gen)\b/i;
+const lockedInIntentRegex = /\b(waste (time|my morning|hours)|wasting (time|mornings)|can't (stick to|follow|organize|manage|get anything done|finish)|struggling (to|with) (manage|organize|plan|schedule|focus|time|productivity)|overwhelmed (with|by) (tasks|everything|to do)|no structure|chaotic day|unproductive|procrastinat|don't know where to start|too many tasks|can never finish|feel (busy|like i'm spinning)|lose(s)? hours|morning routine|time blocking|plan my day|organize my day|better schedule|stop wasting|ADHD and (can't|struggle|unable)|nothing done|always busy but|getting nothing done)\b/i;
 
-// Detects if the matched post is specifically about bots/automation (for split DM copy in agency_bot)
 const botAutomationSpecificRegex = /\b(bot|scraper|automation|automated|automate|booking bot|telegram bot|discord bot|puppeteer|selenium|web scraping|api automation|workflow automation|zapier|make\.com|n8n|broken script|fix my script|my script|my bot|my automation|my scraper)\b/i;
 
 function isFresh(post) {
@@ -186,61 +151,34 @@ function classify(post, forceProduct) {
   const body = (post.selftext || "").toLowerCase();
   const combined = `${title} ${body}`;
   if (title.length < 10) return null;
-
-  // Global blocks — apply to ALL products
   if (blockRegex.test(combined)) return null;
   if (spamRegex.test(combined)) return null;
   if (forHireBlockRegex.test(combined)) return null;
 
   if (forceProduct === "DEVHIRE") {
-    const devHire = devHireRegex.test(combined);
-    if (!devHire) return null;
-    // Must have first-person buyer language — blocks devs talking about their own skills
-    const isFirstPerson = firstPersonBuyerRegex.test(combined);
-    if (!isFirstPerson) return null;
-    // Secondary safety check: if they mention "i am a developer" or "i build" anywhere, block
+    if (!devHireRegex.test(combined)) return null;
+    if (!firstPersonBuyerRegex.test(combined)) return null;
     if (/\bi (am|'m) (a |an )?(developer|dev|programmer|coder|engineer|freelancer)\b/i.test(combined)) return null;
     if (/\bi (build|develop|create|code|design) (websites|apps|bots|tools|automations)\b/i.test(combined)) return null;
     const triggerMatch = combined.match(devHireRegex)?.[0] || "hiring";
-    // Tag whether this is bot/automation specific so agency_bot can send the right copy
     const isBotSpecific = botAutomationSpecificRegex.test(combined);
     const leadType = isBotSpecific ? "DEV_HIRE_BOT" : "DEV_HIRE_GENERAL";
     return { type: leadType, trigger: triggerMatch, product: "DEVHIRE" };
   }
 
-  if (forceProduct === "MAPZAP") {
-    const highIntent = highIntentRegex.test(combined);
-    const medIntent = mediumIntentRegex.test(combined);
-    if (!highIntent && !medIntent) return null;
-    const triggerMatch = (combined.match(highIntentRegex) || combined.match(mediumIntentRegex))?.[0] || "leads";
-    const isOwner = ownerRegex.test(combined);
-    let type;
-    if (highIntent && isOwner) type = "HIGH_INTENT_OWNER";
-    else if (highIntent) type = "HIGH_INTENT";
-    else if (isOwner) type = "MEDIUM_INTENT_OWNER";
-    else type = "MEDIUM_INTENT";
-    return { type, trigger: triggerMatch, product: "MAPZAP" };
-  }
-
   if (forceProduct === "FLOWMATE") {
-    const hasFlowMateIntent = flowMateIntentRegex.test(combined);
-    if (!hasFlowMateIntent) return null;
-    const isOwner = ownerRegex.test(combined);
-    const isFirstPerson = firstPersonBuyerRegex.test(combined);
-    if (!isOwner && !isFirstPerson) return null;
-    const triggerMatch = combined.match(flowMateIntentRegex)?.[0] || "slow follow up";
-    const type = isOwner ? "FLOWMATE_OWNER" : "FLOWMATE_INTENT";
-    return { type, trigger: triggerMatch, product: "FLOWMATE" };
-  }
-
-  if (forceProduct === "AUTOSUB") {
-    const hasAutoSubIntent = autoSubIntentRegex.test(combined);
-    const hasMedIntent = mediumIntentRegex.test(combined);
-    if (!hasAutoSubIntent && !hasMedIntent) return null;
+    if (!flowMateIntentRegex.test(combined)) return null;
     const isFirstPerson = firstPersonBuyerRegex.test(combined);
     if (!isFirstPerson) return null;
-    const triggerMatch = combined.match(autoSubIntentRegex)?.[0] || "outreach";
-    return { type: "AUTOSUB_INTENT", trigger: triggerMatch, product: "AUTOSUB" };
+    const triggerMatch = combined.match(flowMateIntentRegex)?.[0] || "slow follow up";
+    return { type: "FLOWMATE_INTENT", trigger: triggerMatch, product: "FLOWMATE" };
+  }
+
+  if (forceProduct === "LOCKEDIN") {
+    if (!lockedInIntentRegex.test(combined)) return null;
+    if (!firstPersonBuyerRegex.test(combined)) return null;
+    const triggerMatch = combined.match(lockedInIntentRegex)?.[0] || "unproductive";
+    return { type: "LOCKEDIN_INTENT", trigger: triggerMatch, product: "LOCKEDIN" };
   }
 
   return null;
@@ -298,9 +236,8 @@ async function scrape() {
   console.log("=".repeat(50));
   let leads = 0;
   leads += await searchGlobal(DEVHIRE_QUERIES, "DEVHIRE");
-  leads += await searchGlobal(MAPZAP_QUERIES, "MAPZAP");
   leads += await searchGlobal(FLOWMATE_QUERIES, "FLOWMATE");
-  leads += await searchGlobal(AUTOSUB_QUERIES, "AUTOSUB");
+  leads += await searchGlobal(LOCKEDIN_QUERIES, "LOCKEDIN");
   console.log(`Scrape complete -- leads found: ${leads}`);
 }
 

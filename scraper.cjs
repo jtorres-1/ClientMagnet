@@ -14,6 +14,7 @@ if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir);
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 const HEADER = "username,title,url,subreddit,time,leadType,matchedTrigger,product";
 if (!fs.existsSync(leadsPath)) fs.writeFileSync(leadsPath, HEADER + "\n");
+
 function prependLead(file, rowObj) {
   const row = Object.values(rowObj).join(",") + "\n";
   const lines = fs.readFileSync(file, "utf8").split("\n");
@@ -22,52 +23,30 @@ function prependLead(file, rowObj) {
   fs.writeFileSync(file, lines.join("\n"));
 }
 
-// ─── DEVHIRE QUERIES ─────────────────────────────────────────────────────────
-const DEVHIRE_QUERIES = [
-  "I need a booking bot built",
-  "I need a bot built",
-  "I need a scraper built",
-  "I need automation built",
-  "I need someone to automate",
-  "I need a custom bot",
-  "looking for bot developer",
-  "my bot stopped working",
-  "bot not working after update",
-  "I need automation fixed",
-  "need someone to fix my automation",
-  "bot broke after update",
-  "scraper stopped working",
-  "I need a Puppeteer script",
-  "I need web scraping done",
-  "I need API automation",
-  "I need a Discord bot built",
-  "I need a Telegram bot built",
-  "I need a Chrome extension built",
-  "I need someone to build a tool",
-  "I need API integration built",
-  "I need an AI tool built",
-  "I need a web app built",
-  "I need a SaaS built",
-  "I need a dashboard built",
-  "I need someone to build my MVP",
-  "I need to hire a developer",
-  "I need a developer for my project",
-  "I need a freelancer to build",
-  "I need a web developer urgently",
-  "I need a developer asap",
-  "I need a developer this week",
-  "I need someone to code",
-  "I need a python developer",
-  "I need a full stack developer",
-  "I need a React developer",
-  "I need someone to fix my website",
-  "I need an app built for my business",
-  "I need a chatbot for my business",
-  "I need a landing page built",
-  "I need a mobile app built",
-  "I need a database built",
+// ─── DEVHIRE SUBREDDITS ───────────────────────────────────────────────────────
+// Only scrape subreddits where every post is a buyer looking to hire
+const DEVHIRE_SUBREDDITS = [
+  "forhire",
+  "slavelabour",
+  "DoneDirtCheap",
+  "learnmachinelearning",
+  "hwstartups",
+  "EntrepreneurRideAlong",
+  "SomebodyMakeThis",
+  "startups",
+  "JobsForGeeks",
+  "WorkOnline",
+  "jobs4bitcoins",
+  "FreelanceWebDevelopers",
+  "webdev",
+  "Python",
+  "javascript",
+  "node",
+  "reactjs",
+  "programming",
+  "softwaregore",
+  "hireai",
 ];
-
 
 // ─── LOCKEDIN QUERIES ─────────────────────────────────────────────────────────
 const LOCKEDIN_QUERIES = [
@@ -99,94 +78,134 @@ const LOCKEDIN_QUERIES = [
 ];
 
 // ─── BLOCK FILTERS ────────────────────────────────────────────────────────────
-const forHireBlockRegex = /\b(\[for hire\]|\[offering\]|\[available\]|i am available|i('m| am) a (developer|designer|programmer|dev|coder|engineer|freelancer)|offering my services|available for hire|hire me|my rates|i build websites|i develop websites|i create websites|i code for|check out my work|starting at \$|portfolio|years of experience|i have experience|i specialize in|my skills include|i can build|i can develop|i can create|i can help you build|dm me if you need|feel free to dm|looking for (clients|projects|work|opportunities)|open to (work|projects|clients)|taking on (clients|projects)|accepting (clients|projects)|available for (projects|work|freelance)|i do (freelance|contract)|contract developer|remote developer|senior developer|junior developer|full stack developer available|react developer available|python developer available)\b/i;
+// Anyone offering services — not buying
+const offeringBlockRegex = /\b(\[for hire\]|\[FOR HIRE\]|\[offering\]|\[OFFERING\]|\[available\]|\[AVAILABLE\]|for hire|FOR HIRE|i am available|i('m| am) a (developer|designer|programmer|dev|coder|engineer|freelancer)|offering my services|available for hire|hire me|my rates|i build websites|i develop websites|i create websites|check out my work|starting at \$|my portfolio|years of experience|i have experience|i specialize in|my skills include|i can build|i can develop|i can create|i can help you build|dm me if you need|feel free to dm|looking for (clients|projects|work|opportunities)|open to (work|projects|clients)|taking on (clients|projects)|accepting (clients|projects)|available for (projects|work|freelance)|i do (freelance|contract)|contract developer|remote developer|senior developer|junior developer|full stack developer available|react developer available|python developer available|nodejs developer available|i offer|my services|my work|my experience|portfolio link|github\.com\/(?!jtorres))\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become|learning to code|trying to learn|beginner developer|new to programming|studying programming)\b/i;
 
-const spamRegex = /\b(buy now|limited offer|discount code|promo code|affiliate link)\b/i;
+// Must have hiring intent tags or keywords
+const hiringTagRegex = /^\s*\[h\]|\[hiring\]|\[hire\]|\[paid\]|\[budget\]|\[job\]|\[project\]/i;
 
-// ─── INTENT REGEXES ──────────────────────────────────────────────────────────
-const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|engineer|freelancer|bot developer|automation developer)|hiring (a |an )?(developer|dev|programmer|coder|engineer|freelancer)|need (a |an )?(developer|dev|programmer|coder|engineer|freelancer|website|web developer|app|mobile app|chatbot|bot|scraper|landing page|tool|dashboard|saas|database|chrome extension|discord bot|telegram bot|api integration|ai integration|ai tool|mvp|automation|web app)|need (someone|anyone) to (build|create|develop|code|make|fix|automate|scrape)|want (a |an )?(developer|dev|programmer|website|app|bot|scraper|automation)|searching for (a |an )?(developer|dev|programmer|bot developer)|anyone (available|able to|can) (build|create|develop|code|make|fix|automate)|budget (\$|usd)|willing to pay|will pay|paid (project|work|gig|opportunity)|paying for|bounty|paid job|contract (work|developer|position)|short term (project|contract)|one time (project|build)|need (this |it )?(built|coded|developed|created|made|fixed|automated|scraped)|anyone (here )?build|can someone build|who can build|looking to (hire|commission)|need a (bot|scraper|tool|dashboard|app|site|website|extension|integration|api|mvp|saas|automation) (built|fixed|created|developed)|broken bot|bot broke|bot stopped working|automation broke|automation stopped working|scraper broke|scraper stopped working|fix my bot|fix my script|fix my automation|fix my scraper)\b/i;
+const hiringKeywordRegex = /\b(looking to hire|want to hire|need to hire|hiring a|hiring an|need a developer|need a programmer|need a coder|need a dev|need someone to build|need someone to create|need someone to code|need someone to fix|need someone to scrape|need someone to automate|looking for a developer|looking for a programmer|looking for a coder|looking for a dev|budget is|my budget|willing to pay|will pay|paying|paid project|paid work|paid gig|fixed price|flat fee|one time project|short term project|contract work|freelance project|commission|bounty|need built|get built|have built|needs to be built|need to get done|need this done|can anyone build|can someone build|who can build|anyone able to build|anyone available to build|need help building|need help creating|need help coding|need help with my|need help fixing)\b/i;
 
-const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know|we need|our (company|business|team) needs)\b/i;
-
-
+// ─── LOCKEDIN INTENT ──────────────────────────────────────────────────────────
 const lockedInIntentRegex = /\b(waste (time|my morning|hours)|wasting (time|mornings)|can't (stick to|follow|organize|manage|get anything done|finish)|struggling (to|with) (manage|organize|plan|schedule|focus|time|productivity)|overwhelmed (with|by) (tasks|everything|to do)|no structure|chaotic day|unproductive|procrastinat|don't know where to start|too many tasks|can never finish|feel (busy|like i'm spinning)|lose(s)? hours|morning routine|time blocking|plan my day|organize my day|better schedule|stop wasting|ADHD and (can't|struggle|unable)|nothing done|always busy but|getting nothing done)\b/i;
 
-const botAutomationSpecificRegex = /\b(bot|scraper|automation|automated|automate|booking bot|telegram bot|discord bot|puppeteer|selenium|web scraping|api automation|workflow automation|zapier|make\.com|n8n|broken script|fix my script|my script|my bot|my automation|my scraper)\b/i;
+const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know|we need|our (company|business|team) needs)\b/i;
 
 function isFresh(post) {
   const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
   return ageHours <= 24;
 }
 
-function classify(post, forceProduct) {
+function isHiringPost(post) {
+  const title = (post.title || "");
+  const body = (post.selftext || "");
+  const combined = `${title} ${body}`;
+
+  // Block anyone offering services
+  if (offeringBlockRegex.test(combined)) return false;
+  if (blockRegex.test(combined)) return false;
+
+  // Must have hiring tag in title OR hiring keywords in body
+  const hasTag = hiringTagRegex.test(title);
+  const hasKeywords = hiringKeywordRegex.test(combined);
+
+  return hasTag || hasKeywords;
+}
+
+function isLockedInLead(post) {
   const title = (post.title || "").toLowerCase();
   const body = (post.selftext || "").toLowerCase();
   const combined = `${title} ${body}`;
-  if (title.length < 10) return null;
-  if (blockRegex.test(combined)) return null;
-  if (spamRegex.test(combined)) return null;
-  if (forHireBlockRegex.test(combined)) return null;
 
-  if (forceProduct === "DEVHIRE") {
-    if (!devHireRegex.test(combined)) return null;
-    if (!firstPersonBuyerRegex.test(combined)) return null;
-    if (/\bi (am|'m) (a |an )?(developer|dev|programmer|coder|engineer|freelancer)\b/i.test(combined)) return null;
-    if (/\bi (build|develop|create|code|design) (websites|apps|bots|tools|automations)\b/i.test(combined)) return null;
-    const triggerMatch = combined.match(devHireRegex)?.[0] || "hiring";
-    const isBotSpecific = botAutomationSpecificRegex.test(combined);
-    const leadType = isBotSpecific ? "DEV_HIRE_BOT" : "DEV_HIRE_GENERAL";
-    return { type: leadType, trigger: triggerMatch, product: "DEVHIRE" };
-  }
+  if (title.length < 10) return false;
+  if (offeringBlockRegex.test(combined)) return false;
+  if (blockRegex.test(combined)) return false;
+  if (!lockedInIntentRegex.test(combined)) return false;
+  if (!firstPersonBuyerRegex.test(combined)) return false;
 
-  if (forceProduct === "LOCKEDIN") {
-    if (!lockedInIntentRegex.test(combined)) return null;
-    if (!firstPersonBuyerRegex.test(combined)) return null;
-    const triggerMatch = combined.match(lockedInIntentRegex)?.[0] || "unproductive";
-    return { type: "LOCKEDIN_INTENT", trigger: triggerMatch, product: "LOCKEDIN" };
-  }
-
-  return null;
+  return true;
 }
 
 const wait = ms => new Promise(res => setTimeout(res, ms));
 
-async function searchGlobal(queries, product) {
+// ─── SCRAPE DEVHIRE SUBREDDITS ────────────────────────────────────────────────
+async function scrapeDevHireSubreddits() {
   const existingUrls = new Set(
     fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2])
   );
   let leads = 0;
-  for (const query of queries) {
-    console.log(`Searching: "${query}" [${product}]`);
+
+  for (const sub of DEVHIRE_SUBREDDITS) {
+    console.log(`Scraping r/${sub} for hiring posts...`);
     try {
       await wait(2000);
-      const posts = await reddit.search({
-        query,
-        sort: "new",
-        time: "day",
-        limit: 100,
-      });
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
       for (const p of posts) {
         if (!p.author || !isFresh(p)) continue;
-        const result = classify(p, product);
-        if (!result) continue;
+        if (!isHiringPost(p)) continue;
+
         const url = `https://reddit.com${p.permalink}`;
         if (existingUrls.has(url)) continue;
+
+        const row = {
+          username: p.author.name,
+          title: `"${p.title.replace(/"/g, "'")}"`,
+          url,
+          subreddit: `r/${sub}`,
+          time: new Date(p.created_utc * 1000).toISOString(),
+          leadType: "DEV_HIRE_SUBREDDIT",
+          matchedTrigger: p.title.slice(0, 60),
+          product: "DEVHIRE"
+        };
+        prependLead(leadsPath, row);
+        existingUrls.add(url);
+        leads++;
+        console.log(`  + DEV_HIRE_SUBREDDIT [r/${sub}]: u/${p.author.name} - "${p.title.slice(0, 60)}"`);
+      }
+    } catch (err) {
+      console.log(`Error scraping r/${sub}: ${err.message}`);
+      await wait(10000);
+    }
+  }
+  return leads;
+}
+
+// ─── SCRAPE LOCKEDIN GLOBAL SEARCH ────────────────────────────────────────────
+async function scrapeLockedIn() {
+  const existingUrls = new Set(
+    fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2])
+  );
+  let leads = 0;
+
+  for (const query of LOCKEDIN_QUERIES) {
+    console.log(`Searching: "${query}" [LOCKEDIN]`);
+    try {
+      await wait(2000);
+      const posts = await reddit.search({ query, sort: "new", time: "day", limit: 100 });
+      for (const p of posts) {
+        if (!p.author || !isFresh(p)) continue;
+        if (!isLockedInLead(p)) continue;
+
+        const url = `https://reddit.com${p.permalink}`;
+        if (existingUrls.has(url)) continue;
+
+        const triggerMatch = (p.title + " " + p.selftext).toLowerCase().match(lockedInIntentRegex)?.[0] || "unproductive";
         const row = {
           username: p.author.name,
           title: `"${p.title.replace(/"/g, "'")}"`,
           url,
           subreddit: p.subreddit_name_prefixed || p.subreddit,
           time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: result.type,
-          matchedTrigger: result.trigger,
-          product: result.product
+          leadType: "LOCKEDIN_INTENT",
+          matchedTrigger: triggerMatch,
+          product: "LOCKEDIN"
         };
         prependLead(leadsPath, row);
         existingUrls.add(url);
         leads++;
-        console.log(`  + ${result.type} [${result.product}]: u/${p.author.name} - "${result.trigger}"`);
+        console.log(`  + LOCKEDIN_INTENT: u/${p.author.name} - "${triggerMatch}"`);
       }
     } catch (err) {
       console.log(`Error searching "${query}": ${err.message}`);
@@ -198,11 +217,11 @@ async function searchGlobal(queries, product) {
 
 async function scrape() {
   console.log("=".repeat(50));
-  console.log("ClientMagnet -- Global Reddit Search");
+  console.log("ClientMagnet -- Subreddit Hiring + lockedIn Search");
   console.log("=".repeat(50));
   let leads = 0;
-  leads += await searchGlobal(DEVHIRE_QUERIES, "DEVHIRE");
-  leads += await searchGlobal(LOCKEDIN_QUERIES, "LOCKEDIN");
+  leads += await scrapeDevHireSubreddits();
+  leads += await scrapeLockedIn();
   console.log(`Scrape complete -- leads found: ${leads}`);
 }
 

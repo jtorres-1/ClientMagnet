@@ -141,6 +141,7 @@ function scoreLead(p) {
 
   if (leadType === "LOCKEDIN_INTENT") score += 20;
   if (leadType === "DEV_HIRE_BOT") score += 20;
+  if (leadType === "DEV_HIRE_SUBREDDIT") score += 25;
   if (leadType === "DEV_HIRE_GENERAL") score += 12;
 
   if (/waste|wasting|overwhelmed|procrastinat|chaotic|unproductive|no structure/.test(t)) score += 10;
@@ -268,7 +269,10 @@ async function runOutreachCycle() {
       tpl = pick(LOCKEDIN_MESSAGES);
       subject = "this might help";
     } else if (product === "DEVHIRE") {
-      if (leadType === "DEV_HIRE_BOT") {
+      if (leadType === "DEV_HIRE_SUBREDDIT") {
+        tpl = pick(DEVHIRE_BOT_MESSAGES);
+        subject = "available now";
+      } else if (leadType === "DEV_HIRE_BOT") {
         tpl = pick(DEVHIRE_BOT_MESSAGES);
         subject = "bot and automation dev for hire";
       } else {

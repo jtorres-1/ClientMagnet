@@ -68,31 +68,6 @@ const DEVHIRE_QUERIES = [
   "I need a database built",
 ];
 
-// ─── FLOWMATE QUERIES ─────────────────────────────────────────────────────────
-const FLOWMATE_QUERIES = [
-  "I keep losing leads because I respond too slow",
-  "I forget to follow up with leads",
-  "I need to follow up with leads faster",
-  "my business is too slow to respond to leads",
-  "I miss leads because I'm busy on the job",
-  "I need automatic lead follow up",
-  "I lose customers because I don't respond fast enough",
-  "I need to text leads automatically",
-  "how do I respond to leads faster",
-  "I need a system to follow up with leads",
-  "my leads go cold because I don't respond in time",
-  "I need an automated follow up system",
-  "I keep forgetting to text back leads",
-  "I need to automate my lead follow up",
-  "contractor losing leads to slow response",
-  "plumber losing leads to slow response",
-  "HVAC company losing leads",
-  "I respond to leads too late",
-  "need GoHighLevel alternative",
-  "GoHighLevel too expensive",
-  "I need instant lead response",
-  "how to never miss a lead again",
-];
 
 // ─── LOCKEDIN QUERIES ─────────────────────────────────────────────────────────
 const LOCKEDIN_QUERIES = [
@@ -135,7 +110,6 @@ const devHireRegex = /\b(looking for (a |an )?(developer|dev|programmer|coder|en
 
 const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know|we need|our (company|business|team) needs)\b/i;
 
-const flowMateIntentRegex = /\b(lose(s)? leads|losing leads|leads (go|going) cold|respond(ing)? (too )?(slow|late)|slow to respond|follow up (with leads|faster|automatically)|forget to (follow up|text back)|miss(ing)? leads|automatic(ally)? (text|respond|follow up)|instant lead response|never miss a lead|GoHighLevel|automated follow up|lead response (time|speed))\b/i;
 
 const lockedInIntentRegex = /\b(waste (time|my morning|hours)|wasting (time|mornings)|can't (stick to|follow|organize|manage|get anything done|finish)|struggling (to|with) (manage|organize|plan|schedule|focus|time|productivity)|overwhelmed (with|by) (tasks|everything|to do)|no structure|chaotic day|unproductive|procrastinat|don't know where to start|too many tasks|can never finish|feel (busy|like i'm spinning)|lose(s)? hours|morning routine|time blocking|plan my day|organize my day|better schedule|stop wasting|ADHD and (can't|struggle|unable)|nothing done|always busy but|getting nothing done)\b/i;
 
@@ -164,14 +138,6 @@ function classify(post, forceProduct) {
     const isBotSpecific = botAutomationSpecificRegex.test(combined);
     const leadType = isBotSpecific ? "DEV_HIRE_BOT" : "DEV_HIRE_GENERAL";
     return { type: leadType, trigger: triggerMatch, product: "DEVHIRE" };
-  }
-
-  if (forceProduct === "FLOWMATE") {
-    if (!flowMateIntentRegex.test(combined)) return null;
-    const isFirstPerson = firstPersonBuyerRegex.test(combined);
-    if (!isFirstPerson) return null;
-    const triggerMatch = combined.match(flowMateIntentRegex)?.[0] || "slow follow up";
-    return { type: "FLOWMATE_INTENT", trigger: triggerMatch, product: "FLOWMATE" };
   }
 
   if (forceProduct === "LOCKEDIN") {
@@ -236,7 +202,6 @@ async function scrape() {
   console.log("=".repeat(50));
   let leads = 0;
   leads += await searchGlobal(DEVHIRE_QUERIES, "DEVHIRE");
-  leads += await searchGlobal(FLOWMATE_QUERIES, "FLOWMATE");
   leads += await searchGlobal(LOCKEDIN_QUERIES, "LOCKEDIN");
   console.log(`Scrape complete -- leads found: ${leads}`);
 }

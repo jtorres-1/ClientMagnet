@@ -1,4 +1,4 @@
-// agency_bot.cjs — DevHire + FlowMate + lockedIn Outreach
+// agency_bot.cjs — DevHire + lockedIn Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -104,22 +104,6 @@ const DEVHIRE_GENERAL_MESSAGES = [
   }
 ];
 
-// ─── FLOWMATE MESSAGES ────────────────────────────────────────────────────────
-const FLOWMATE_MESSAGES = [
-  {
-    id: "FM_1",
-    text: `saw your post. roughly 78% of customers go with whoever responds first, so if a lead sits for even 10 minutes you're losing it to a competitor\n\ni built flowmate, it automatically texts and emails every new lead within 60 seconds, runs 24/7, you never touch it\n\n$297 first month to test it, $797/month after if it's working\n\n[flowmate.live](https://flowmate.live)`
-  },
-  {
-    id: "FM_2",
-    text: `saw your post. this is exactly what flowmate solves\n\ni set up an automation that texts and emails every new lead within 60 seconds of them reaching out. runs in the background forever, no software for you to learn, i build and run it for you\n\n$297 first month, $797/month after\n\n[flowmate.live](https://flowmate.live)`
-  },
-  {
-    id: "FM_3",
-    text: `saw your post. i built flowmate for exactly this\n\nautomatic text and email to every new lead within 60 seconds, 24/7. you stop losing business to whoever calls back first. i build it and run it, nothing for you to manage\n\n$297 first month, $797/month ongoing\n\n[flowmate.live](https://flowmate.live)`
-  }
-];
-
 // ─── LOCKEDIN MESSAGES ────────────────────────────────────────────────────────
 const LOCKEDIN_MESSAGES = [
   {
@@ -153,18 +137,15 @@ function scoreLead(p) {
   const leadType = (p.leadType || "").toUpperCase();
 
   if (product === "LOCKEDIN") score += 25;
-  if (product === "FLOWMATE") score += 22;
   if (product === "DEVHIRE") score += 15;
 
   if (leadType === "LOCKEDIN_INTENT") score += 20;
   if (leadType === "DEV_HIRE_BOT") score += 20;
   if (leadType === "DEV_HIRE_GENERAL") score += 12;
-  if (leadType === "FLOWMATE_INTENT") score += 16;
 
   if (/waste|wasting|overwhelmed|procrastinat|chaotic|unproductive|no structure/.test(t)) score += 10;
   if (/broken bot|bot stopped|automation broke|fix my bot|scraper stopped/.test(t)) score += 12;
   if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
-  if (/lose(s)? leads|losing leads|respond(ing)? (too )?(slow|late)|follow up|never miss a lead/.test(t)) score += 10;
 
   if (["productivity","getdisciplined","selfimprovement","ADHD","timemanagement","entrepreneur","Entrepreneur"].includes(sub)) score += 10;
   if (["plumbing","HVAC","electricians","Roofing","Contractors","smallbusiness"].includes(sub)) score += 8;
@@ -286,10 +267,7 @@ async function runOutreachCycle() {
     if (product === "LOCKEDIN") {
       tpl = pick(LOCKEDIN_MESSAGES);
       subject = "this might help";
-    } else if (product === "FLOWMATE") {
-      tpl = pick(FLOWMATE_MESSAGES);
-      subject = "stop losing leads to slow follow up";
-    } else if (product === "DEVHIRE") {
+ else if (product === "DEVHIRE") {
       if (leadType === "DEV_HIRE_BOT") {
         tpl = pick(DEVHIRE_BOT_MESSAGES);
         subject = "bot and automation dev for hire";
@@ -345,7 +323,7 @@ async function runOutreachCycle() {
 // ─── MAIN LOOP ───────────────────────────────────────────────────────────────
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet — DevHire + FlowMate + lockedIn Outreach Bot");
+  console.log("ClientMagnet — DevHire + lockedIn Outreach Bot");
   console.log("=".repeat(60));
 
   setInterval(checkInbox, INBOX_POLL_MS);

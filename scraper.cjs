@@ -27,6 +27,9 @@ function prependLead(file, rowObj) {
 const DEVHIRE_SUBREDDITS = [
   "forhire",
   "slavelabour",
+  "freelance_forhire",
+  "freelancer_hire",
+  "freelanceprogramming",
   "DoneDirtCheap",
   "learnmachinelearning",
   "hwstartups",

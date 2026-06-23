@@ -22,11 +22,10 @@ const usersPath = path.join(baseDir, "contacted_users.json");
 
 const MIN_DMS_PER_CYCLE = 60;
 const MAX_DMS_PER_CYCLE = 80;
-const MIN_DELAY_MS      = 2 * 60 * 1000;
-const MAX_DELAY_MS      = 4 * 60 * 1000;
+const MIN_DELAY_MS      = 45 * 1000;  // 45 seconds
+const MAX_DELAY_MS      = 90 * 1000;  // 90 seconds
 const INBOX_POLL_MS     = 60 * 1000;
 
-// ─── USER STATE ──────────────────────────────────────────────────────────────
 function loadUsers() {
   if (!fs.existsSync(usersPath)) return {};
   try { return JSON.parse(fs.readFileSync(usersPath, "utf8")); }
@@ -72,37 +71,36 @@ function classifyReply(text) {
   return "UNCLEAR";
 }
 
-// ─── DEVHIRE BOT MESSAGES ────────────────────────────────────────────────────
-const DEVHIRE_BOT_MESSAGES = [
-  {
-    id: "DH_BOT_1",
-    text: `saw your post. i build custom bots and automation tools for businesses across the US\n\nrecent work includes a reddit dm automation SaaS with active paying users ([autosub.online](https://autosub.online)), a google maps lead scraper SaaS ([mapzap.org](https://mapzap.org)), and a custom booking bot for a logistics company in saudi arabia\n\nif something broke or you need something built from scratch, i can have it running in 48 hours. flat fee, no hourly\n\ndm me what you need`
-  },
-  {
-    id: "DH_BOT_2",
-    text: `saw your post. this sounds like something i can fix fast\n\ni build and fix bots, scrapers, and automation tools. recent builds include a reddit outreach bot in production ([autosub.online](https://autosub.online)), a google maps scraper with email lookup ([mapzap.org](https://mapzap.org)), and a multi-account booking bot for a client in saudi arabia\n\n48 hour turnaround, flat fee. dm me the details`
-  },
-  {
-    id: "DH_BOT_3",
-    text: `saw your post. i specialize in building and fixing automation bots and scrapers\n\nlive projects: [autosub.online](https://autosub.online) (reddit dm automation SaaS), [mapzap.org](https://mapzap.org) (google maps lead scraper), and a custom booking automation for a logistics company\n\nflat fee, delivered in 48 hours. what do you need built or fixed`
-  }
-];
+// ─── CONTEXT-AWARE MESSAGE BUILDER ────────────────────────────────────────────
+function buildDevHireMessage(post) {
+  const title = (post.title || "").replace(/^\[.*?\]\s*/i, "").trim();
+  const budget = (post.budget || "").trim();
+  const leadType = (post.leadType || "").toUpperCase();
+  const isUrgent = leadType === "DEV_HIRE_URGENT";
 
-// ─── DEVHIRE GENERAL MESSAGES ─────────────────────────────────────────────────
-const DEVHIRE_GENERAL_MESSAGES = [
-  {
-    id: "DH_GEN_1",
-    text: `saw your post. i build web apps, scrapers, bots, and ai integrations for businesses across the US\n\nrecent work: [autosub.online](https://autosub.online) (reddit outreach SaaS), [mapzap.org](https://mapzap.org) (google maps lead scraper SaaS), and a custom booking bot for a logistics company\n\n48 hour turnaround, flat fee, no hourly. dm me what you need`
-  },
-  {
-    id: "DH_GEN_2",
-    text: `saw your post. available now for freelance dev work\n\ni build websites, web apps, scrapers, bots, and ai integrations. recent live projects: [autosub.online](https://autosub.online) and [mapzap.org](https://mapzap.org)\n\nflat fee, 48 hour delivery, based in the US. dm me a scope`
-  },
-  {
-    id: "DH_GEN_3",
-    text: `saw your post. i ship fast and charge flat fees\n\nrecent builds: [autosub.online](https://autosub.online) (reddit automation SaaS), [mapzap.org](https://mapzap.org) (google maps scraper with stripe payments), custom booking bot for a logistics client\n\nwebsites, scrapers, bots, ai integrations. 48 hours, flat fee. what do you need`
-  }
-];
+  const budgetLine = budget ? `\n\nbudget looks like ${budget} — works for me.` : "";
+  const urgentLine = isUrgent ? " can start immediately." : " can have it done in 48 hours.";
+
+  const openers = [
+    `saw your post about ${title.toLowerCase().slice(0, 80)}.`,
+    `your post about ${title.toLowerCase().slice(0, 80)} caught my eye.`,
+    `just saw your post — ${title.toLowerCase().slice(0, 80)}.`,
+  ];
+
+  const bodies = [
+    `i build exactly this kind of thing. recent work: reddit dm automation SaaS ([autosub.online](https://autosub.online)), google maps lead scraper ([mapzap.org](https://mapzap.org)), custom booking bot for a logistics company in saudi arabia.`,
+    `this is in my wheelhouse. i've shipped a reddit outreach bot ([autosub.online](https://autosub.online)), a google maps scraper with email lookup ([mapzap.org](https://mapzap.org)), and a multi-account booking automation for a client overseas.`,
+    `i've built similar things. live projects: [autosub.online](https://autosub.online) (reddit automation SaaS), [mapzap.org](https://mapzap.org) (google maps lead scraper), custom booking bot for a logistics company.`,
+  ];
+
+  const closes = [
+    `flat fee, no hourly.${urgentLine}${budgetLine}\n\nwhat are the full details?`,
+    `flat fee, delivered fast.${urgentLine}${budgetLine}\n\ndm me the scope and i'll give you a quote today.`,
+    `flat fee only.${urgentLine}${budgetLine}\n\nwhat do you need built exactly?`,
+  ];
+
+  return `${pick(openers)}\n\n${pick(bodies)}\n\n${pick(closes)}`;
+}
 
 // ─── LOCKEDIN MESSAGES ────────────────────────────────────────────────────────
 const LOCKEDIN_MESSAGES = [
@@ -130,27 +128,21 @@ const LOCKEDIN_MESSAGES = [
 
 // ─── SCORING ──────────────────────────────────────────────────────────────────
 function scoreLead(p) {
+  // Use pre-computed score from scraper if available
+  const preScore = parseInt(p.score || "0");
+  if (preScore > 0 && p.product === "DEVHIRE") return preScore;
+
   let score = 0;
-  const t = (p.matchedTrigger || "").toLowerCase();
-  const sub = (p.subreddit || "").toLowerCase();
   const product = (p.product || "LOCKEDIN").toUpperCase();
   const leadType = (p.leadType || "").toUpperCase();
 
+  // DevHire always scores higher than lockedIn
+  if (product === "DEVHIRE") score += 50;
   if (product === "LOCKEDIN") score += 25;
-  if (product === "DEVHIRE") score += 15;
 
+  if (leadType === "DEV_HIRE_URGENT") score += 30;
+  if (leadType === "DEV_HIRE_SUBREDDIT") score += 20;
   if (leadType === "LOCKEDIN_INTENT") score += 20;
-  if (leadType === "DEV_HIRE_BOT") score += 20;
-  if (leadType === "DEV_HIRE_SUBREDDIT") score += 25;
-  if (leadType === "DEV_HIRE_GENERAL") score += 12;
-
-  if (/waste|wasting|overwhelmed|procrastinat|chaotic|unproductive|no structure/.test(t)) score += 10;
-  if (/broken bot|bot stopped|automation broke|fix my bot|scraper stopped/.test(t)) score += 12;
-  if (/budget|willing to pay|will pay|paid/.test(t)) score += 6;
-
-  if (["productivity","getdisciplined","selfimprovement","ADHD","timemanagement","entrepreneur","Entrepreneur"].includes(sub)) score += 10;
-  if (["plumbing","HVAC","electricians","Roofing","Contractors","smallbusiness"].includes(sub)) score += 8;
-  if (["forhire","slavelabour"].includes(sub)) score += 5;
 
   return score;
 }
@@ -187,7 +179,7 @@ async function checkInbox() {
       const users = loadUsers();
 
       if (replyType === "NEGATIVE") {
-        log("REPLY_NEG", `u/${item.author.name} not interested — closing lead`);
+        log("REPLY_NEG", `u/${item.author.name} not interested`);
         upsertUser(users, item.author.name, {
           replied: true, reply_type: "NEGATIVE",
           closed: true, closed_reason: "not_interested"
@@ -208,9 +200,8 @@ async function checkInbox() {
     }
 
     if (toMarkRead.length > 0) {
-      const chunkSize = 25;
-      for (let i = 0; i < toMarkRead.length; i += chunkSize) {
-        const chunk = toMarkRead.slice(i, i + chunkSize);
+      for (let i = 0; i < toMarkRead.length; i += 25) {
+        const chunk = toMarkRead.slice(i, i + 25);
         try {
           await reddit.markMessagesAsRead(chunk);
           log("INFO", `Marked ${chunk.length} message(s) as read`);
@@ -227,7 +218,7 @@ async function checkInbox() {
 // ─── OUTREACH CYCLE ──────────────────────────────────────────────────────────
 async function runOutreachCycle() {
   const leads = await loadLeads();
-  if (!leads.length) { log("INFO", "No leads found. Waiting for scraper..."); return; }
+  if (!leads.length) { log("INFO", "No leads found."); return; }
 
   const seenUsernames = new Set();
   const dedupedLeads = leads.filter(p => {
@@ -259,28 +250,26 @@ async function runOutreachCycle() {
 
     if (cyclesSeen.has(key)) continue;
     if (user?.sent) { log("SKIP", `already contacted u/${username}`); continue; }
-    if (user?.closed) { log("SKIP", `closed u/${username} (${user.closed_reason})`); continue; }
+    if (user?.closed) { log("SKIP", `closed u/${username}`); continue; }
 
     cyclesSeen.add(key);
     attempted++;
 
-    let tpl, subject;
+    let tplText, tplId, subject;
+
     if (product === "LOCKEDIN") {
-      tpl = pick(LOCKEDIN_MESSAGES);
+      const tpl = pick(LOCKEDIN_MESSAGES);
+      tplText = tpl.text;
+      tplId = tpl.id;
       subject = "this might help";
     } else if (product === "DEVHIRE") {
-      if (leadType === "DEV_HIRE_SUBREDDIT") {
-        tpl = pick(DEVHIRE_BOT_MESSAGES);
-        subject = "available now";
-      } else if (leadType === "DEV_HIRE_BOT") {
-        tpl = pick(DEVHIRE_BOT_MESSAGES);
-        subject = "bot and automation dev for hire";
-      } else {
-        tpl = pick(DEVHIRE_GENERAL_MESSAGES);
-        subject = "dev for hire";
-      }
+      tplText = buildDevHireMessage(post);
+      tplId = leadType === "DEV_HIRE_URGENT" ? "DH_URGENT_CONTEXT" : "DH_CONTEXT";
+      subject = leadType === "DEV_HIRE_URGENT" ? "available now" : "saw your post";
     } else {
-      tpl = pick(LOCKEDIN_MESSAGES);
+      const tpl = pick(LOCKEDIN_MESSAGES);
+      tplText = tpl.text;
+      tplId = tpl.id;
       subject = "this might help";
     }
 
@@ -291,26 +280,26 @@ async function runOutreachCycle() {
         continue;
       }
 
-      await reddit.composeMessage({ to: username, subject, text: tpl.text });
+      await reddit.composeMessage({ to: username, subject, text: tplText });
       confirmed++;
-      log("SENT", `u/${username} | ${tpl.id} | [${product}/${leadType}] | score:${scoreLead(post)}`);
+      log("SENT", `u/${username} | ${tplId} | [${product}/${leadType}] | score:${scoreLead(post)} | budget:${post.budget||"unknown"}`);
 
       upsertUser(users, username, {
         username, product, leadType,
-        sent: true, sent_at: new Date().toISOString(), template: tpl.id,
+        sent: true, sent_at: new Date().toISOString(), template: tplId,
         replied: false, reply_type: null, reply_body: null,
         closed: false, closed_reason: null,
         trigger, url, subreddit
       });
 
       await sentWriter.writeRecords([{
-        time: new Date().toISOString(), username, templateId: tpl.id,
+        time: new Date().toISOString(), username, templateId: tplId,
         subreddit, leadType, trigger, url, product
       }]);
 
       if (attempted < target) {
         const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
-        log("INFO", `Waiting ${Math.round(delay/60000)}m before next DM...`);
+        log("INFO", `Waiting ${Math.round(delay/1000)}s before next DM...`);
         await sleep(delay);
       }
     } catch (err) {

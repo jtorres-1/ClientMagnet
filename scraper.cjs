@@ -39,9 +39,7 @@ const DEVHIRE_SUBREDDITS = [
   "JobsForGeeks",
   "WorkOnline",
   "jobs4bitcoins",
-  "FreelanceWebDevelopers",
-  "hireai",
-  "Entrepreneur",
+      "Entrepreneur",
   "smallbusiness",
   "agency",
   "digital_marketing",
@@ -53,13 +51,11 @@ const TRADINGBOT_SUBREDDITS = [
   "algotrading",
   "Daytrading",
   "Forex",
-  "Futures",
-  "CryptoMarkets",
+    "CryptoMarkets",
   "trading",
   "StockMarket",
   "options",
-  "Bitcointrade",
-];
+  ];
 
 // ─── LOCKEDIN QUERIES ─────────────────────────────────────────────────────────
 const LOCKEDIN_QUERIES = [
@@ -150,10 +146,9 @@ function isFresh(post, maxHours = 6) {
 
 // ─── ACCOUNT QUALITY ─────────────────────────────────────────────────────────
 function isQualityAccount(post) {
-  const karma = (post.author?.comment_karma || 0) + (post.author?.link_karma || 0);
-  const ageMs = Date.now() - ((post.author?.created_utc || 0) * 1000);
-  const ageDays = ageMs / (1000 * 60 * 60 * 24);
-  return karma >= 10 && ageDays >= 30;
+  const name = (post.author?.name || "").toLowerCase();
+  if (name === "automoderator" || name.includes("bot") || name.includes("mod")) return false;
+  return true;
 }
 
 // ─── BUDGET EXTRACTION ────────────────────────────────────────────────────────
@@ -204,8 +199,9 @@ function isTradingBotLead(post) {
   if (offeringTagRegex.test(title)) return false;
   if (offeringContentRegex.test(combined)) return false;
   if (tradingBlockRegex.test(combined)) return false;
-  if (!tradingBotIntentRegex.test(combined)) return false;
-  if (!tradingBuyerRegex.test(combined)) return false;
+  const hasIntent = tradingBotIntentRegex.test(combined);
+  const hasBuyer = tradingBuyerRegex.test(combined);
+  if (!hasIntent && !hasBuyer) return false;
 
   return true;
 }

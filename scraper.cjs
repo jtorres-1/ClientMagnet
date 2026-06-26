@@ -92,32 +92,31 @@ const LOCKEDIN_QUERIES = [
 
 // ─── TRADING BOT QUERIES ──────────────────────────────────────────────────────
 const TRADINGBOT_QUERIES = [
-  "automate my trading strategy",
-  "looking for someone to code a trading bot",
-  "need a trading bot built",
-  "hire someone to build a trading bot",
-  "want to automate my trades",
-  "manually executing my strategy is too slow",
-  "need a bot to execute my trades automatically",
-  "looking for a developer to build an algo",
-  "want to turn my strategy into a bot",
-  "can someone build a trading bot for me",
-  "need someone to automate my forex strategy",
-  "need someone to automate my futures strategy",
-  "need someone to automate my crypto strategy",
-  "TradingView alert automation",
-  "automate TradingView signals",
-  "execute trades automatically from TradingView",
-  "pine script to live trading automation",
-  "need a bot for Kraken",
-  "need a bot for crypto futures",
-  "algo trading developer for hire",
+  "trading bot developer",
+  "automate trading strategy",
+  "algo trading hire",
+  "trading bot python",
+  "TradingView automation",
+  "automated trading strategy",
+  "forex bot developer",
+  "crypto trading bot hire",
+  "trading bot for hire",
+  "hire algo trader",
+  "trading automation developer",
+  "automate my strategy",
+  "trading script developer",
+  "futures trading bot",
+  "forex trading automation",
+  "crypto bot developer",
+  "trading bot commission",
+  "algorithmic trading developer",
+  "pine script automation",
+  "trading webhook automation",
 ];
 
 // ─── BLOCK FILTERS ────────────────────────────────────────────────────────────
 const offeringTagRegex = /^\s*\[(for hire|FH|FOR HIRE|offering|OFFERING|available|AVAILABLE|forhire)\]/i;
 
-// Tightened: only blocks clear seller signals, not buyer language
 const offeringContentRegex = /\b(i am available for hire|hire me|my rates start|check out my portfolio|looking for clients|open to new clients|taking on new clients|accepting new clients|available for freelance work|i offer (my )?services|my services include|feel free to dm me for (rates|pricing|work)|years of experience (in|with)|i specialize in building|i have \d+ years|portfolio link|my github|view my work)\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become|learning to code|trying to learn|beginner developer|new to programming|studying programming)\b/i;
@@ -125,13 +124,11 @@ const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applyin
 // ─── HIRING TAG DETECTION ─────────────────────────────────────────────────────
 const hiringTagRegex = /^\s*\[(h|hiring|hire|paid|budget|job|project|HIRING|HIRE|H|PAID|BUDGET|JOB|PROJECT)\]/i;
 
-// Tightened: requires specific technical ask, not just "I need"
 const hiringKeywordRegex = /\b(looking to hire (a |an )?(developer|programmer|coder|dev|engineer|freelancer)|want to hire (a |an )?(developer|programmer|coder|dev)|need to hire (a |an )?(developer|programmer|coder|dev)|hiring a developer|hiring an engineer|need a developer|need a programmer|need a coder|need a dev|need someone to (build|create|code|fix|scrape|automate|develop)|looking for a (developer|programmer|coder|dev|freelancer) (to|who|that)|my budget is \$|budget is \$|willing to pay \$|will pay \$|paid (project|gig|work)|need (a bot|a script|a scraper|a tool|a website|an app|a dashboard|an api|a saas|automation) (built|created|developed|made)|can (anyone|someone) build|who can build|anyone able to build|need help (building|creating|coding|developing) (a |an |my )?)\b/i;
 
 // ─── TRADING BOT INTENT ───────────────────────────────────────────────────────
 const tradingBotIntentRegex = /\b(automate (my |a |the )?(trading|strategy|trades|signals|entries|exits|orders)|trading bot|algo(rithm)?( trading)?( bot| system| strategy)?|need (a |someone to build )?(bot|script|automation) (for|to) (trade|trading|execute|forex|futures|crypto|stocks)|execute (trades|orders) automatically|TradingView (alert|signal|webhook) automation|pine script to (live|real|automated) trading|manual(ly)? execut|too slow to (enter|exit|trade) manually|missing (entries|trades|signals)|backtest(ed|ing)? (my |a )?strategy|strategy (that |I )?(need|want) automated|want to (go live|automate|run) (my |a )?strategy|hiring (a |an )?algo|looking for (a |an )?(algo|quant|bot) developer)\b/i;
 
-// Block trading posts that are clearly not looking to hire
 const tradingBlockRegex = /\b(just sharing|my results|my pnl|how i trade|my approach|what do you think|rate my|review my|is this strategy good|advice on my|feedback on|am i doing this right|paper trading journey|learning to trade|new to trading|trading journal|day \d+ of|week \d+ of)\b/i;
 
 // ─── BUDGET DETECTION ─────────────────────────────────────────────────────────
@@ -141,7 +138,6 @@ const urgencyRegex = /\b(urgent|urgently|asap|as soon as possible|today|immediat
 // ─── LOCKEDIN INTENT ──────────────────────────────────────────────────────────
 const lockedInIntentRegex = /\b(waste (time|my morning|hours)|wasting (time|mornings)|can't (stick to|follow|organize|manage|get anything done|finish)|struggling (to|with) (manage|organize|plan|schedule|focus|time|productivity)|overwhelmed (with|by) (tasks|everything|to do)|no structure|chaotic day|unproductive|procrastinat|don't know where to start|too many tasks|can never finish|lose(s)? hours|morning routine|time blocking|plan my day|organize my day|better schedule|stop wasting|ADHD and (can't|struggle|unable)|nothing done|always busy but|getting nothing done)\b/i;
 
-// Tightened: removed generic phrases like "I need", "I want", "how do i"
 const firstPersonBuyerRegex = /\b(i need help (with|organizing|managing|planning)|i need someone to|i'm looking for (a tool|an app|something that)|i am looking for (a tool|an app|something that)|i need to (fix|solve|stop) (my|this)|i can never|i struggle (to|with)|i keep (failing|losing|missing|forgetting)|i have (tried|been trying)|i can't seem to|i don't know how to stop|i've been trying to)\b/i;
 
 // ─── FRESHNESS ────────────────────────────────────────────────────────────────
@@ -232,7 +228,7 @@ function scoreTradingBotLead(post) {
   if (budgetRegex.test(combined)) score += 25;
   if (urgencyRegex.test(combined)) score += 15;
   if (/\$[5-9]\d{2}|\$[1-9]\d{3}|\$[1-9]\d{4}/.test(combined)) score += 20;
-  if (/kraken|binance|bybit|coinbase|interactive brokers|tradovate|topstep|funded/.test(combined)) score += 10;
+  if (/kraken|coinbase|interactive brokers|tradovate|topstep|funded/.test(combined)) score += 10;
   if (/futures|forex|crypto|options|stocks/.test(combined)) score += 8;
   if (/live trading|real money|funded account|prop (firm|trading)/.test(combined)) score += 12;
 
@@ -365,7 +361,6 @@ async function scrapeTradingBotSearch() {
         const combined = `${p.title} ${p.selftext || ""}`;
         const budget = extractBudget(combined) || "";
         const score = scoreTradingBotLead(p);
-
         const triggerMatch = (p.title + " " + p.selftext).toLowerCase().match(tradingBotIntentRegex)?.[0] || "trading bot";
 
         const row = {

@@ -282,6 +282,6 @@ async function scrape() {
 (async () => {
   while (true) {
     await scrape();
-    await wait(2 * 60 * 1000); // 2 min interval for speed
+    await wait(30 * 60 * 1000); // 2 min interval for speed
   }
 })();

@@ -48,6 +48,19 @@ const DEVHIRE_SUBREDDITS = [
   "ecommerce",
 ];
 
+// ─── TRADING BOT SUBREDDITS ───────────────────────────────────────────────────
+const TRADINGBOT_SUBREDDITS = [
+  "algotrading",
+  "Daytrading",
+  "Forex",
+  "Futures",
+  "CryptoMarkets",
+  "trading",
+  "StockMarket",
+  "options",
+  "Bitcointrade",
+];
+
 // ─── LOCKEDIN QUERIES ─────────────────────────────────────────────────────────
 const LOCKEDIN_QUERIES = [
   "I waste so much time figuring out what to do first",
@@ -77,19 +90,49 @@ const LOCKEDIN_QUERIES = [
   "I lose hours just deciding what to work on",
 ];
 
+// ─── TRADING BOT QUERIES ──────────────────────────────────────────────────────
+const TRADINGBOT_QUERIES = [
+  "automate my trading strategy",
+  "looking for someone to code a trading bot",
+  "need a trading bot built",
+  "hire someone to build a trading bot",
+  "want to automate my trades",
+  "manually executing my strategy is too slow",
+  "need a bot to execute my trades automatically",
+  "looking for a developer to build an algo",
+  "want to turn my strategy into a bot",
+  "can someone build a trading bot for me",
+  "need someone to automate my forex strategy",
+  "need someone to automate my futures strategy",
+  "need someone to automate my crypto strategy",
+  "TradingView alert automation",
+  "automate TradingView signals",
+  "execute trades automatically from TradingView",
+  "pine script to live trading automation",
+  "need a bot for Kraken",
+  "need a bot for crypto futures",
+  "algo trading developer for hire",
+];
+
 // ─── BLOCK FILTERS ────────────────────────────────────────────────────────────
-// Block anyone OFFERING services — tags only, not "for hire" phrase which buyers also use
 const offeringTagRegex = /^\s*\[(for hire|FH|FOR HIRE|offering|OFFERING|available|AVAILABLE|forhire)\]/i;
 
-const offeringContentRegex = /\b(i am available|i('m| am) a (developer|designer|programmer|dev|coder|engineer|freelancer)|offering my services|available for hire|hire me|my rates|i build websites|i develop websites|i create websites|check out my work|starting at \$|my portfolio|years of experience|i have experience|i specialize in|my skills include|i can build|i can develop|i can create|i can help you build|dm me if you need|feel free to dm|looking for (clients|projects|work|opportunities)|open to (work|projects|clients)|taking on (clients|projects)|accepting (clients|projects)|available for (projects|work|freelance)|i do (freelance|contract)|contract developer|remote developer|senior developer|junior developer|full stack developer available|react developer available|python developer available|nodejs developer available|i offer my|my services include|my work includes|portfolio link)\b/i;
+// Tightened: only blocks clear seller signals, not buyer language
+const offeringContentRegex = /\b(i am available for hire|hire me|my rates start|check out my portfolio|looking for clients|open to new clients|taking on new clients|accepting new clients|available for freelance work|i offer (my )?services|my services include|feel free to dm me for (rates|pricing|work)|years of experience (in|with)|i specialize in building|i have \d+ years|portfolio link|my github|view my work)\b/i;
 
 const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|unemployment|homework|assignment|school project|research paper|how do i become|how to become|learning to code|trying to learn|beginner developer|new to programming|studying programming)\b/i;
 
 // ─── HIRING TAG DETECTION ─────────────────────────────────────────────────────
-// Matches buyer posts: [H], [Hiring], [HIRING], [Hire], [hire], [PAID], [Budget], [Job], [Project]
 const hiringTagRegex = /^\s*\[(h|hiring|hire|paid|budget|job|project|HIRING|HIRE|H|PAID|BUDGET|JOB|PROJECT)\]/i;
 
-const hiringKeywordRegex = /\b(looking to hire|want to hire|need to hire|hiring a|hiring an|need a developer|need a programmer|need a coder|need a dev|need someone to build|need someone to create|need someone to code|need someone to fix|need someone to scrape|need someone to automate|looking for a developer|looking for a programmer|looking for a coder|looking for a dev|budget is|my budget|willing to pay|will pay|paying|paid project|paid work|paid gig|fixed price|flat fee|one time project|short term project|contract work|freelance project|commission|bounty|need built|needs to be built|need to get done|need this done|can anyone build|can someone build|who can build|anyone able to build|anyone available to build|need help building|need help creating|need help coding|need help with my|need help fixing|i need to automate|i need to scrape|i need a bot|i need a script|i need a tool|i need a website|i need an app|i need a scraper|i need a dashboard|i need an api|i need a saas)\b/i;
+// Tightened: requires specific technical ask, not just "I need"
+const hiringKeywordRegex = /\b(looking to hire (a |an )?(developer|programmer|coder|dev|engineer|freelancer)|want to hire (a |an )?(developer|programmer|coder|dev)|need to hire (a |an )?(developer|programmer|coder|dev)|hiring a developer|hiring an engineer|need a developer|need a programmer|need a coder|need a dev|need someone to (build|create|code|fix|scrape|automate|develop)|looking for a (developer|programmer|coder|dev|freelancer) (to|who|that)|my budget is \$|budget is \$|willing to pay \$|will pay \$|paid (project|gig|work)|need (a bot|a script|a scraper|a tool|a website|an app|a dashboard|an api|a saas|automation) (built|created|developed|made)|can (anyone|someone) build|who can build|anyone able to build|need help (building|creating|coding|developing) (a |an |my )?)\b/i;
+
+// ─── TRADING BOT INTENT ───────────────────────────────────────────────────────
+const tradingBotIntentRegex = /\b(automate (my |a |the )?(trading|strategy|trades|signals|entries|exits|orders)|trading bot|algo(rithm)?( trading)?( bot| system| strategy)?|need (a |someone to build )?(bot|script|automation) (for|to) (trade|trading|execute|forex|futures|crypto|stocks)|execute (trades|orders) automatically|TradingView (alert|signal|webhook) automation|pine script to (live|real|automated) trading|manual(ly)? execut|too slow to (enter|exit|trade) manually|missing (entries|trades|signals)|backtest(ed|ing)? (my |a )?strategy|strategy (that |I )?(need|want) automated|want to (go live|automate|run) (my |a )?strategy|hiring (a |an )?algo|looking for (a |an )?(algo|quant|bot) developer)\b/i;
+
+// Block trading posts that are clearly not looking to hire
+const tradingBlockRegex = /\b(just sharing|my results|my pnl|how i trade|my approach|what do you think|rate my|review my|is this strategy good|advice on my|feedback on|am i doing this right|paper trading journey|learning to trade|new to trading|trading journal|day \d+ of|week \d+ of)\b/i;
 
 // ─── BUDGET DETECTION ─────────────────────────────────────────────────────────
 const budgetRegex = /\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(k|K)?|\b(\d+(?:,\d{3})*)\s*(dollars?|usd|budget)\b/i;
@@ -98,7 +141,8 @@ const urgencyRegex = /\b(urgent|urgently|asap|as soon as possible|today|immediat
 // ─── LOCKEDIN INTENT ──────────────────────────────────────────────────────────
 const lockedInIntentRegex = /\b(waste (time|my morning|hours)|wasting (time|mornings)|can't (stick to|follow|organize|manage|get anything done|finish)|struggling (to|with) (manage|organize|plan|schedule|focus|time|productivity)|overwhelmed (with|by) (tasks|everything|to do)|no structure|chaotic day|unproductive|procrastinat|don't know where to start|too many tasks|can never finish|lose(s)? hours|morning routine|time blocking|plan my day|organize my day|better schedule|stop wasting|ADHD and (can't|struggle|unable)|nothing done|always busy but|getting nothing done)\b/i;
 
-const firstPersonBuyerRegex = /\b(i need|i'm looking|i am looking|i want|i have a budget|i will pay|i need to hire|i'm hiring|i am hiring|i need help with|i need someone to|i'm searching|i am searching|how do i|how can i|does anyone know|can anyone|anyone know|we need|our (company|business|team) needs)\b/i;
+// Tightened: removed generic phrases like "I need", "I want", "how do i"
+const firstPersonBuyerRegex = /\b(i need help (with|organizing|managing|planning)|i need someone to|i'm looking for (a tool|an app|something that)|i am looking for (a tool|an app|something that)|i need to (fix|solve|stop) (my|this)|i can never|i struggle (to|with)|i keep (failing|losing|missing|forgetting)|i have (tried|been trying)|i can't seem to|i don't know how to stop|i've been trying to)\b/i;
 
 // ─── FRESHNESS ────────────────────────────────────────────────────────────────
 function isFresh(post, maxHours = 6) {
@@ -127,13 +171,10 @@ function isHiringPost(post) {
   const body = (post.selftext || "");
   const combined = `${title} ${body}`;
 
-  // Block offering tags in title
   if (offeringTagRegex.test(title)) return false;
-  // Block offering content
   if (offeringContentRegex.test(combined)) return false;
   if (blockRegex.test(combined)) return false;
 
-  // Must have hiring tag OR hiring keywords
   const hasHiringTag = hiringTagRegex.test(title);
   const hasKeywords = hiringKeywordRegex.test(combined);
 
@@ -156,16 +197,44 @@ function isLockedInLead(post) {
   return true;
 }
 
+// ─── TRADING BOT POST CHECK ───────────────────────────────────────────────────
+function isTradingBotLead(post) {
+  const title = (post.title || "");
+  const body = (post.selftext || "");
+  const combined = `${title} ${body}`;
+
+  if (offeringTagRegex.test(title)) return false;
+  if (offeringContentRegex.test(combined)) return false;
+  if (tradingBlockRegex.test(combined)) return false;
+  if (!tradingBotIntentRegex.test(combined)) return false;
+
+  return true;
+}
+
 // ─── LEAD SCORING ─────────────────────────────────────────────────────────────
 function scoreDevHireLead(post) {
-  let score = 40; // base for subreddit hire posts
+  let score = 40;
   const combined = `${post.title} ${post.selftext || ""}`.toLowerCase();
 
   if (budgetRegex.test(combined)) score += 20;
   if (urgencyRegex.test(combined)) score += 15;
   if (/bot|scraper|automation|automate|script|api|saas|dashboard|web app/.test(combined)) score += 10;
-  if (/\$[5-9]\d{2}|\$[1-9]\d{3}/.test(combined)) score += 15; // $500+ budget
+  if (/\$[5-9]\d{2}|\$[1-9]\d{3}/.test(combined)) score += 15;
   if (/python|node|playwright|puppeteer|selenium|ai|openai|gpt/.test(combined)) score += 8;
+
+  return score;
+}
+
+function scoreTradingBotLead(post) {
+  let score = 50;
+  const combined = `${post.title} ${post.selftext || ""}`.toLowerCase();
+
+  if (budgetRegex.test(combined)) score += 25;
+  if (urgencyRegex.test(combined)) score += 15;
+  if (/\$[5-9]\d{2}|\$[1-9]\d{3}|\$[1-9]\d{4}/.test(combined)) score += 20;
+  if (/kraken|binance|bybit|coinbase|interactive brokers|tradovate|topstep|funded/.test(combined)) score += 10;
+  if (/futures|forex|crypto|options|stocks/.test(combined)) score += 8;
+  if (/live trading|real money|funded account|prop (firm|trading)/.test(combined)) score += 12;
 
   return score;
 }
@@ -223,6 +292,107 @@ async function scrapeDevHireSubreddits() {
   return leads;
 }
 
+// ─── SCRAPE TRADING BOT SUBREDDITS ───────────────────────────────────────────
+async function scrapeTradingBotSubreddits() {
+  const existingUrls = new Set(
+    fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2])
+  );
+  let leads = 0;
+
+  for (const sub of TRADINGBOT_SUBREDDITS) {
+    console.log(`Scraping r/${sub} for trading bot leads...`);
+    try {
+      await wait(2000);
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
+      for (const p of posts) {
+        if (!p.author) continue;
+        if (!isFresh(p, 12)) continue;
+        if (!isTradingBotLead(p)) continue;
+        if (!isQualityAccount(p)) continue;
+
+        const url = `https://reddit.com${p.permalink}`;
+        if (existingUrls.has(url)) continue;
+
+        const combined = `${p.title} ${p.selftext || ""}`;
+        const budget = extractBudget(combined) || "";
+        const score = scoreTradingBotLead(p);
+
+        const row = {
+          username: p.author.name,
+          title: `"${p.title.replace(/"/g, "'").replace(/,/g, " ")}"`,
+          url,
+          subreddit: `r/${sub}`,
+          time: new Date(p.created_utc * 1000).toISOString(),
+          leadType: "TRADING_BOT",
+          matchedTrigger: p.title.slice(0, 60).replace(/,/g, " "),
+          product: "TRADINGBOT",
+          budget,
+          score
+        };
+        prependLead(leadsPath, row);
+        existingUrls.add(url);
+        leads++;
+        console.log(`  + TRADING_BOT [r/${sub}] score:${score} budget:${budget||"unknown"}: u/${p.author.name} - "${p.title.slice(0, 50)}"`);
+      }
+    } catch (err) {
+      console.log(`Error scraping r/${sub}: ${err.message}`);
+      await wait(10000);
+    }
+  }
+  return leads;
+}
+
+// ─── SCRAPE TRADING BOT GLOBAL SEARCH ────────────────────────────────────────
+async function scrapeTradingBotSearch() {
+  const existingUrls = new Set(
+    fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2])
+  );
+  let leads = 0;
+
+  for (const query of TRADINGBOT_QUERIES) {
+    console.log(`Searching: "${query}" [TRADINGBOT]`);
+    try {
+      await wait(2000);
+      const posts = await reddit.search({ query, sort: "new", time: "week", limit: 25 });
+      for (const p of posts) {
+        if (!p.author || !isFresh(p, 48)) continue;
+        if (!isTradingBotLead(p)) continue;
+        if (!isQualityAccount(p)) continue;
+
+        const url = `https://reddit.com${p.permalink}`;
+        if (existingUrls.has(url)) continue;
+
+        const combined = `${p.title} ${p.selftext || ""}`;
+        const budget = extractBudget(combined) || "";
+        const score = scoreTradingBotLead(p);
+
+        const triggerMatch = (p.title + " " + p.selftext).toLowerCase().match(tradingBotIntentRegex)?.[0] || "trading bot";
+
+        const row = {
+          username: p.author.name,
+          title: `"${p.title.replace(/"/g, "'").replace(/,/g, " ")}"`,
+          url,
+          subreddit: p.subreddit_name_prefixed || p.subreddit,
+          time: new Date(p.created_utc * 1000).toISOString(),
+          leadType: "TRADING_BOT",
+          matchedTrigger: triggerMatch,
+          product: "TRADINGBOT",
+          budget,
+          score
+        };
+        prependLead(leadsPath, row);
+        existingUrls.add(url);
+        leads++;
+        console.log(`  + TRADING_BOT_SEARCH: u/${p.author.name} - "${triggerMatch}"`);
+      }
+    } catch (err) {
+      console.log(`Error searching "${query}": ${err.message}`);
+      await wait(15000);
+    }
+  }
+  return leads;
+}
+
 // ─── SCRAPE LOCKEDIN GLOBAL SEARCH ────────────────────────────────────────────
 async function scrapeLockedIn() {
   const existingUrls = new Set(
@@ -271,10 +441,12 @@ async function scrapeLockedIn() {
 
 async function scrape() {
   console.log("=".repeat(50));
-  console.log("ClientMagnet -- Subreddit Hiring + lockedIn Search");
+  console.log("ClientMagnet -- DevHire + TradingBot + lockedIn");
   console.log("=".repeat(50));
   let leads = 0;
   leads += await scrapeDevHireSubreddits();
+  leads += await scrapeTradingBotSubreddits();
+  leads += await scrapeTradingBotSearch();
   leads += await scrapeLockedIn();
   console.log(`Scrape complete -- leads found: ${leads}`);
 }
@@ -282,6 +454,6 @@ async function scrape() {
 (async () => {
   while (true) {
     await scrape();
-    await wait(30 * 60 * 1000); // 2 min interval for speed
+    await wait(30 * 60 * 1000);
   }
 })();

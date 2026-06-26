@@ -1,4 +1,4 @@
-// agency_bot.cjs — DevHire + lockedIn Outreach
+// agency_bot.cjs — DevHire + lockedIn + TradingBot Outreach
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs       = require("fs");
@@ -22,8 +22,8 @@ const usersPath = path.join(baseDir, "contacted_users.json");
 
 const MIN_DMS_PER_CYCLE = 60;
 const MAX_DMS_PER_CYCLE = 80;
-const MIN_DELAY_MS      = 45 * 1000;  // 45 seconds
-const MAX_DELAY_MS      = 90 * 1000;  // 90 seconds
+const MIN_DELAY_MS      = 45 * 1000;
+const MAX_DELAY_MS      = 90 * 1000;
 const INBOX_POLL_MS     = 60 * 1000;
 
 function loadUsers() {
@@ -71,20 +71,20 @@ function classifyReply(text) {
   return "UNCLEAR";
 }
 
-// ─── CONTEXT-AWARE MESSAGE BUILDER ────────────────────────────────────────────
+// ─── DEVHIRE MESSAGE BUILDER ──────────────────────────────────────────────────
 function buildDevHireMessage(post) {
   const title = (post.title || "").replace(/^\[.*?\]\s*/i, "").trim();
   const budget = (post.budget || "").trim();
   const leadType = (post.leadType || "").toUpperCase();
   const isUrgent = leadType === "DEV_HIRE_URGENT";
 
-  const budgetLine = budget ? `\n\nbudget looks like ${budget} — works for me.` : "";
+  const budgetLine = budget ? `\n\nbudget looks like ${budget}, works for me.` : "";
   const urgentLine = isUrgent ? " can start immediately." : " can have it done in 48 hours.";
 
   const openers = [
     `saw your post about ${title.toLowerCase().slice(0, 80)}.`,
     `your post about ${title.toLowerCase().slice(0, 80)} caught my eye.`,
-    `just saw your post — ${title.toLowerCase().slice(0, 80)}.`,
+    `just saw your post about ${title.toLowerCase().slice(0, 80)}.`,
   ];
 
   const bodies = [
@@ -101,6 +101,30 @@ function buildDevHireMessage(post) {
 
   return `${pick(openers)}\n\n${pick(bodies)}\n\n${pick(closes)}`;
 }
+
+// ─── TRADING BOT MESSAGES ─────────────────────────────────────────────────────
+const TRADINGBOT_MESSAGES = [
+  {
+    id: "TB_1",
+    text: `saw your post. i build custom trading bots for people running real strategies.\n\ni recently built a live futures bot that ran on a funded Topstep account using the ProjectX API. paper trading mode, live execution, position sizing, all included.\n\nwhat exchange and strategy are you working with?`
+  },
+  {
+    id: "TB_2",
+    text: `saw your post. automating trading strategies is what i do.\n\nrecent build: a fully automated futures bot running on a funded account. handles entries, exits, position sizing, and risk limits. flat fee, you get a working bot.\n\nwhat are you trying to automate?`
+  },
+  {
+    id: "TB_3",
+    text: `saw your post. i build trading bots for people who have a strategy and want it running automatically.\n\nlive example: futures bot on a Topstep funded account, built in Python, connected to the exchange API directly. no third party tools, no subscriptions.\n\nwhat does your setup look like?`
+  },
+  {
+    id: "TB_4",
+    text: `saw your post. if you have a strategy that works manually and you want it automated, that's exactly what i build.\n\ni've shipped a live futures bot on a funded account and custom automation for several trading setups. flat fee, delivered fast.\n\nwhat exchange are you on and what's the strategy?`
+  },
+  {
+    id: "TB_5",
+    text: `saw your post. i specialize in custom trading bot development.\n\nrecent work includes a live automated futures bot on a funded Topstep combine using ProjectX API. built in Python, handles full trade lifecycle.\n\ntell me about your strategy and what you want automated.`
+  },
+];
 
 // ─── LOCKEDIN MESSAGES ────────────────────────────────────────────────────────
 const LOCKEDIN_MESSAGES = [
@@ -128,20 +152,21 @@ const LOCKEDIN_MESSAGES = [
 
 // ─── SCORING ──────────────────────────────────────────────────────────────────
 function scoreLead(p) {
-  // Use pre-computed score from scraper if available
   const preScore = parseInt(p.score || "0");
-  if (preScore > 0 && p.product === "DEVHIRE") return preScore;
+  const product = (p.product || "LOCKEDIN").toUpperCase();
+
+  if (preScore > 0 && (product === "DEVHIRE" || product === "TRADINGBOT")) return preScore;
 
   let score = 0;
-  const product = (p.product || "LOCKEDIN").toUpperCase();
   const leadType = (p.leadType || "").toUpperCase();
 
-  // DevHire always scores higher than lockedIn
+  if (product === "TRADINGBOT") score += 70;
   if (product === "DEVHIRE") score += 50;
   if (product === "LOCKEDIN") score += 25;
 
   if (leadType === "DEV_HIRE_URGENT") score += 30;
   if (leadType === "DEV_HIRE_SUBREDDIT") score += 20;
+  if (leadType === "TRADING_BOT") score += 40;
   if (leadType === "LOCKEDIN_INTENT") score += 20;
 
   return score;
@@ -257,15 +282,20 @@ async function runOutreachCycle() {
 
     let tplText, tplId, subject;
 
-    if (product === "LOCKEDIN") {
-      const tpl = pick(LOCKEDIN_MESSAGES);
+    if (product === "TRADINGBOT") {
+      const tpl = pick(TRADINGBOT_MESSAGES);
       tplText = tpl.text;
       tplId = tpl.id;
-      subject = "this might help";
+      subject = "saw your post";
     } else if (product === "DEVHIRE") {
       tplText = buildDevHireMessage(post);
       tplId = leadType === "DEV_HIRE_URGENT" ? "DH_URGENT_CONTEXT" : "DH_CONTEXT";
       subject = leadType === "DEV_HIRE_URGENT" ? "available now" : "saw your post";
+    } else if (product === "LOCKEDIN") {
+      const tpl = pick(LOCKEDIN_MESSAGES);
+      tplText = tpl.text;
+      tplId = tpl.id;
+      subject = "this might help";
     } else {
       const tpl = pick(LOCKEDIN_MESSAGES);
       tplText = tpl.text;
@@ -316,7 +346,7 @@ async function runOutreachCycle() {
 // ─── MAIN LOOP ───────────────────────────────────────────────────────────────
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet — DevHire + lockedIn Outreach Bot");
+  console.log("ClientMagnet — DevHire + TradingBot + lockedIn Outreach Bot");
   console.log("=".repeat(60));
 
   setInterval(checkInbox, INBOX_POLL_MS);

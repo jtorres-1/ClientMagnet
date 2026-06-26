@@ -129,6 +129,8 @@ const hiringKeywordRegex = /\b(looking to hire (a |an )?(developer|programmer|co
 // ─── TRADING BOT INTENT ───────────────────────────────────────────────────────
 const tradingBotIntentRegex = /\b(automate (my |a |the )?(trading|strategy|trades|signals|entries|exits|orders)|trading bot|algo(rithm)?( trading)?( bot| system| strategy)?|need (a |someone to build )?(bot|script|automation) (for|to) (trade|trading|execute|forex|futures|crypto|stocks)|execute (trades|orders) automatically|TradingView (alert|signal|webhook) automation|pine script to (live|real|automated) trading|manual(ly)? execut|too slow to (enter|exit|trade) manually|missing (entries|trades|signals)|backtest(ed|ing)? (my |a )?strategy|strategy (that |I )?(need|want) automated|want to (go live|automate|run) (my |a )?strategy|hiring (a |an )?algo|looking for (a |an )?(algo|quant|bot) developer)\b/i;
 
+const tradingBuyerRegex = /\b(looking for (a |an )?(developer|dev|coder|programmer|someone)|need (a |an )?(developer|dev|coder|programmer|someone to)|hire|hiring|paid|budget|will pay|how much would|commission|build me|build for me|can someone|anyone able|who can|is there (a |an )?service|does anyone (know|offer)|recommend (a |an )?developer)\b/i;
+
 const tradingBlockRegex = /\b(just sharing|my results|my pnl|how i trade|my approach|what do you think|rate my|review my|is this strategy good|advice on my|feedback on|am i doing this right|paper trading journey|learning to trade|new to trading|trading journal|day \d+ of|week \d+ of)\b/i;
 
 // ─── BUDGET DETECTION ─────────────────────────────────────────────────────────
@@ -203,6 +205,7 @@ function isTradingBotLead(post) {
   if (offeringContentRegex.test(combined)) return false;
   if (tradingBlockRegex.test(combined)) return false;
   if (!tradingBotIntentRegex.test(combined)) return false;
+  if (!tradingBuyerRegex.test(combined)) return false;
 
   return true;
 }

@@ -1,7 +1,10 @@
+// agency_bot.cjs — Improved version (No links in DMs + Better messaging)
 require("dotenv").config();
+const snoowrap = require("snoowrap");
 const fs = require("fs");
 const path = require("path");
-const snoowrap = require("snoowrap");
+const csv = require("csv-parser");
+const { createObjectCsvWriter } = require("csv-writer");
 
 const reddit = new snoowrap({
   userAgent: process.env.REDDIT_USER_AGENT,
@@ -15,268 +18,239 @@ const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
 const leadsPath = path.join(baseDir, "clean_leads.csv");
-const HEADER = "username,title,url,subreddit,time,leadType,matchedTrigger,product,budget,score";
+const sentPath = path.join(baseDir, "clean_leads_dmed.csv");
+const usersPath = path.join(baseDir, "contacted_users.json");
 
-// Initialize CSV if it doesn't exist
-if (!fs.existsSync(leadsPath)) {
-  fs.writeFileSync(leadsPath, HEADER + "\n");
+const MIN_DMS_PER_CYCLE = 50;
+const MAX_DMS_PER_CYCLE = 70;
+const MIN_DELAY_MS = 50 * 1000;
+const MAX_DELAY_MS = 95 * 1000;
+const INBOX_POLL_MS = 60 * 1000;
+
+// ─── USER TRACKING ───────────────────────────────────────────────────────────
+function loadUsers() {
+  if (!fs.existsSync(usersPath)) return {};
+  try { return JSON.parse(fs.readFileSync(usersPath, "utf8")); }
+  catch { return {}; }
+}
+function saveUsers(users) { fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
+function getUser(users, username) { return users[username.toLowerCase()] || null; }
+function upsertUser(users, username, fields) {
+  const key = username.toLowerCase();
+  users[key] = { ...(users[key] || {}), ...fields, last_message_at: new Date().toISOString() };
+  saveUsers(users);
+  return users[key];
 }
 
-// ─── UTILS ───────────────────────────────────────────────────────────────────
-const wait = ms => new Promise(res => setTimeout(res, ms));
+const sentWriter = createObjectCsvWriter({
+  path: sentPath,
+  header: [
+    { id: "time", title: "Time" }, { id: "username", title: "Username" },
+    { id: "templateId", title: "Template ID" }, { id: "subreddit", title: "Subreddit" },
+    { id: "leadType", title: "Lead Type" }, { id: "trigger", title: "Matched Trigger" },
+    { id: "url", title: "Post URL" }, { id: "product", title: "Product" },
+  ],
+  append: true
+});
 
-function prependLead(file, rowObj) {
-  const row = Object.values(rowObj).map(v => `"${String(v).replace(/"/g, '""')}"`).join(",") + "\n";
-  const lines = fs.readFileSync(file, "utf8").split("\n");
-  if (!lines[0].startsWith("username")) lines.unshift(HEADER);
-  lines.splice(1, 0, row.trim());
-  fs.writeFileSync(file, lines.join("\n"));
+function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ─── REPLY CLASSIFICATION ────────────────────────────────────────────────────
+const positiveReplyRegex = /\b(interested|tell me more|how does it work|how much|what's the price|sounds good|yes|yeah|sure|how do i|sign me up|i want|send me|where do i|how do i get|let's do it|can you|would this work|more info|demo|trial|how to get started|i'd like|this looks|this sounds|great|awesome|exactly what|been looking for|need this)\b/i;
+
+const negativeReplyRegex = /\b(not interested|no thanks|stop messaging|don't message|remove me|unsubscribe|leave me alone|wrong person|not for me|spam|already have|don't need|not looking|pass|nope|scam)\b/i;
+
+function classifyReply(text) {
+  const t = (text || "").toLowerCase();
+  if (negativeReplyRegex.test(t)) return "NEGATIVE";
+  if (positiveReplyRegex.test(t)) return "POSITIVE";
+  return "UNCLEAR";
 }
 
-function isFresh(post, maxHours = 12) {
-  const ageHours = (Date.now() - post.created_utc * 1000) / 36e5;
-  return ageHours <= maxHours;
+// ─── IMPROVED MESSAGES (NO LINKS) ────────────────────────────────────────────
+
+// DevHire Messages
+function buildDevHireMessage(post) {
+  const title = (post.title || "").replace(/^\[.*?\]\s*/i, "").trim().toLowerCase().slice(0, 85);
+  const budget = (post.budget || "").trim();
+  const isUrgent = (post.leadType || "").toUpperCase() === "DEV_HIRE_URGENT";
+
+  const budgetLine = budget ? ` Budget mentioned looks workable for me.` : "";
+  const timing = isUrgent ? " I can start right away." : " I can usually turn these around in 48 hours.";
+
+  const openers = [
+    `Saw your post about ${title}.`,
+    `Your post about ${title} caught my attention.`,
+    `Just came across your post about ${title}.`,
+  ];
+
+  const bodies = [
+    `I build this kind of thing regularly. Recent work includes Reddit automation tools, Google Maps lead scrapers, and custom booking/automation systems for businesses.`,
+    `This type of project is in my wheelhouse. I've shipped automation bots, scrapers with email lookup, and custom workflow tools for clients.`,
+    `I've built similar tools before — including automation systems and data scrapers that are currently in use.`,
+  ];
+
+  const closes = [
+    `Flat fee only.${timing}${budgetLine}\n\nWhat are the full details?`,
+    `Flat fee, delivered quickly.${timing}${budgetLine}\n\nHappy to take a look at the full scope.`,
+    `Flat fee only.${timing}${budgetLine}\n\nWhat exactly are you looking to have built?`,
+  ];
+
+  return `${pick(openers)}\n\n${pick(bodies)}\n\n${pick(closes)}`;
 }
 
-function isGoodAccount(post) {
-  if (!post.author) return false;
-  const name = post.author.name.toLowerCase();
-  if (name === "automoderator" || name.includes("bot") || name.includes("mod")) return false;
+// Trading Bot Messages (Improved - No links)
+const TRADINGBOT_MESSAGES = [
+  {
+    id: "TB_1",
+    text: `Saw your post. I build custom trading bots for people running real strategies.\n\nI recently built a live futures bot that ran on a funded account with full execution, position sizing, and risk rules.\n\nWhat exchange and strategy are you working with?`
+  },
+  {
+    id: "TB_2",
+    text: `Saw your post. I specialize in turning trading strategies into automated bots.\n\nRecent project: A fully automated futures bot with entries, exits, and risk management running on a funded account.\n\nWhat are you trying to automate?`
+  },
+  {
+    id: "TB_3",
+    text: `Saw your post. I build trading bots for traders who already have a working strategy.\n\nI’ve shipped live automated systems including a futures bot on a funded account with full trade lifecycle handling.\n\nWhat does your current setup look like?`
+  },
+];
 
-  const accountAgeDays = (Date.now() / 1000 - post.author.created_utc) / 86400;
-  const karma = (post.author.link_karma || 0) + (post.author.comment_karma || 0);
-  return accountAgeDays > 25 && karma > 40;
+// LockedIn Messages (No links + softer)
+const LOCKEDIN_MESSAGES = [
+  {
+    id: "LI_1",
+    text: `Saw your post. I had the same issue so I built something that helps.\n\nYou type out everything you need to do, and it turns it into a clean time-blocked schedule that goes straight into your calendar.\n\nTakes about 10 seconds.`
+  },
+  {
+    id: "LI_2",
+    text: `Saw your post. I built a simple tool for this exact problem.\n\nDump all your tasks in any order and it builds a realistic daily schedule and adds it to your calendar automatically.\n\nNo manual dragging or planning needed.`
+  },
+  {
+    id: "LI_3",
+    text: `Saw your post. I used to waste the first hour of every day planning.\n\nSo I built something that takes your task list and turns it into a proper time-blocked calendar schedule in seconds.`
+  },
+];
+
+// ─── SCORING (same as before) ────────────────────────────────────────────────
+function scoreLead(p) {
+  const preScore = parseInt(p.score || "0");
+  const product = (p.product || "LOCKEDIN").toUpperCase();
+
+  if (preScore > 0 && (product === "DEVHIRE" || product === "TRADINGBOT")) return preScore;
+
+  let score = 0;
+  const leadType = (p.leadType || "").toUpperCase();
+
+  if (product === "TRADINGBOT") score += 70;
+  if (product === "DEVHIRE") score += 50;
+  if (product === "LOCKEDIN") score += 25;
+
+  if (leadType === "DEV_HIRE_URGENT") score += 30;
+  if (leadType === "DEV_HIRE_SUBREDDIT") score += 20;
+  if (leadType === "TRADING_BOT") score += 40;
+  if (leadType === "LOCKEDIN_INTENT") score += 20;
+
+  return score;
 }
 
-// ─── REGEXES ─────────────────────────────────────────────────────────────────
-const offeringTagRegex = /^\s*\[(for hire|FH|FOR HIRE|offering|OFFERING|available|AVAILABLE)\]/i;
-const offeringContentRegex = /\b(i am available for hire|hire me|my rates start|check out my portfolio|looking for clients|open to new clients|taking on new clients)\b/i;
-const blockRegex = /\b(looking for a job|job hunting|resume|cover letter|applying for|interview prep|laid off|homework|assignment|school project)\b/i;
-
-// DevHire
-const hiringTagRegex = /^\s*\[(h|hiring|hire|paid|budget|job|project)\]/i;
-const devHireBuyerRegex = /\b(looking to hire|need to hire|hiring (a |an )?(developer|dev|programmer|coder)|need (a |an )?(developer|dev|programmer|coder)|need someone to (build|create|code|fix|scrape|automate|develop)|can someone build|anyone able to build|who can build)\b/i;
-const quickGigRegex = /\b(quick|small|simple|fast|short term|one time|one-off|small project|script|bot|scraper|automation|tool|dashboard|api integration)\b/i;
-const devHireBlockRegex = /\b(full time|full-time|permanent|long term|ongoing|monthly retainer|equity|intern|internship|senior developer|lead developer)\b/i;
-
-// Trading Bot
-const tradingBotIntentRegex = /\b(automate (my |a |the )?(trading|strategy|trades)|trading bot|algo trading bot|need (a |someone to build )?(bot|script|automation) (for|to) (trade|trading)|TradingView (alert|webhook) automation|futures trading bot|forex trading automation)\b/i;
-const tradingBuyerRegex = /\b(looking for (a |an )?(developer|dev)|need (a |an )?(developer|dev)|hire|hiring|paid|budget|will pay|build me|can someone build|anyone able to build)\b/i;
-const tradingBlockRegex = /\b(just sharing|my results|my pnl|how i trade|my approach|what do you think|rate my|review my|paper trading journey|new to trading)\b/i;
-
-// LockedIn
-const lockedInIntentRegex = /\b(waste (time|my morning)|can't (stick to|organize|manage|get anything done)|struggling (to|with) (manage|organize|plan)|overwhelmed (with|by) (tasks)|no structure|chaotic day|unproductive|procrastinat|too many tasks|can never finish|lose hours|morning routine|time blocking|plan my day|ADHD and (can't|struggle))\b/i;
-const firstPersonBuyerRegex = /\b(i need help|i need someone to|i'm looking for|i am looking for|i need to (fix|stop)|i can never|i struggle (to|with)|i keep (failing|losing)|i have (tried|been trying)|i can't seem to)\b/i;
-
-// Budget & Urgency
-const budgetRegex = /\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(k|K)?|\b(\d+(?:,\d{3})*)\s*(dollars?|usd|budget)\b/i;
-const urgencyRegex = /\b(urgent|urgently|asap|as soon as possible|today|immediately|right away|need it done fast|rush|by tomorrow|eod)\b/i;
-
-// ─── SCORING ─────────────────────────────────────────────────────────────────
-function extractBudget(text) {
-  const match = text.match(budgetRegex);
-  return match ? match[0].trim().slice(0, 25) : "";
+// ─── INBOX + OUTREACH LOGIC (kept mostly the same) ───────────────────────────
+async function checkInbox() {
+  // ... (keep your existing inbox logic — it's solid)
 }
 
-function scoreDevHireLead(post) {
-  let score = 35;
-  const combined = `${post.title} ${post.selftext || ""}`.toLowerCase();
+async function runOutreachCycle() {
+  const leads = await loadLeads();
+  if (!leads.length) return;
 
-  if (budgetRegex.test(combined)) score += 25;
-  if (urgencyRegex.test(combined)) score += 20;
-  if (quickGigRegex.test(combined)) score += 15;
-  if (/bot|scraper|automation|script|api|dashboard/.test(combined)) score += 12;
-  if (/\$[3-9]\d{2}|\$[1-9]\d{3}/.test(combined)) score += 15;
+  const seen = new Set();
+  const deduped = leads.filter(p => {
+    const k = (p.username || "").toLowerCase().trim();
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  deduped.sort((a, b) => scoreLead(b) - scoreLead(a));
 
-  if (devHireBlockRegex.test(combined)) score -= 35;
-  if (/full time|full-time|permanent|long term/.test(combined)) score -= 30;
+  const users = loadUsers();
+  const target = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
+  let attempted = 0, sent = 0;
 
-  return Math.max(0, score);
-}
+  const MIN_SCORE = 60; // New quality gate
 
-function scoreTradingBotLead(post) {
-  let score = 50;
-  const combined = `${post.title} ${post.selftext || ""}`.toLowerCase();
+  for (const post of deduped) {
+    if (attempted >= target) break;
 
-  if (budgetRegex.test(combined)) score += 25;
-  if (urgencyRegex.test(combined)) score += 15;
-  if (/\$[5-9]\d{2}|\$[1-9]\d{3}/.test(combined)) score += 20;
-  if (/kraken|coinbase|interactive brokers|tradovate|topstep|funded/.test(combined)) score += 12;
-  if (/futures|forex|crypto|options/.test(combined)) score += 8;
+    const username = (post.username || "").trim();
+    if (!username) continue;
 
-  return Math.max(0, score);
-}
+    const key = username.toLowerCase();
+    const user = getUser(users, username);
+    if (user?.sent || user?.closed) continue;
 
-// ─── LEAD FILTERS ────────────────────────────────────────────────────────────
-function isHiringPost(post) {
-  const title = post.title || "";
-  const body = post.selftext || "";
-  const combined = `${title} ${body}`.toLowerCase();
+    const leadScore = scoreLead(post);
+    if (leadScore < MIN_SCORE) continue;
 
-  if (offeringTagRegex.test(title)) return false;
-  if (offeringContentRegex.test(combined)) return false;
-  if (blockRegex.test(combined)) return false;
-  if (devHireBlockRegex.test(combined)) return false;
+    attempted++;
 
-  const hasTag = hiringTagRegex.test(title);
-  const hasBuyer = devHireBuyerRegex.test(combined);
-  const hasQuickGig = quickGigRegex.test(combined);
+    let message, tplId, subject;
+    const product = (post.product || "LOCKEDIN").toUpperCase();
 
-  return hasBuyer && (hasTag || hasQuickGig);
-}
+    if (product === "TRADINGBOT") {
+      const tpl = pick(TRADINGBOT_MESSAGES);
+      message = tpl.text;
+      tplId = tpl.id;
+      subject = "saw your post";
+    } else if (product === "DEVHIRE") {
+      message = buildDevHireMessage(post);
+      tplId = "DEVHIRE";
+      subject = "available to help";
+    } else {
+      const tpl = pick(LOCKEDIN_MESSAGES);
+      message = tpl.text;
+      tplId = tpl.id;
+      subject = "this might help";
+    }
 
-function isTradingBotLead(post) {
-  const title = post.title || "";
-  const body = post.selftext || "";
-  const combined = `${title} ${body}`.toLowerCase();
-
-  if (offeringTagRegex.test(title)) return false;
-  if (offeringContentRegex.test(combined)) return false;
-  if (tradingBlockRegex.test(combined)) return false;
-
-  const hasIntent = tradingBotIntentRegex.test(combined);
-  const hasBuyer = tradingBuyerRegex.test(combined);
-
-  return hasIntent && hasBuyer;
-}
-
-function isLockedInLead(post) {
-  const title = (post.title || "").toLowerCase();
-  const body = (post.selftext || "").toLowerCase();
-  const combined = `${title} ${body}`;
-
-  if (title.length < 12) return false;
-  if (offeringTagRegex.test(post.title)) return false;
-  if (offeringContentRegex.test(combined)) return false;
-  if (blockRegex.test(combined)) return false;
-
-  return lockedInIntentRegex.test(combined) && firstPersonBuyerRegex.test(combined);
-}
-
-// ─── SCRAPERS ────────────────────────────────────────────────────────────────
-async function scrapeDevHireSubreddits() {
-  const DEVHIRE_SUBS = ["forhire", "slavelabour", "freelance_forhire", "freelancer_hire", "freelanceprogramming", "DoneDirtCheap", "startups", "Entrepreneur", "smallbusiness"];
-
-  let newLeads = 0;
-  const existing = new Set(fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2]));
-
-  for (const sub of DEVHIRE_SUBS) {
-    console.log(`[DevHire] Scraping r/${sub}...`);
     try {
-      await wait(1800);
-      const posts = await reddit.getSubreddit(sub).getNew({ limit: 80 });
+      await reddit.composeMessage({ to: username, subject, text: message });
+      sent++;
 
-      for (const p of posts) {
-        if (!isFresh(p, 8) || !isHiringPost(p) || !isGoodAccount(p)) continue;
+      log("SENT", `u/${username} | ${tplId} | score:${leadScore}`);
 
-        const url = `https://reddit.com${p.permalink}`;
-        if (existing.has(url)) continue;
+      upsertUser(users, username, {
+        username, product, sent: true, sent_at: new Date().toISOString(),
+        template: tplId, replied: false, closed: false
+      });
 
-        const combined = `${p.title} ${p.selftext || ""}`;
-        const score = scoreDevHireLead(p);
-        if (score < 55) continue; // Quality gate
+      await sentWriter.writeRecords([{
+        time: new Date().toISOString(), username, templateId: tplId,
+        subreddit: post.subreddit, leadType: post.leadType,
+        trigger: post.matchedTrigger, url: post.url, product
+      }]);
 
-        const budget = extractBudget(combined);
-        const isUrgent = urgencyRegex.test(combined);
-
-        const row = {
-          username: p.author.name,
-          title: p.title.replace(/"/g, "'").slice(0, 180),
-          url,
-          subreddit: `r/${sub}`,
-          time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: isUrgent ? "DEV_HIRE_URGENT" : "DEV_HIRE_SUBREDDIT",
-          matchedTrigger: p.title.slice(0, 70),
-          product: "DEVHIRE",
-          budget,
-          score
-        };
-
-        prependLead(leadsPath, row);
-        existing.add(url);
-        newLeads++;
-        console.log(`  + DevHire [score:${score}] u/${p.author.name} - ${p.title.slice(0, 55)}`);
+      if (attempted < target) {
+        const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
+        await sleep(delay);
       }
     } catch (err) {
-      console.log(`Error in r/${sub}: ${err.message}`);
-      await wait(8000);
+      log("ERROR", `Failed to DM u/${username}: ${err.message}`);
     }
   }
-  return newLeads;
+
+  log("INFO", `Cycle complete — attempted: ${attempted}, sent: ${sent}`);
 }
 
-async function scrapeTradingBot() {
-  // Add your TRADINGBOT_SUBREDDITS + search logic here (same structure as before)
-  // For brevity, keeping the same logic but with the improved isTradingBotLead() + score gate
-  console.log("[TradingBot] Scraping trading subs + search...");
-  // You can paste your previous trading bot scraping logic here with the updated filters
-  return 0; // placeholder until you add it back
-}
-
-async function scrapeLockedIn() {
-  const LOCKEDIN_QUERIES = [ /* your list */ ];
-
-  let newLeads = 0;
-  const existing = new Set(fs.readFileSync(leadsPath, "utf8").split("\n").map(l => l.split(",")[2]));
-
-  for (const query of LOCKEDIN_QUERIES) {
-    console.log(`[LockedIn] Searching: "${query}"`);
-    try {
-      await wait(1500);
-      const posts = await reddit.search({ query, sort: "new", time: "day", limit: 80 });
-
-      for (const p of posts) {
-        if (!isFresh(p, 24) || !isLockedInLead(p) || !isGoodAccount(p)) continue;
-
-        const url = `https://reddit.com${p.permalink}`;
-        if (existing.has(url)) continue;
-
-        const trigger = (p.title + " " + p.selftext).toLowerCase().match(lockedInIntentRegex)?.[0] || "productivity";
-
-        const row = {
-          username: p.author.name,
-          title: p.title.replace(/"/g, "'").slice(0, 180),
-          url,
-          subreddit: p.subreddit_name_prefixed,
-          time: new Date(p.created_utc * 1000).toISOString(),
-          leadType: "LOCKEDIN_INTENT",
-          matchedTrigger: trigger,
-          product: "LOCKEDIN",
-          budget: "",
-          score: 48
-        };
-
-        prependLead(leadsPath, row);
-        existing.add(url);
-        newLeads++;
-        console.log(`  + LockedIn: u/${p.author.name} - ${trigger}`);
-      }
-    } catch (err) {
-      console.log(`Error searching "${query}": ${err.message}`);
-      await wait(10000);
-    }
-  }
-  return newLeads;
-}
-
-// ─── MAIN ────────────────────────────────────────────────────────────────────
-async function scrapeAll() {
-  console.log("\n" + "=".repeat(55));
-  console.log("ClientMagnet Scraper - Improved Targeting");
-  console.log("=".repeat(55));
-
-  let total = 0;
-  total += await scrapeDevHireSubreddits();
-  total += await scrapeTradingBot();     // Add your trading logic here
-  total += await scrapeLockedIn();
-
-  console.log(`\nScrape complete. New leads added: ${total}`);
-}
-
+// ─── MAIN LOOP ───────────────────────────────────────────────────────────────
 (async () => {
+  console.log("ClientMagnet Outreach Bot — Improved Messaging (No Links)");
+  setInterval(checkInbox, INBOX_POLL_MS);
+
   while (true) {
-    await scrapeAll();
-    console.log("Waiting 35 minutes before next scrape...\n");
-    await wait(35 * 60 * 1000);
+    console.log(`\n[${new Date().toLocaleString()}] Starting outreach cycle...`);
+    await runOutreachCycle();
+    const delay = (6 + Math.floor(Math.random() * 3)) * 60 * 1000;
+    await sleep(delay);
   }
 })();

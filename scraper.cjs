@@ -1,5 +1,6 @@
-// agency_bot.cjs — Improved version (No links in DMs + Better messaging)
+// scraper.cjs — ClientMagnet Outreach Bot (Improved Messaging + No Links)
 require("dotenv").config();
+
 const snoowrap = require("snoowrap");
 const fs = require("fs");
 const path = require("path");
@@ -26,6 +27,20 @@ const MAX_DMS_PER_CYCLE = 70;
 const MIN_DELAY_MS = 50 * 1000;
 const MAX_DELAY_MS = 95 * 1000;
 const INBOX_POLL_MS = 60 * 1000;
+const MIN_SCORE_TO_DM = 60;
+
+// ─── LOAD LEADS ──────────────────────────────────────────────────────────────
+function loadLeads() {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(leadsPath)) return resolve([]);
+    const leads = [];
+    fs.createReadStream(leadsPath)
+      .pipe(csv())
+      .on("data", row => leads.push(row))
+      .on("end", () => resolve(leads))
+      .on("error", () => resolve(leads));
+  });
+}
 
 // ─── USER TRACKING ───────────────────────────────────────────────────────────
 function loadUsers() {
@@ -70,74 +85,61 @@ function classifyReply(text) {
 }
 
 // ─── IMPROVED MESSAGES (NO LINKS) ────────────────────────────────────────────
-
-// DevHire Messages
 function buildDevHireMessage(post) {
   const title = (post.title || "").replace(/^\[.*?\]\s*/i, "").trim().toLowerCase().slice(0, 85);
   const budget = (post.budget || "").trim();
   const isUrgent = (post.leadType || "").toUpperCase() === "DEV_HIRE_URGENT";
 
-  const budgetLine = budget ? ` Budget mentioned looks workable for me.` : "";
-  const timing = isUrgent ? " I can start right away." : " I can usually turn these around in 48 hours.";
+  const budgetLine = budget ? ` Budget looks workable.` : "";
+  const timing = isUrgent ? " I can start right away." : " I can usually deliver in 48 hours.";
 
   const openers = [
     `Saw your post about ${title}.`,
-    `Your post about ${title} caught my attention.`,
-    `Just came across your post about ${title}.`,
+    `Your post about ${title} caught my eye.`,
+    `Just saw your post about ${title}.`,
   ];
 
   const bodies = [
-    `I build this kind of thing regularly. Recent work includes Reddit automation tools, Google Maps lead scrapers, and custom booking/automation systems for businesses.`,
-    `This type of project is in my wheelhouse. I've shipped automation bots, scrapers with email lookup, and custom workflow tools for clients.`,
-    `I've built similar tools before — including automation systems and data scrapers that are currently in use.`,
+    `I build this kind of automation regularly. Recent work includes Reddit tools, lead scrapers, and custom booking/automation systems.`,
+    `This type of project is in my wheelhouse. I've shipped automation bots and data tools that are currently in use.`,
+    `I've built similar tools before — including scrapers and workflow automation for businesses.`,
   ];
 
   const closes = [
     `Flat fee only.${timing}${budgetLine}\n\nWhat are the full details?`,
-    `Flat fee, delivered quickly.${timing}${budgetLine}\n\nHappy to take a look at the full scope.`,
-    `Flat fee only.${timing}${budgetLine}\n\nWhat exactly are you looking to have built?`,
+    `Flat fee, delivered quickly.${timing}${budgetLine}\n\nHappy to look at the full scope.`,
+    `Flat fee only.${timing}${budgetLine}\n\nWhat exactly do you need built?`,
   ];
 
   return `${pick(openers)}\n\n${pick(bodies)}\n\n${pick(closes)}`;
 }
 
-// Trading Bot Messages (Improved - No links)
 const TRADINGBOT_MESSAGES = [
   {
     id: "TB_1",
-    text: `Saw your post. I build custom trading bots for people running real strategies.\n\nI recently built a live futures bot that ran on a funded account with full execution, position sizing, and risk rules.\n\nWhat exchange and strategy are you working with?`
+    text: `Saw your post. I build custom trading bots for people running real strategies.\n\nI recently built a live futures bot that ran on a funded account with full execution and risk rules.\n\nWhat exchange and strategy are you working with?`
   },
   {
     id: "TB_2",
-    text: `Saw your post. I specialize in turning trading strategies into automated bots.\n\nRecent project: A fully automated futures bot with entries, exits, and risk management running on a funded account.\n\nWhat are you trying to automate?`
-  },
-  {
-    id: "TB_3",
-    text: `Saw your post. I build trading bots for traders who already have a working strategy.\n\nI’ve shipped live automated systems including a futures bot on a funded account with full trade lifecycle handling.\n\nWhat does your current setup look like?`
+    text: `Saw your post. I specialize in turning trading strategies into automated bots.\n\nRecent project: A fully automated futures bot with entries, exits, and risk management on a funded account.\n\nWhat are you trying to automate?`
   },
 ];
 
-// LockedIn Messages (No links + softer)
 const LOCKEDIN_MESSAGES = [
   {
     id: "LI_1",
-    text: `Saw your post. I had the same issue so I built something that helps.\n\nYou type out everything you need to do, and it turns it into a clean time-blocked schedule that goes straight into your calendar.\n\nTakes about 10 seconds.`
+    text: `Saw your post. I had the same problem so I built something that helps.\n\nYou type out everything you need to do and it turns it into a clean time-blocked schedule that goes straight into your calendar.\n\nTakes about 10 seconds.`
   },
   {
     id: "LI_2",
-    text: `Saw your post. I built a simple tool for this exact problem.\n\nDump all your tasks in any order and it builds a realistic daily schedule and adds it to your calendar automatically.\n\nNo manual dragging or planning needed.`
-  },
-  {
-    id: "LI_3",
-    text: `Saw your post. I used to waste the first hour of every day planning.\n\nSo I built something that takes your task list and turns it into a proper time-blocked calendar schedule in seconds.`
+    text: `Saw your post. I built a simple tool for this exact issue.\n\nDump all your tasks in any order and it builds a realistic daily schedule and adds it to your calendar automatically.`
   },
 ];
 
-// ─── SCORING (same as before) ────────────────────────────────────────────────
+// ─── SCORING ─────────────────────────────────────────────────────────────────
 function scoreLead(p) {
   const preScore = parseInt(p.score || "0");
   const product = (p.product || "LOCKEDIN").toUpperCase();
-
   if (preScore > 0 && (product === "DEVHIRE" || product === "TRADINGBOT")) return preScore;
 
   let score = 0;
@@ -155,18 +157,53 @@ function scoreLead(p) {
   return score;
 }
 
-// ─── INBOX + OUTREACH LOGIC (kept mostly the same) ───────────────────────────
+// ─── INBOX HANDLER ───────────────────────────────────────────────────────────
 async function checkInbox() {
-  // ... (keep your existing inbox logic — it's solid)
+  const botUsername = (process.env.REDDIT_USERNAME || "").toLowerCase();
+  try {
+    const unread = await reddit.getUnreadMessages({ limit: 50 });
+    const toMarkRead = [];
+
+    for (const item of unread) {
+      if (item.was_comment !== false || !item.body || !item.author) continue;
+      toMarkRead.push(item);
+
+      const sender = item.author.name.toLowerCase();
+      if (sender === botUsername) continue;
+
+      const replyType = classifyReply(item.body);
+      const users = loadUsers();
+
+      if (replyType === "NEGATIVE") {
+        log("REPLY_NEG", `u/${item.author.name}`);
+        upsertUser(users, item.author.name, { replied: true, reply_type: "NEGATIVE", closed: true, closed_reason: "not_interested" });
+      } else if (replyType === "POSITIVE") {
+        log("HOT_LEAD", `HOT LEAD — u/${item.author.name} replied with interest`);
+        upsertUser(users, item.author.name, { replied: true, reply_type: "POSITIVE", reply_body: item.body.slice(0, 500), closed: false });
+      } else {
+        log("REPLY_UNCLEAR", `u/${item.author.name} replied — REVIEW MANUALLY`);
+        upsertUser(users, item.author.name, { replied: true, reply_type: "UNCLEAR", reply_body: item.body.slice(0, 500), closed: false });
+      }
+    }
+
+    if (toMarkRead.length > 0) {
+      for (let i = 0; i < toMarkRead.length; i += 25) {
+        await reddit.markMessagesAsRead(toMarkRead.slice(i, i + 25));
+      }
+    }
+  } catch (err) {
+    log("ERROR", `Inbox check failed: ${err.message}`);
+  }
 }
 
+// ─── OUTREACH CYCLE ──────────────────────────────────────────────────────────
 async function runOutreachCycle() {
   const leads = await loadLeads();
-  if (!leads.length) return;
+  if (!leads.length) { log("INFO", "No leads found."); return; }
 
   const seen = new Set();
   const deduped = leads.filter(p => {
-    const k = (p.username || "").toLowerCase().trim();
+    const k = (p.username || "").trim().toLowerCase();
     if (!k || seen.has(k)) return false;
     seen.add(k);
     return true;
@@ -176,8 +213,6 @@ async function runOutreachCycle() {
   const users = loadUsers();
   const target = MIN_DMS_PER_CYCLE + Math.floor(Math.random() * (MAX_DMS_PER_CYCLE - MIN_DMS_PER_CYCLE + 1));
   let attempted = 0, sent = 0;
-
-  const MIN_SCORE = 60; // New quality gate
 
   for (const post of deduped) {
     if (attempted >= target) break;
@@ -190,7 +225,7 @@ async function runOutreachCycle() {
     if (user?.sent || user?.closed) continue;
 
     const leadScore = scoreLead(post);
-    if (leadScore < MIN_SCORE) continue;
+    if (leadScore < MIN_SCORE_TO_DM) continue;
 
     attempted++;
 
@@ -216,7 +251,6 @@ async function runOutreachCycle() {
     try {
       await reddit.composeMessage({ to: username, subject, text: message });
       sent++;
-
       log("SENT", `u/${username} | ${tplId} | score:${leadScore}`);
 
       upsertUser(users, username, {
@@ -235,7 +269,7 @@ async function runOutreachCycle() {
         await sleep(delay);
       }
     } catch (err) {
-      log("ERROR", `Failed to DM u/${username}: ${err.message}`);
+      log("ERROR", `DM failed u/${username}: ${err.message}`);
     }
   }
 

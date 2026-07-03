@@ -78,9 +78,9 @@ function classifyReply(text) {
 
 // ─── DEVHIRE MESSAGES ─────────────────────────────────────────────────────────
 function buildDevHireMessage(post) {
-  const title = (post.title || "").replace(/^\[.*?\]\s*/i, "").trim().toLowerCase().slice(0, 80);
-  const budget = (post.budget || "").trim();
-  const isUrgent = (post.leadType || "").toUpperCase() === "DEV_HIRE_URGENT";
+  const title = (post.Title || "").replace(/^\[.*?\]\s*/i, "").trim().toLowerCase().slice(0, 80);
+  const budget = (post.Budget || "").trim();
+  const isUrgent = (post['Lead Type'] || "").toUpperCase() === "DEV_HIRE_URGENT";
 
   const budgetLine = budget ? ` Budget works.` : "";
   const timing = isUrgent ? " I can start today." : " Delivered in 48 hours.";
@@ -132,12 +132,12 @@ const TRADINGBOT_MESSAGES = [
 
 // ─── SCORING ──────────────────────────────────────────────────────────────────
 function scoreLead(p) {
-  const preScore = parseInt(p.score || "0");
+  const preScore = parseInt(p.Score || "0");
   if (preScore > 0) return preScore;
 
   let score = 0;
-  const product  = (p.product  || "").toUpperCase();
-  const leadType = (p.leadType || "").toUpperCase();
+  const product  = (p.Product  || "").toUpperCase();
+  const leadType = (p['Lead Type'] || "").toUpperCase();
 
   if (product === "TRADINGBOT") score += 70;
   if (product === "DEVHIRE")    score += 50;
@@ -220,7 +220,7 @@ async function runOutreachCycle() {
 
   const seenUsernames = new Set();
   const deduped = leads.filter(p => {
-    const k = (p.username || "").trim().toLowerCase();
+    const k = (p.Username || "").trim().toLowerCase();
     if (!k || seenUsernames.has(k)) return false;
     seenUsernames.add(k);
     return true;
@@ -235,12 +235,12 @@ async function runOutreachCycle() {
   for (const post of deduped) {
     if (attempted >= target) { log("INFO", `Cycle target reached (${target} DMs).`); break; }
 
-    const username  = (post.username || "").trim();
-    const url       = (post.url      || "").trim();
-    const product   = (post.product  || "").trim().toUpperCase();
-    const leadType  = (post.leadType || "").trim().toUpperCase();
-    const subreddit = (post.subreddit || "").trim();
-    const trigger   = (post.matchedTrigger || "").trim();
+    const username  = (post.Username || "").trim();
+    const url       = (post.URL      || "").trim();
+    const product   = (post.Product  || "").trim().toUpperCase();
+    const leadType  = (post['Lead Type'] || "").trim().toUpperCase();
+    const subreddit = (post.Subreddit || "").trim();
+    const trigger   = (post['Matched Trigger'] || "").trim();
 
     if (!username) continue;
     if (cycleSeen.has(username.toLowerCase())) continue;
@@ -277,7 +277,7 @@ async function runOutreachCycle() {
 
       await reddit.composeMessage({ to: username, subject, text: tplText });
       confirmed++;
-      log("SENT", `u/${username} | ${tplId} | [${product}] | score:${score} | budget:${post.budget || "unknown"}`);
+      log("SENT", `u/${username} | ${tplId} | [${product}] | score:${score} | budget:${post.Budget || "unknown"}`);
 
       upsertUser(freshUsers, username, {
         username, product, leadType,

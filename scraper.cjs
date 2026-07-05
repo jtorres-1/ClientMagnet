@@ -1,6 +1,8 @@
 // scraper.cjs — ClientMagnet Lead Scraper
 // DEVHIRE + TRADINGBOT only. No lockedIn. No DM sending.
 // agency_bot.cjs handles all DM sending.
+// LLM classification layer added — calls local Ollama (via ngrok tunnel to Mac)
+// Falls back to regex-only if LLM is unreachable, so scraper never breaks.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -24,6 +26,74 @@ const usersPath = path.join(baseDir, "contacted_users.json");
 
 const SCRAPE_INTERVAL_MS = 30 * 60 * 1000;
 
+// ─── LLM CLASSIFICATION CONFIG ────────────────────────────────────────────────
+// NOTE: This URL changes every time ngrok restarts on the Mac (free tier).
+// Update this value whenever the tunnel is restarted.
+const OLLAMA_URL = process.env.OLLAMA_URL || "https://25ee-2603-8000-c93f-49c1-100c-19e8-6d5-9461.ngrok-free.app";
+const OLLAMA_MODEL = "qwen2.5:14b";
+const LLM_TIMEOUT_MS = 20000;
+
+let llmAvailable = true;
+let consecutiveLLMFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 5;
+
+async function classifyWithLLM(fullText, product) {
+  if (!llmAvailable) return { ok: false, verdict: null, reason: "llm_disabled_this_cycle" };
+
+  const prompt = product === "TRADINGBOT"
+    ? `You are screening Reddit posts to find people who want to HIRE someone to build/automate a trading bot for them, and who have a real strategy or budget signal.
+
+REJECT posts where the author: already built their own bot/strategy, is offering their own dev/trading services, is a total beginner with no capital, or is just asking general questions with no hiring intent.
+
+Post: "${fullText.slice(0, 500)}"
+
+Reply with ONLY one word: HIRE or REJECT`
+    : `You are screening Reddit posts to find people who want to HIRE a developer to build something for them.
+
+REJECT posts where the author: is describing something they already built, is offering their own dev services for hire, or has no real project/budget intent.
+
+Post: "${fullText.slice(0, 500)}"
+
+Reply with ONLY one word: HIRE or REJECT`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+
+    const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt,
+        stream: false,
+        options: { temperature: 0.1, num_predict: 10 }
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+    consecutiveLLMFailures = 0;
+
+    if (!res.ok) return { ok: false, verdict: null, reason: `HTTP ${res.status}` };
+
+    const data = await res.json();
+    const verdict = (data.response || "").trim().toUpperCase();
+
+    if (verdict.includes("HIRE")) return { ok: true, verdict: "HIRE" };
+    if (verdict.includes("REJECT")) return { ok: true, verdict: "REJECT" };
+    return { ok: true, verdict: "UNCLEAR" };
+
+  } catch (err) {
+    consecutiveLLMFailures++;
+    if (consecutiveLLMFailures >= MAX_CONSECUTIVE_FAILURES) {
+      llmAvailable = false;
+      log("WARN", `LLM failed ${MAX_CONSECUTIVE_FAILURES}x in a row (Mac likely offline) — disabling LLM checks for this cycle, using regex only`);
+    }
+    return { ok: false, verdict: null, reason: err.message };
+  }
+}
+
 const leadsWriter = createObjectCsvWriter({
   path: leadsPath,
   header: [
@@ -37,6 +107,7 @@ const leadsWriter = createObjectCsvWriter({
     { id: "matchedTrigger", title: "Matched Trigger" },
     { id: "budget",         title: "Budget" },
     { id: "score",          title: "Score" },
+    { id: "llmVerdict",     title: "LLM Verdict" },
   ],
   append: true,
 });
@@ -56,42 +127,19 @@ function loadContactedUsernames() {
 
 // ─── DEVHIRE ──────────────────────────────────────────────────────────────────
 const DEVHIRE_SUBREDDITS = [
-  "forhire",
-  "hiring",
-  "entrepreneur",
-  "smallbusiness",
-  "startups",
-  "SideProject",
-  "webdev",
-  "shopify",
-  "ecommerce",
-  "passive_income",
-  "Flipping",
-  "socialmedia",
-  "digital_marketing",
+  "forhire", "hiring", "entrepreneur", "smallbusiness", "startups",
+  "SideProject", "webdev", "shopify", "ecommerce", "passive_income",
+  "Flipping", "socialmedia", "digital_marketing",
 ];
 
 const DEVHIRE_QUERIES = [
-  "need a developer",
-  "need a programmer",
-  "need someone to build",
-  "looking for developer",
-  "hire a developer",
-  "hire a programmer",
-  "need a bot built",
-  "need automation built",
-  "need a website built",
-  "need a web app built",
-  "need an app built",
-  "need a mobile app built",
-  "can someone build a bot",
-  "willing to pay developer",
-  "budget for developer",
-  "need someone to code",
-  "need a scraper built",
-  "need automation help",
-  "looking for coder",
-  "need a custom tool built",
+  "need a developer", "need a programmer", "need someone to build",
+  "looking for developer", "hire a developer", "hire a programmer",
+  "need a bot built", "need automation built", "need a website built",
+  "need a web app built", "need an app built", "need a mobile app built",
+  "can someone build a bot", "willing to pay developer", "budget for developer",
+  "need someone to code", "need a scraper built", "need automation help",
+  "looking for coder", "need a custom tool built",
 ];
 
 const devHireIntentRegex = /\b(need|want|looking for|hiring|hire|searching for|seeking|require|paid|paying|budget|willing to pay)\b.{0,60}\b(developer|programmer|coder|dev|engineer|builder|freelancer)\b|\b(build|create|make|develop|code|automate|scrape)\b.{0,60}\b(bot|automation|script|tool|app|website|web app|mobile app|dashboard|platform|scraper|integration|workflow|saas)\b|\[H\].{0,100}(developer|programmer|dev|build|app|bot|website)/i;
@@ -119,40 +167,18 @@ function scoreDevHire(post, leadType) {
 
 // ─── TRADINGBOT ───────────────────────────────────────────────────────────────
 const TRADINGBOT_SUBREDDITS = [
-  "algotrading",
-  "Daytrading",
-  "FuturesTrading",
-  "Forex",
-  "trading",
-  "TradingView",
-  "technicalanalysis",
-  "Futures",
-  "PropFirmTrading",
-  "stocks",
-  "options",
-  "FuturesTrader71",
-  "FXtrading",
+  "algotrading", "Daytrading", "FuturesTrading", "Forex", "trading",
+  "TradingView", "technicalanalysis", "Futures", "PropFirmTrading",
+  "stocks", "options", "FuturesTrader71", "FXtrading",
 ];
 
 const TRADINGBOT_QUERIES = [
-  "automate my trading strategy",
-  "trading bot developer",
-  "need a trading bot built",
-  "hire someone trading bot",
-  "custom trading bot",
-  "want to automate my strategy",
-  "profitable strategy automate",
-  "manual strategy automate",
-  "algo trading developer",
-  "trading bot for hire",
-  "pay for trading bot",
-  "funded account strategy automate",
-  "prop firm strategy bot",
-  "mt5 bot developer",
-  "tradingview bot developer",
-  "my strategy automated",
-  "backtested strategy automate",
-  "ninjatrader developer",
+  "automate my trading strategy", "trading bot developer", "need a trading bot built",
+  "hire someone trading bot", "custom trading bot", "want to automate my strategy",
+  "profitable strategy automate", "manual strategy automate", "algo trading developer",
+  "trading bot for hire", "pay for trading bot", "funded account strategy automate",
+  "prop firm strategy bot", "mt5 bot developer", "tradingview bot developer",
+  "my strategy automated", "backtested strategy automate", "ninjatrader developer",
   "interactive brokers bot",
 ];
 
@@ -193,6 +219,13 @@ async function scrapeSubreddit(subredditName, product) {
       if (product === "DEVHIRE") {
         if (!devHireIntentRegex.test(fullText)) continue;
         if (devHireExcludeRegex.test(fullText)) continue;
+
+        const llmResult = await classifyWithLLM(fullText, "DEVHIRE");
+        if (llmResult.ok && llmResult.verdict === "REJECT") {
+          log("LLM_FILTERED", `[DEVHIRE] u/${author} rejected by LLM despite regex match: ${post.title.slice(0, 60)}`);
+          continue;
+        }
+
         const isUrgent = /urgent|asap|immediately|right away|need now/i.test(fullText);
         const leadType = isUrgent ? "DEV_HIRE_URGENT" : "DEV_HIRE_SUBREDDIT";
         const budget = extractBudget(fullText);
@@ -202,13 +235,21 @@ async function scrapeSubreddit(subredditName, product) {
           title: post.title.slice(0, 150), url: `https://reddit.com${post.permalink}`,
           subreddit: subredditName, leadType, product: "DEVHIRE",
           matchedTrigger: "subreddit_scan", budget, score,
+          llmVerdict: llmResult.ok ? llmResult.verdict : "N/A (llm unavailable)",
         });
-        log("LEAD", `[DEVHIRE] u/${author} in r/${subredditName} | score:${score} | ${post.title.slice(0, 60)}`);
+        log("LEAD", `[DEVHIRE] u/${author} in r/${subredditName} | score:${score} | llm:${llmResult.ok ? llmResult.verdict : "skipped"} | ${post.title.slice(0, 60)}`);
       }
 
       if (product === "TRADINGBOT") {
         if (!tradingBotIntentRegex.test(fullText)) continue;
         if (tradingBotExcludeRegex.test(fullText)) continue;
+
+        const llmResult = await classifyWithLLM(fullText, "TRADINGBOT");
+        if (llmResult.ok && llmResult.verdict === "REJECT") {
+          log("LLM_FILTERED", `[TRADINGBOT] u/${author} rejected by LLM despite regex match: ${post.title.slice(0, 60)}`);
+          continue;
+        }
+
         const score = scoreTradingBot(post);
         const budget = extractBudget(fullText);
         newLeads.push({
@@ -216,8 +257,9 @@ async function scrapeSubreddit(subredditName, product) {
           title: post.title.slice(0, 150), url: `https://reddit.com${post.permalink}`,
           subreddit: subredditName, leadType: "TRADING_BOT", product: "TRADINGBOT",
           matchedTrigger: "subreddit_scan", budget, score,
+          llmVerdict: llmResult.ok ? llmResult.verdict : "N/A (llm unavailable)",
         });
-        log("LEAD", `[TRADINGBOT] u/${author} in r/${subredditName} | score:${score} | ${post.title.slice(0, 60)}`);
+        log("LEAD", `[TRADINGBOT] u/${author} in r/${subredditName} | score:${score} | llm:${llmResult.ok ? llmResult.verdict : "skipped"} | ${post.title.slice(0, 60)}`);
       }
     }
   } catch (err) {
@@ -246,6 +288,13 @@ async function globalSearch(query, product) {
       if (product === "DEVHIRE") {
         if (!devHireIntentRegex.test(fullText)) continue;
         if (devHireExcludeRegex.test(fullText)) continue;
+
+        const llmResult = await classifyWithLLM(fullText, "DEVHIRE");
+        if (llmResult.ok && llmResult.verdict === "REJECT") {
+          log("LLM_FILTERED", `[DEVHIRE/GLOBAL] u/${author} rejected by LLM: ${post.title.slice(0, 60)}`);
+          continue;
+        }
+
         const isUrgent = /urgent|asap|immediately|right away|need now/i.test(fullText);
         const leadType = isUrgent ? "DEV_HIRE_URGENT" : "DEV_HIRE_GLOBAL";
         const budget = extractBudget(fullText);
@@ -255,13 +304,21 @@ async function globalSearch(query, product) {
           title: post.title.slice(0, 150), url: `https://reddit.com${post.permalink}`,
           subreddit: post.subreddit?.display_name || "unknown",
           leadType, product: "DEVHIRE", matchedTrigger: query, budget, score,
+          llmVerdict: llmResult.ok ? llmResult.verdict : "N/A (llm unavailable)",
         });
-        log("LEAD", `[DEVHIRE/GLOBAL] u/${author} | "${query}" | score:${score}`);
+        log("LEAD", `[DEVHIRE/GLOBAL] u/${author} | "${query}" | score:${score} | llm:${llmResult.ok ? llmResult.verdict : "skipped"}`);
       }
 
       if (product === "TRADINGBOT") {
         if (!tradingBotIntentRegex.test(fullText)) continue;
         if (tradingBotExcludeRegex.test(fullText)) continue;
+
+        const llmResult = await classifyWithLLM(fullText, "TRADINGBOT");
+        if (llmResult.ok && llmResult.verdict === "REJECT") {
+          log("LLM_FILTERED", `[TRADINGBOT/GLOBAL] u/${author} rejected by LLM: ${post.title.slice(0, 60)}`);
+          continue;
+        }
+
         const score = scoreTradingBot(post);
         const budget = extractBudget(fullText);
         newLeads.push({
@@ -269,8 +326,9 @@ async function globalSearch(query, product) {
           title: post.title.slice(0, 150), url: `https://reddit.com${post.permalink}`,
           subreddit: post.subreddit?.display_name || "unknown",
           leadType: "TRADING_BOT", product: "TRADINGBOT", matchedTrigger: query, budget, score,
+          llmVerdict: llmResult.ok ? llmResult.verdict : "N/A (llm unavailable)",
         });
-        log("LEAD", `[TRADINGBOT/GLOBAL] u/${author} | "${query}" | score:${score}`);
+        log("LEAD", `[TRADINGBOT/GLOBAL] u/${author} | "${query}" | score:${score} | llm:${llmResult.ok ? llmResult.verdict : "skipped"}`);
       }
     }
   } catch (err) {
@@ -282,6 +340,10 @@ async function globalSearch(query, product) {
 // ─── MAIN SCRAPE CYCLE ────────────────────────────────────────────────────────
 async function runScrapeCycle() {
   log("INFO", "Scrape cycle starting...");
+
+  llmAvailable = true;
+  consecutiveLLMFailures = 0;
+
   const allLeads = [];
 
   for (const sub of DEVHIRE_SUBREDDITS) {
@@ -311,12 +373,16 @@ async function runScrapeCycle() {
   } else {
     log("INFO", "No new leads this cycle.");
   }
+
+  if (!llmAvailable) {
+    log("WARN", "LLM was unavailable during this cycle — leads were filtered by regex only.");
+  }
 }
 
 // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet Scraper — DEVHIRE + TRADINGBOT");
+  console.log("ClientMagnet Scraper — DEVHIRE + TRADINGBOT + LLM classification");
   console.log("=".repeat(60));
 
   while (true) {

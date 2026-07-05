@@ -23,7 +23,7 @@ Reply with ONLY one word: HIRE or REJECT`;
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
     const res = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: "POST",

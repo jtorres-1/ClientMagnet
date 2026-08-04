@@ -3,14 +3,30 @@
 // scraper.cjs handles all lead generation. This file never scrapes.
 //
 // CHANGES IN THIS VERSION:
-// - buildDevHireMessage() and buildTradingBotMessage() now pull the actual
-//   need from post title + selftext instead of swapping in a lowercased title
-//   fragment into a fixed template. Proof point matches what they asked for.
-// - Removed the static TRADINGBOT_MESSAGES rotation, replaced with
-//   buildTradingBotMessage(post) so every trading bot DM is personalized too.
-// - Hard skip on Money Signal === NO from the CSV, on top of the score check.
-// - Template id is now a short signature string instead of a fixed pool id,
-//   so replies can be traced back to what got sent, not just which pool.
+// - Removed the budgetLine claims ("your budget works for this" / "your
+//   number works") from both message builders. These fired on any
+//   non-empty Budget field regardless of the actual amount, promising
+//   fit before any real scoping happened. Never confirm budget fit in
+//   the first message — same standard used in every real conversation.
+// - Replaced extractNeedPhrase()'s verbatim quote-back with a small
+//   topic-word detector. Quoting the post's own text back in quotation
+//   marks is a recognizable mail-merge pattern; a plain topic word
+//   ("scraper," "bot," "site") reads as paraphrased, not templated, and
+//   removes the risk of the old regex cutting off mid-word or mid-phrase.
+// - Each category now has 3-4 structurally different message variants
+//   (not just reworded versions of one shape), written in a plain,
+//   casual register — lowercase openers, no formal closing question
+//   every time, specific-but-brief proof lines instead of polished
+//   category claims. Picked at random per send so the same lead type
+//   doesn't always produce the same message skeleton.
+// - templateId now reflects which specific variant was sent (e.g.
+//   DH_AUTOMATION_2), not just the category, so replies can be traced
+//   to the exact message that landed.
+//
+// STILL OPEN, NOT CHANGED HERE:
+// - MIN/MAX_DMS_PER_CYCLE (60-80) is still high enough to itself read as
+//   bot-like traffic to Reddit's spam detection, independent of how good
+//   the message text is. Worth a separate decision on lowering this.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -33,6 +49,7 @@ const leadsPath = path.join(baseDir, "clean_leads.csv");
 const sentPath  = path.join(baseDir, "clean_leads_dmed.csv");
 const usersPath = path.join(baseDir, "contacted_users.json");
 
+// See "STILL OPEN" note above — flagged, not changed in this pass.
 const MIN_DMS_PER_CYCLE = 60;
 const MAX_DMS_PER_CYCLE = 80;
 const MIN_DELAY_MS      = 45 * 1000;
@@ -72,6 +89,7 @@ const sentWriter = createObjectCsvWriter({
 
 function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 // ─── REPLY CLASSIFICATION ─────────────────────────────────────────────────────
 const positiveReplyRegex = /\b(interested|tell me more|how does it work|how much|what's the price|what is the price|sounds good|yes|yeah|sure|how do i|sign me up|i want|send me|where do i|let's do it|lets do it|can you|would this work|more info|more information|demo|trial|how to get started|i'd like|i would like|this looks|this sounds|great|awesome|exactly what|been looking for|need this|what would|what do you|what's your|what's included|how long|timeline|what exchange|what platform|tell me)\b/i;
@@ -85,84 +103,113 @@ function classifyReply(text) {
   return "UNCLEAR";
 }
 
-// ─── EXTRACT SPECIFIC NEED FROM POST TEXT ─────────────────────────────────────
-// Pulls the clause that matched intent so it can be referenced directly in
-// the DM body, instead of reusing a lowercased title fragment everywhere.
-function extractNeedPhrase(title, selftext) {
-  const text = `${title} ${selftext || ""}`;
-  const patterns = [
-    /\b(build|create|make|develop|code|automate|scrape)\b[^.!?]{0,80}/i,
-    /\bneed[^.!?]{0,80}/i,
-    /\blooking for[^.!?]{0,80}/i,
+// ─── TOPIC WORD DETECTION ──────────────────────────────────────────────────────
+function extractTopicWord(title, selftext) {
+  const t = `${title} ${selftext || ""}`.toLowerCase();
+  if (/scraper|scraping/.test(t)) return "scraper";
+  if (/\bbot\b/.test(t)) return "bot";
+  if (/automation|automate/.test(t)) return "automation";
+  if (/mobile app|ios|android/.test(t)) return "app";
+  if (/dashboard/.test(t)) return "dashboard";
+  if (/website|web app|platform/.test(t)) return "site";
+  return "project";
+}
+
+// ─── DEVHIRE MESSAGE VARIANTS ──────────────────────────────────────────────────
+function devHireAutomationVariants(topic) {
+  return [
+    { id: "DH_AUTOMATION_1", text: `hey, saw your post about the ${topic}. built something similar for a shop a few weeks back, few days turnaround usually. happy to give you a real price if you send over the details` },
+    { id: "DH_AUTOMATION_2", text: `saw you're looking for something automated. i do this kind of build full time, can usually turn it around fast. what are you trying to get it to do exactly` },
+    { id: "DH_AUTOMATION_3", text: `hey, this is exactly the kind of thing i build. want me to send a quick idea of cost once i know more about what you need` },
+    { id: "DH_AUTOMATION_4", text: `saw your post, i can probably help with this. built a similar ${topic} recently for another client. what's the timeline looking like on your end` },
   ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) return m[0].trim().replace(/\s+/g, " ");
-  }
-  return (title || "").replace(/^\[.*?\]\s*/i, "").trim();
 }
 
-// ─── DEVHIRE MESSAGE (personalized) ───────────────────────────────────────────
+function devHirePlatformVariants(topic) {
+  return [
+    { id: "DH_PLATFORM_1", text: `hey, saw you're looking to get a ${topic} built. did something close to this for a print shop client not long ago. happy to talk through what you need` },
+    { id: "DH_PLATFORM_2", text: `saw your post about the ${topic}. this is what i do, can give you a real number once i know more about the scope` },
+    { id: "DH_PLATFORM_3", text: `hey, this looks like something i can help with. built a full platform for a client recently, similar idea. want to tell me more about what you're trying to build` },
+  ];
+}
+
+function devHireGeneralVariants() {
+  return [
+    { id: "DH_GENERAL_1", text: `hey, saw your post. this is the kind of work i do full time, flat fee, no agency in between. want to tell me more about it` },
+    { id: "DH_GENERAL_2", text: `saw you're looking for a developer. happy to take a look, what are you trying to get built` },
+    { id: "DH_GENERAL_3", text: `hey, this seems like something i could help with. what's the project, and do you have a rough idea of scope` },
+  ];
+}
+
+const urgencyAddOns = [
+  " can start today if that helps.",
+  " free to jump on this right away.",
+  "",
+];
+
 function buildDevHireMessage(post) {
-  const rawTitle   = (post.Title || "").replace(/^\[.*?\]\s*/i, "").trim();
-  const selftext   = post.Selftext || "";
-  const needPhrase = extractNeedPhrase(post.Title, selftext);
-  const budget     = (post.Budget || "").trim();
-  const leadType   = (post['Lead Type'] || "").toUpperCase();
-  const isUrgent   = leadType === "DEV_HIRE_URGENT";
-  const isTagged   = leadType === "DEV_HIRE_TAGGED";
+  const rawTitle = post.Title || "";
+  const selftext = post.Selftext || "";
+  const topic    = extractTopicWord(rawTitle, selftext);
+  const leadType = (post['Lead Type'] || "").toUpperCase();
+  const isUrgent = leadType === "DEV_HIRE_URGENT";
 
-  const opener = isTagged
-    ? `saw your task post, specifically "${needPhrase}."`
-    : `saw your post, you mentioned needing "${needPhrase}."`;
-
-  let proof, sig;
-  if (/bot|automat|scrape/i.test(rawTitle + selftext)) {
-    proof = `I build exactly this, custom bots and automation. Recent one was a lead scraper with automated outreach built for a business with a similar setup.`;
-    sig = "DH_AUTOMATION";
-  } else if (/website|web app|platform|app|dashboard/i.test(rawTitle + selftext)) {
-    proof = `I build exactly this. Recent build was a full ordering platform for a print shop client, live product selection, order tracking, owner dashboard.`;
-    sig = "DH_PLATFORM";
+  const combined = `${rawTitle} ${selftext}`;
+  let variants;
+  if (/bot|automat|scrape/i.test(combined)) {
+    variants = devHireAutomationVariants(topic);
+  } else if (/website|web app|platform|app|dashboard/i.test(combined)) {
+    variants = devHirePlatformVariants(topic);
   } else {
-    proof = `This is the kind of work I do full time, custom builds, flat fee, no agency markup.`;
-    sig = "DH_GENERAL";
+    variants = devHireGeneralVariants();
   }
 
-  const timing = isUrgent ? " Can start today." : " Can turn this around in 48 hours.";
-  const budgetLine = budget ? ` Your budget works for this.` : "";
-  const close = `${timing}${budgetLine} Want me to send a quick breakdown of how I'd build it and a flat price?`;
-
-  const text = `${opener}\n\n${proof}\n\n${close}`;
-  const templateId = `${sig}${isUrgent ? "_URGENT" : ""}`;
-  return { text, templateId };
+  const chosen = pick(variants);
+  const suffix = isUrgent ? pick(urgencyAddOns) : "";
+  return { text: `${chosen.text}${suffix}`, templateId: chosen.id };
 }
 
-// ─── TRADINGBOT MESSAGE (personalized) ────────────────────────────────────────
+// ─── TRADINGBOT MESSAGE VARIANTS ───────────────────────────────────────────────
+function tradingBotPropFirmVariants() {
+  return [
+    { id: "TB_PROPFIRM_1", text: `hey, saw your post. built one of these before, automated a strategy on a funded topstep account, handled entries and exits without me touching it. what's your setup` },
+    { id: "TB_PROPFIRM_2", text: `saw you're looking to automate a prop firm strategy. done this exact thing before. what account are you running and what's the strategy look like` },
+    { id: "TB_PROPFIRM_3", text: `hey, this is something i build regularly. want to walk me through your entries and exits, i can tell you what it'd take to automate it` },
+  ];
+}
+
+function tradingBotForexVariants() {
+  return [
+    { id: "TB_FOREX_1", text: `hey, saw your post about automating your forex strategy. i connect bots straight to broker apis, you keep the edge, i handle the execution. what pairs are you trading` },
+    { id: "TB_FOREX_2", text: `saw you're looking to automate a forex strategy. done a few of these. what's your entry logic look like` },
+    { id: "TB_FOREX_3", text: `hey, this is exactly what i build. what broker are you on and what's the strategy` },
+  ];
+}
+
+function tradingBotGeneralVariants() {
+  return [
+    { id: "TB_GENERAL_1", text: `hey, saw your post. i build bots for people who already have a working strategy, you keep the edge, i handle the automation. what's your setup` },
+    { id: "TB_GENERAL_2", text: `saw you're trying to automate your trading. what exchange and what's the entry logic look like, i can tell you what it'd take` },
+    { id: "TB_GENERAL_3", text: `hey, this is something i do a lot. want to walk me through your strategy` },
+  ];
+}
+
 function buildTradingBotMessage(post) {
-  const rawTitle   = (post.Title || "").trim();
-  const selftext   = post.Selftext || "";
-  const needPhrase = extractNeedPhrase(post.Title, selftext);
-  const budget     = (post.Budget || "").trim();
+  const rawTitle = (post.Title || "").trim();
+  const selftext = post.Selftext || "";
+  const combined = `${rawTitle} ${selftext}`;
 
-  const opener = `saw your post about "${needPhrase}."`;
-
-  let proof, sig;
-  if (/prop firm|topstep|apex|ftmo|combine/i.test(rawTitle + selftext)) {
-    proof = `I've done this exact setup before, automated a strategy for a funded prop account. Handles entries, exits, and drawdown protection without manual execution.`;
-    sig = "TB_PROPFIRM";
-  } else if (/forex|eur|gbp|usd/i.test(rawTitle + selftext)) {
-    proof = `I build execution bots connected directly to broker APIs for forex strategies. You keep the edge, I handle the infrastructure.`;
-    sig = "TB_FOREX";
+  let variants;
+  if (/prop firm|topstep|apex|ftmo|combine/i.test(combined)) {
+    variants = tradingBotPropFirmVariants();
+  } else if (/forex|eur|gbp|usd/i.test(combined)) {
+    variants = tradingBotForexVariants();
   } else {
-    proof = `I build custom execution bots for people who already have a working strategy. Live example, an automated futures bot running on a funded Topstep account, entries, exits, and risk rules all hands off.`;
-    sig = "TB_GENERAL";
+    variants = tradingBotGeneralVariants();
   }
 
-  const budgetLine = budget ? ` Your number works.` : "";
-  const close = `Flat fee, you own the code outright.${budgetLine} What's your exchange and entry logic, want me to tell you exactly how I'd build it?`;
-
-  const text = `${opener}\n\n${proof}\n\n${close}`;
-  return { text, templateId: sig };
+  const chosen = pick(variants);
+  return { text: chosen.text, templateId: chosen.id };
 }
 
 // ─── SCORING ──────────────────────────────────────────────────────────────────
@@ -285,9 +332,6 @@ async function runOutreachCycle() {
     if (cycleSeen.has(username.toLowerCase())) continue;
     if (product !== "DEVHIRE" && product !== "TRADINGBOT") continue;
 
-    // Hard skip if the scraper explicitly flagged no money signal.
-    // UNKNOWN is allowed through (LLM was unavailable at scrape time),
-    // only an explicit NO is blocked here.
     if (moneySignal === "NO") {
       skippedNoMoney++;
       log("SKIP_NO_MONEY", `u/${username}`);
@@ -324,7 +368,7 @@ async function runOutreachCycle() {
 
       await reddit.composeMessage({ to: username, subject, text: tplText });
       confirmed++;
-      log("SENT", `u/${username} | ${tplId} | [${product}] | score:${score} | budget:${post.Budget || "unknown"} | money:${moneySignal || "unknown"}`);
+      log("SENT", `u/${username} | ${tplId} | [${product}] | score:${score} | money:${moneySignal || "unknown"}`);
 
       upsertUser(freshUsers, username, {
         username, product, leadType,
@@ -359,7 +403,7 @@ async function runOutreachCycle() {
 // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet DM Bot — DEVHIRE + TRADINGBOT — personalized copy + money filter");
+  console.log("ClientMagnet DM Bot — DEVHIRE + TRADINGBOT — varied casual messaging");
   console.log("=".repeat(60));
 
   setInterval(checkInbox, INBOX_POLL_MS);

@@ -2,35 +2,28 @@
 // DEVHIRE + TRADINGBOT only. No lockedIn. No DM sending.
 // agency_bot.cjs handles all DM sending.
 //
-// CHANGES IN THIS VERSION:
-// - LLM classification layer removed entirely. Regex now carries full
-//   classification weight — no Ollama/ngrok dependency, no Mac uptime
-//   requirement, no silent-fallback risk.
-// - devHireIntentRegex tightened: the build-verb branch now requires a
-//   hiring verb nearby, not just any mention of building something.
-//   Fixes false positives like "I'm trying to build a scraper for my
-//   own project" matching as a lead.
-// - referralRegex added: "does anyone know a good developer" style posts
-//   now count as leads (confirmed in scope).
-// - firstPersonOwnershipRegex added as a structural backstop to the
-//   static exclude list, catches "I'm currently building/working on/
-//   attempting to build" phrasing the static list doesn't enumerate.
-// - noCashCompRegex added: equity-only / revenue-share-only posts are
-//   explicitly excluded (confirmed out of scope).
-// - devShopSubcontractRegex added: posts from dev shops/agencies looking
-//   to subcontract overflow work are explicitly excluded (confirmed out
-//   of scope) — distinct from a regular business with real budget, which
-//   still passes via hasBusinessContext.
-// - hasMoneySignal now negation-aware: "no budget," "can't afford,"
-//   "unpaid" near a money term no longer counts as a money signal.
-// - seenPostIds is now keyed per-product (`${post.id}_${product}`)
-//   instead of globally. Previously a post matching DEVHIRE first would
-//   silently never be evaluated for TRADINGBOT, and vice versa.
-// - contacted-users JSON is now loaded once per scrape cycle instead of
-//   once per subreddit call (was ~26 redundant disk reads per cycle).
-// - Dead/banned subreddits removed from TRADINGBOT_SUBREDDITS (r/Futures
-//   private, r/PropFirmTrading and r/FXtrading banned as of last check).
-//   Replaced with live alternatives.
+// FIXES IN THIS VERSION:
+// - checkTagFilter's PASS result no longer bypasses the intent regex or
+//   the money-signal requirement. It previously let ANY [Request]/[Task]/
+//   [Hiring]/[Job] tagged post through unconditionally, regardless of
+//   content — this is how a Steam key giveaway request ("[Request][Steam]
+//   Breath of Fire IV") and a salaried "[Hiring] Sales & Marketing
+//   Specialist" post both scored as real dev-hire leads. PASS now only
+//   boosts leadType/score, never bypasses the real checks.
+// - jobPostingExcludeRegex added: excludes salaried/W2 job listings
+//   (full-time, benefits, onsite, etc.) from DEVHIRE — those are
+//   employee postings, not freelance client work.
+// - tradingBotIntentRegex's loose "strategy/system near automate/bot"
+//   branch was matching completely unrelated business posts (a window
+//   cleaning scaling post, an HR/org performance post, a festival
+//   giveaway). hasTradingContext() added as a hard requirement — the
+//   post must contain an actual trading-specific word (a market,
+//   platform, or trading term) somewhere in the text, not just generic
+//   automation language.
+// - Reach expanded: added subreddits and search queries currently
+//   uncovered, and widened global search window from "day" to "week"
+//   (per-product seenPostKeys dedup already prevents reprocessing, so
+//   this only adds coverage).
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -76,8 +69,6 @@ const leadsWriter = createObjectCsvWriter({
 function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Per-product post tracking. Keyed by `${postId}_${product}` so a post
-// that matches DEVHIRE gets independently evaluated for TRADINGBOT too.
 const seenPostKeys = new Set();
 
 function loadContactedUsernames() {
@@ -89,10 +80,13 @@ function loadContactedUsernames() {
 }
 
 // ─── TAG FILTER ────────────────────────────────────────────────────────────────
+// REJECT is still a hard exclude (these are people OFFERING services, not
+// buyers). PASS is now advisory only — it labels leadType and boosts score,
+// it does NOT bypass the intent or money-signal checks below.
 function checkTagFilter(title) {
   const t = (title || "").toLowerCase();
   if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(t)) return "REJECT";
-  if (/\[task\]|\[hiring\]|\[request\]|\[job\]/i.test(t)) return "PASS";
+  if (/\[task\]|\[hiring\]|\[request\]|\[job\]/i.test(t)) return "ADVISORY_PASS";
   return "NEUTRAL";
 }
 
@@ -112,11 +106,16 @@ function hasBusinessContext(text) {
   return /\bour (store|company|team|clients|business|shop|agency)\b|\bwe (have|do|run|sell|operate)\b|\d+\s*employees|monthly revenue|our revenue|our customers|existing (business|store|shop|clients)/i.test(text);
 }
 
+// ─── JOB POSTING EXCLUDE (salaried/W2 employee listings, not freelance work) ───
+const jobPostingExcludeRegex = /\b(full-time|full time|part-time|part time|\bW2\b|salary|onsite|in-office|benefits package|401k|paid time off|\bPTO\b|equity \+ salary|equity plus salary|health insurance|relocation)\b/i;
+
 // ─── DEVHIRE ──────────────────────────────────────────────────────────────────
 const DEVHIRE_SUBREDDITS = [
   "forhire", "hiring", "entrepreneur", "smallbusiness", "startups",
   "SideProject", "webdev", "shopify", "ecommerce", "passive_income",
   "Flipping", "socialmedia", "digital_marketing",
+  // added for reach
+  "WebDevJobs", "SaaS", "nocode", "Zapier", "juststart", "growmybusiness",
 ];
 
 const DEVHIRE_QUERIES = [
@@ -127,6 +126,10 @@ const DEVHIRE_QUERIES = [
   "can someone build a bot", "willing to pay developer", "budget for developer",
   "need someone to code", "need a scraper built", "need automation help",
   "looking for coder", "need a custom tool built", "does anyone know a good developer",
+  // added for reach
+  "need this done this week", "budget is flexible", "serious inquiries only",
+  "looking to hire freelance developer", "need help automating my business",
+  "want to pay someone to build",
 ];
 
 const devHireIntentRegex = /\b(need|want|looking for|hiring|hire|searching for|seeking|require|paid|paying|budget|willing to pay)\b.{0,60}\b(developer|programmer|coder|dev|engineer|builder|freelancer)\b|\b(need|want|looking for|hiring|hire|require|willing to pay|can (someone|anyone))\b.{0,60}\b(build|create|make|develop|code|automate|scrape)\b.{0,80}\b(bot|automation|script|tool|app|website|web app|mobile app|dashboard|platform|scraper|integration|workflow|saas)\b|\[H\].{0,100}(developer|programmer|dev|build|app|bot|website)/i;
@@ -163,14 +166,18 @@ function scoreDevHire(post, leadType) {
   return score;
 }
 
+// tagResult "ADVISORY_PASS" now only feeds leadType/score below — it is
+// NEVER allowed to skip the intent check or the money-signal check.
 function devHireQualifies(fullText, tagResult) {
   const isReferral = referralRegex.test(fullText);
-  if (!devHireIntentRegex.test(fullText) && !isReferral && tagResult !== "PASS") return { pass: false };
+  const hasRealIntent = devHireIntentRegex.test(fullText) || isReferral;
+  if (!hasRealIntent) return { pass: false };
   if (devHireExcludeRegex.test(fullText)) return { pass: false };
   if (firstPersonOwnershipRegex.test(fullText)) return { pass: false };
   if (noCashCompRegex.test(fullText)) return { pass: false };
   if (devShopSubcontractRegex.test(fullText)) return { pass: false };
-  if (!hasMoneySignal(fullText) && !hasBusinessContext(fullText) && tagResult !== "PASS") return { pass: false };
+  if (jobPostingExcludeRegex.test(fullText)) return { pass: false };
+  if (!hasMoneySignal(fullText) && !hasBusinessContext(fullText)) return { pass: false };
   return { pass: true, isReferral };
 }
 
@@ -179,6 +186,8 @@ const TRADINGBOT_SUBREDDITS = [
   "algotrading", "Daytrading", "FuturesTrading", "Forex", "trading",
   "TradingView", "technicalanalysis", "optionstrading", "thewallstreet",
   "stocks", "options",
+  // added for reach
+  "quant", "CryptoMarkets", "FundedTrading", "PropFirms",
 ];
 // Removed: Futures (now private), PropFirmTrading (banned), FXtrading (banned),
 // FuturesTrader71 (dead/low-activity as of last check — verify before re-adding).
@@ -191,11 +200,24 @@ const TRADINGBOT_QUERIES = [
   "prop firm strategy bot", "mt5 bot developer", "tradingview bot developer",
   "my strategy automated", "backtested strategy automate", "ninjatrader developer",
   "interactive brokers bot",
+  // added for reach
+  "need help automating trades", "pay someone to build trading bot",
+  "looking for algo developer", "budget for trading bot",
 ];
 
 const tradingBotIntentRegex = /\b(automat|bot|algo|algorithm)\b.{0,80}\b(strateg|trade|trading|entry|exit|signal|execution)\b|\b(strateg|setup|system|signal)\b.{0,80}\b(automat|bot|algo|running|execut|passive)\b|\b(profitable|proven|backtested|live|working|manual|tested)\b.{0,60}\b(strateg|system|setup|signal|trade|results)\b|\b(hire|pay|budget|looking for|need someone|need a dev|custom|developer)\b.{0,60}\b(bot|algo|trading bot|automat|script|strategy)\b|\b(funded account|prop firm|topstep|apex|FTMO|combine|passed combine|live account)\b/i;
 
 const tradingBotExcludeRegex = /\b(beginner|just started|new to trading|learning to trade|paper trading only|no money|broke|can't afford|free bot|open source|free strategy|copy trading|signals|i built|i've built|already built|already have|already made|working on building|been working on|launched this week|launched recently)\b/i;
+
+// Hard requirement: the post must actually be about trading/markets
+// somewhere in the text, not just generic "strategy/system/automate"
+// business language. This is what was letting a window cleaning post
+// and an HR/org performance post through.
+const tradingContextRegex = /\b(trad(e|ing)|forex|futures|crypto(currency)?|stocks?|options?|nq|es|gc|gold|eurusd|gbpusd|forex pair|broker|exchange|mt4|mt5|tradingview|ninjatrader|thinkorswim|interactive brokers|ibkr|topstep|ftmo|apex|prop firm|pips?|leverage|long position|short position|candlestick|chart pattern|backtest|drawdown|win rate)\b/i;
+
+function hasTradingContext(text) {
+  return tradingContextRegex.test(text);
+}
 
 function scoreTradingBot(post) {
   let score = 70;
@@ -212,6 +234,7 @@ function scoreTradingBot(post) {
 }
 
 function tradingBotQualifies(fullText) {
+  if (!hasTradingContext(fullText)) return false;
   if (!tradingBotIntentRegex.test(fullText)) return false;
   if (tradingBotExcludeRegex.test(fullText)) return false;
   if (!hasMoneySignal(fullText) && !hasBusinessContext(fullText)) return false;
@@ -231,7 +254,7 @@ function evaluateDevHirePost(post, subredditLabel, trigger) {
   if (!result.pass) return null;
 
   const isUrgent = /urgent|asap|immediately|right away|need now/i.test(fullText);
-  const leadType = tagResult === "PASS" ? "DEV_HIRE_TAGGED"
+  const leadType = tagResult === "ADVISORY_PASS" ? "DEV_HIRE_TAGGED"
     : result.isReferral ? "DEV_HIRE_REFERRAL"
     : (isUrgent ? "DEV_HIRE_URGENT" : "DEV_HIRE_SUBREDDIT");
   const budget = extractBudget(fullText);
@@ -304,7 +327,7 @@ async function scrapeSubreddit(subredditName, product, contactedUsers) {
 async function globalSearch(query, product, contactedUsers) {
   const newLeads = [];
   try {
-    const results = await reddit.search({ query, sort: "new", time: "day", limit: 25 });
+    const results = await reddit.search({ query, sort: "new", time: "week", limit: 25 });
 
     for (const post of results) {
       const key = `${post.id}_${product}`;

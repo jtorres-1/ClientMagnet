@@ -13,6 +13,10 @@
 // - jobPostingExcludeRegex added: excludes salaried/W2 job listings
 //   (full-time, benefits, onsite, etc.) from DEVHIRE — those are
 //   employee postings, not freelance client work.
+// - volunteerExcludeRegex added: excludes unpaid/volunteer postings
+//   ("Looking for a Volunteer Web Developer") — these have real business
+//   context but explicitly no money, so the money-signal-or-context gate
+//   let them through. Now excluded outright regardless of context.
 // - tradingBotIntentRegex's loose "strategy/system near automate/bot"
 //   branch was matching completely unrelated business posts (a window
 //   cleaning scaling post, an HR/org performance post, a festival
@@ -109,6 +113,12 @@ function hasBusinessContext(text) {
 // ─── JOB POSTING EXCLUDE (salaried/W2 employee listings, not freelance work) ───
 const jobPostingExcludeRegex = /\b(full-time|full time|part-time|part time|\bW2\b|salary|onsite|in-office|benefits package|401k|paid time off|\bPTO\b|equity \+ salary|equity plus salary|health insurance|relocation)\b/i;
 
+// ─── VOLUNTEER / UNPAID EXCLUDE ────────────────────────────────────────────────
+// Real business context but explicitly no money — the context-only gate
+// let these through before. "Looking for a Volunteer Web Developer" is
+// the case that surfaced this.
+const volunteerExcludeRegex = /\b(volunteer|unpaid position|non-?paid|pro bono|for exposure|for experience only|internship \(unpaid\))\b/i;
+
 // ─── DEVHIRE ──────────────────────────────────────────────────────────────────
 const DEVHIRE_SUBREDDITS = [
   "forhire", "hiring", "entrepreneur", "smallbusiness", "startups",
@@ -177,6 +187,7 @@ function devHireQualifies(fullText, tagResult) {
   if (noCashCompRegex.test(fullText)) return { pass: false };
   if (devShopSubcontractRegex.test(fullText)) return { pass: false };
   if (jobPostingExcludeRegex.test(fullText)) return { pass: false };
+  if (volunteerExcludeRegex.test(fullText)) return { pass: false };
   if (!hasMoneySignal(fullText) && !hasBusinessContext(fullText)) return { pass: false };
   return { pass: true, isReferral };
 }

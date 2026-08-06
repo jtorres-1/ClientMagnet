@@ -3,6 +3,12 @@
 // agency_bot.cjs handles all DM sending.
 //
 // FIXES IN THIS VERSION:
+// - checkTagFilter now checks the post's real link_flair_text field first
+//   (structured Reddit metadata, exact and reliable) instead of only
+//   pattern-matching [For Hire]/[Hiring] brackets in the title text.
+//   Falls back to bracket matching only when a post has no structured
+//   flair set. This is why r/forhire scans were dominated by "For Hire"
+//   noise — bracket text in titles is inconsistent, flair is exact.
 // - checkTagFilter's PASS result no longer bypasses the intent regex or
 //   the money-signal requirement. It previously let ANY [Request]/[Task]/
 //   [Hiring]/[Job] tagged post through unconditionally, regardless of
@@ -87,10 +93,21 @@ function loadContactedUsernames() {
 // REJECT is still a hard exclude (these are people OFFERING services, not
 // buyers). PASS is now advisory only — it labels leadType and boosts score,
 // it does NOT bypass the intent or money-signal checks below.
-function checkTagFilter(title) {
-  const t = (title || "").toLowerCase();
-  if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(t)) return "REJECT";
-  if (/\[task\]|\[hiring\]|\[request\]|\[job\]/i.test(t)) return "ADVISORY_PASS";
+//
+// Checks the post's real link_flair_text field first (structured Reddit
+// metadata, exact and reliable) and falls back to bracket-text matching
+// in the title only when the subreddit doesn't use structured flair.
+function checkTagFilter(post) {
+  const flair = (post.link_flair_text || "").toLowerCase();
+  const title = (post.title || "").toLowerCase();
+
+  if (flair) {
+    if (/for.?hire/.test(flair)) return "REJECT";
+    if (/hiring|task|request|\bjob\b/.test(flair)) return "ADVISORY_PASS";
+  }
+
+  if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
+  if (/\[task\]|\[hiring\]|\[request\]|\[job\]/i.test(title)) return "ADVISORY_PASS";
   return "NEUTRAL";
 }
 
@@ -114,9 +131,6 @@ function hasBusinessContext(text) {
 const jobPostingExcludeRegex = /\b(full-time|full time|part-time|part time|\bW2\b|salary|onsite|in-office|benefits package|401k|paid time off|\bPTO\b|equity \+ salary|equity plus salary|health insurance|relocation)\b/i;
 
 // ─── VOLUNTEER / UNPAID EXCLUDE ────────────────────────────────────────────────
-// Real business context but explicitly no money — the context-only gate
-// let these through before. "Looking for a Volunteer Web Developer" is
-// the case that surfaced this.
 const volunteerExcludeRegex = /\b(volunteer|unpaid position|non-?paid|pro bono|for exposure|for experience only|internship \(unpaid\))\b/i;
 
 // ─── DEVHIRE ──────────────────────────────────────────────────────────────────
@@ -124,7 +138,6 @@ const DEVHIRE_SUBREDDITS = [
   "forhire", "hiring", "entrepreneur", "smallbusiness", "startups",
   "SideProject", "webdev", "shopify", "ecommerce", "passive_income",
   "Flipping", "socialmedia", "digital_marketing",
-  // added for reach
   "WebDevJobs", "SaaS", "nocode", "Zapier", "juststart", "growmybusiness",
 ];
 
@@ -136,7 +149,6 @@ const DEVHIRE_QUERIES = [
   "can someone build a bot", "willing to pay developer", "budget for developer",
   "need someone to code", "need a scraper built", "need automation help",
   "looking for coder", "need a custom tool built", "does anyone know a good developer",
-  // added for reach
   "need this done this week", "budget is flexible", "serious inquiries only",
   "looking to hire freelance developer", "need help automating my business",
   "want to pay someone to build",
@@ -197,11 +209,8 @@ const TRADINGBOT_SUBREDDITS = [
   "algotrading", "Daytrading", "FuturesTrading", "Forex", "trading",
   "TradingView", "technicalanalysis", "optionstrading", "thewallstreet",
   "stocks", "options",
-  // added for reach
   "quant", "CryptoMarkets", "FundedTrading", "PropFirms",
 ];
-// Removed: Futures (now private), PropFirmTrading (banned), FXtrading (banned),
-// FuturesTrader71 (dead/low-activity as of last check — verify before re-adding).
 
 const TRADINGBOT_QUERIES = [
   "automate my trading strategy", "trading bot developer", "need a trading bot built",
@@ -211,7 +220,6 @@ const TRADINGBOT_QUERIES = [
   "prop firm strategy bot", "mt5 bot developer", "tradingview bot developer",
   "my strategy automated", "backtested strategy automate", "ninjatrader developer",
   "interactive brokers bot",
-  // added for reach
   "need help automating trades", "pay someone to build trading bot",
   "looking for algo developer", "budget for trading bot",
 ];
@@ -220,10 +228,6 @@ const tradingBotIntentRegex = /\b(automat|bot|algo|algorithm)\b.{0,80}\b(strateg
 
 const tradingBotExcludeRegex = /\b(beginner|just started|new to trading|learning to trade|paper trading only|no money|broke|can't afford|free bot|open source|free strategy|copy trading|signals|i built|i've built|already built|already have|already made|working on building|been working on|launched this week|launched recently)\b/i;
 
-// Hard requirement: the post must actually be about trading/markets
-// somewhere in the text, not just generic "strategy/system/automate"
-// business language. This is what was letting a window cleaning post
-// and an HR/org performance post through.
 const tradingContextRegex = /\b(trad(e|ing)|forex|futures|crypto(currency)?|stocks?|options?|nq|es|gc|gold|eurusd|gbpusd|forex pair|broker|exchange|mt4|mt5|tradingview|ninjatrader|thinkorswim|interactive brokers|ibkr|topstep|ftmo|apex|prop firm|pips?|leverage|long position|short position|candlestick|chart pattern|backtest|drawdown|win rate)\b/i;
 
 function hasTradingContext(text) {
@@ -256,7 +260,7 @@ function tradingBotQualifies(fullText) {
 function evaluateDevHirePost(post, subredditLabel, trigger) {
   const author = post.author?.name;
   const fullText = `${post.title} ${post.selftext || ""}`;
-  const tagResult = checkTagFilter(post.title);
+  const tagResult = checkTagFilter(post);
   if (tagResult === "REJECT") {
     log("TAG_FILTERED", `u/${author} rejected by tag: ${post.title.slice(0, 60)}`);
     return null;
@@ -286,7 +290,7 @@ function evaluateDevHirePost(post, subredditLabel, trigger) {
 function evaluateTradingBotPost(post, subredditLabel, trigger) {
   const author = post.author?.name;
   const fullText = `${post.title} ${post.selftext || ""}`;
-  const tagResult = checkTagFilter(post.title);
+  const tagResult = checkTagFilter(post);
   if (tagResult === "REJECT") {
     log("TAG_FILTERED", `u/${author} rejected by tag: ${post.title.slice(0, 60)}`);
     return null;

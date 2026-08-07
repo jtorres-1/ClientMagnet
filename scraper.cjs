@@ -1,34 +1,16 @@
-// scraper.cjs — ClientMagnet Lead Scraper
-// DEVHIRE + TRADINGBOT only. No lockedIn. No DM sending.
-// agency_bot.cjs handles all DM sending.
+// scraper.cjs — ClientMagnet Lead Scraper (v2 — niche pivot)
+// Targets: e-commerce operators, local service businesses, property management.
+// Dropped DEVHIRE/TRADINGBOT entirely — both niches had too much hobbyist/
+// commentary noise for regex to separate from real buyers. This version
+// targets people with an actual operating business describing a specific,
+// first-person operational pain, not people discussing a topic.
 //
-// FIXES IN THIS VERSION:
-// - Money signal is now a HARD requirement for both DEVHIRE and
-//   TRADINGBOT qualification. Business-context-only used to be enough
-//   on its own, and every fresh false positive tonight (a gaming
-//   anti-cheat post, a trading-scam warning, an outsourcing podcast)
-//   came through exactly that hole. hasBusinessContext still feeds
-//   scoring, it just can no longer qualify a lead by itself.
-// - checkTagFilter now checks the post's real link_flair_text field
-//   first (structured Reddit metadata), falling back to bracket-text
-//   matching only when a post has no structured flair.
-// - checkTagFilter's advisory PASS no longer bypasses the intent regex
-//   or the money-signal requirement, only affects leadType/score.
-// - jobPostingExcludeRegex and volunteerExcludeRegex added, both had
-//   real business context but no real freelance-money signal.
-// - tradingBotIntentRegex requires hasTradingContext() as a hard gate —
-//   generic "strategy/automate" business language alone no longer
-//   qualifies as a trading lead.
-// - NEW: comment scanning. Real buyer intent often shows up as a reply
-//   in someone else's thread, not a top-level post. Scans recent
-//   comments across the same subreddit list using the same
-//   qualification logic.
-// - NEW: broader, more natural query phrasing added to both query
-//   lists, and a real expansion of subreddits toward people who
-//   actually have budgets (indie founders, ecommerce sellers, funded
-//   traders) rather than just the crowded generic hiring boards.
-// - Global search window widened from a day to a week (per-product
-//   seenPostKeys dedup prevents reprocessing either way).
+// CORE CHANGE: qualification now requires FIRST-PERSON PAIN LANGUAGE
+// ("I keep manually...", "takes me hours to...", "losing sales because...")
+// not just topic keywords. This is what a real operator sounds like when
+// something in their business is broken, and it's structurally harder to
+// fake or accidentally trigger than "strategy" or "automate" appearing
+// anywhere in the text.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -60,12 +42,13 @@ const leadsWriter = createObjectCsvWriter({
     { id: "title",          title: "Title" },
     { id: "url",            title: "URL" },
     { id: "subreddit",      title: "Subreddit" },
+    { id: "vertical",       title: "Vertical" },
     { id: "leadType",       title: "Lead Type" },
-    { id: "product",        title: "Product" },
     { id: "matchedTrigger", title: "Matched Trigger" },
     { id: "budget",         title: "Budget" },
     { id: "score",          title: "Score" },
     { id: "moneySignal",    title: "Money Signal" },
+    { id: "painPhrase",     title: "Pain Phrase" },
     { id: "selftext",       title: "Selftext" },
   ],
   append: true,
@@ -84,333 +67,155 @@ function loadContactedUsernames() {
   } catch { return new Set(); }
 }
 
-// ─── TAG FILTER ────────────────────────────────────────────────────────────────
+// ─── TAG FILTER ─────────────────────────────────────────────────────────────
 function checkTagFilter(post) {
   const flair = (post.link_flair_text || "").toLowerCase();
   const title = (post.title || "").toLowerCase();
-
   if (flair) {
     if (/for.?hire/.test(flair)) return "REJECT";
-    if (/hiring|task|request|\bjob\b/.test(flair)) return "ADVISORY_PASS";
   }
-
   if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
-  if (/\[task\]|\[hiring\]|\[request\]|\[job\]/i.test(title)) return "ADVISORY_PASS";
   return "NEUTRAL";
 }
 
-// ─── MONEY SIGNAL (negation-aware) ─────────────────────────────────────────────
+// ─── MONEY SIGNAL (negation-aware, hard requirement) ───────────────────────────
 function hasMoneySignal(text) {
-  const moneyRegex = /\$[\d,]+k?|\d+k?\s*(?:usd|dollars)|budget of|paying \$|willing to pay|flat fee|our budget|client budget|\d+\/hr|\d+\/hour|compensation|paid position|paid project|paid work|would pay|i'?d pay|shut up and take my money/i;
+  const moneyRegex = /\$[\d,]+k?|\d+k?\s*(?:usd|dollars)|budget of|paying \$|willing to pay|flat fee|would pay|i'?d pay|pay someone|pay for|pay to have/i;
   const match = text.match(moneyRegex);
   if (!match) return false;
-  const windowStart = Math.max(0, match.index - 25);
-  const before = text.slice(windowStart, match.index);
+  const before = text.slice(Math.max(0, match.index - 25), match.index);
   if (/\b(no|not|n't|zero|without|can'?t afford|unpaid|lacking)\b/i.test(before)) return false;
   return true;
 }
 
-// ─── BUSINESS CONTEXT (feeds scoring only, no longer a qualification path) ─────
-function hasBusinessContext(text) {
-  return /\bour (store|company|team|clients|business|shop|agency)\b|\bwe (have|do|run|sell|operate)\b|\d+\s*employees|monthly revenue|our revenue|our customers|existing (business|store|shop|clients)/i.test(text);
+// ─── FIRST-PERSON OPERATIONAL PAIN (the real qualification gate) ──────────────
+const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bwish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bneed (a |to )?automate\b|\bneed help (managing|tracking|keeping up with)\b|\btakes (me )?(hours|forever|too long)\b|\blosing (sales|customers|money) because\b|\bcan'?t keep up with\b|\bfalling behind on\b|\bno time to keep up with\b|\bjuggling too many\b/i;
+
+function extractPainPhrase(text) {
+  const m = text.match(painPhraseRegex);
+  return m ? m[0].slice(0, 80) : "";
 }
 
-const jobPostingExcludeRegex = /\b(full-time|full time|part-time|part time|\bW2\b|salary|onsite|in-office|benefits package|401k|paid time off|\bPTO\b|equity \+ salary|equity plus salary|health insurance|relocation)\b/i;
+// Still building it themselves = not a buyer. Someone offering services = not a buyer.
+const ownBuildExcludeRegex = /\bi(?:'m| am)\s+(?:currently\s+)?(?:building|developing|creating|coding|making|launching)\b|\bi built\b|\bi've built\b|\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my\b|\bi specialize\b|\bfreelancer here\b/i;
 
-const volunteerExcludeRegex = /\b(volunteer|unpaid position|non-?paid|pro bono|for exposure|for experience only|internship \(unpaid\))\b/i;
+const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but)\b/i;
 
-// ─── DEVHIRE ──────────────────────────────────────────────────────────────────
-const DEVHIRE_SUBREDDITS = [
-  "forhire", "hiring", "entrepreneur", "smallbusiness", "startups",
-  "SideProject", "webdev", "shopify", "ecommerce", "passive_income",
-  "Flipping", "socialmedia", "digital_marketing",
-  "WebDevJobs", "SaaS", "nocode", "Zapier", "juststart", "growmybusiness",
-  // added for reach — people already running something, likely to have a budget
-  "indiehackers", "microsaas", "Etsy", "AmazonFBA", "FulfillmentByAmazon",
-  "dropship", "consulting", "agency", "Twitch", "streaming",
+// ─── VERTICAL DETECTION ─────────────────────────────────────────────────────────
+const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?)\b/i;
+const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|customers?)\b/i;
+const propertyVerticalRegex = /\b(tenant|lease|rent(al)?|property (management|manager)|landlord|maintenance request|units?\b)/i;
+
+function detectVertical(text) {
+  if (ecommerceVerticalRegex.test(text)) return "ecommerce";
+  if (propertyVerticalRegex.test(text)) return "property_mgmt";
+  if (localServiceVerticalRegex.test(text)) return "local_service";
+  return "general";
+}
+
+const SUBREDDITS = [
+  // e-commerce operators
+  "FulfillmentByAmazon", "AmazonFBA", "Etsy", "EtsySellers", "shopify",
+  "ecommerce", "dropship", "dropshipping",
+  // local service businesses
+  "smallbusiness", "Entrepreneur", "HVAC", "Plumbing", "landscaping",
+  "cleaningbusiness", "Contractor", "Construction", "handyman",
+  // property management
+  "PropertyManagement", "realestateinvesting", "Landlord", "RealEstate",
 ];
 
-const DEVHIRE_QUERIES = [
-  "need a developer", "need a programmer", "need someone to build",
-  "looking for developer", "hire a developer", "hire a programmer",
-  "need a bot built", "need automation built", "need a website built",
-  "need a web app built", "need an app built", "need a mobile app built",
-  "can someone build a bot", "willing to pay developer", "budget for developer",
-  "need someone to code", "need a scraper built", "need automation help",
-  "looking for coder", "need a custom tool built", "does anyone know a good developer",
-  "need this done this week", "budget is flexible", "serious inquiries only",
-  "looking to hire freelance developer", "need help automating my business",
-  "want to pay someone to build",
-  // added — natural, informal phrasing real buyers actually type
-  "is there a tool for this", "does this exist already", "how do I automate this",
-  "anyone built something like this", "would pay for this", "is there an app for",
-  "looking to outsource this", "need this built asap", "who can build this for me",
-  "willing to pay for someone to fix this",
+const QUERIES = [
+  "keep manually", "takes me hours", "spending too much time",
+  "wish there was a tool", "manually updating", "manually tracking",
+  "losing sales because", "can't keep up with", "need to automate this",
+  "is there a way to automate", "tired of doing this manually",
+  "would pay someone to automate", "need help managing", "falling behind on",
+  "juggling too many", "no time to keep up with", "is there an app for",
+  "wasting hours on", "drowning in", "sick of doing this by hand",
 ];
-
-const devHireIntentRegex = /\b(need|want|looking for|hiring|hire|searching for|seeking|require|paid|paying|budget|willing to pay)\b.{0,60}\b(developer|programmer|coder|dev|engineer|builder|freelancer)\b|\b(need|want|looking for|hiring|hire|require|willing to pay|can (someone|anyone))\b.{0,60}\b(build|create|make|develop|code|automate|scrape)\b.{0,80}\b(bot|automation|script|tool|app|website|web app|mobile app|dashboard|platform|scraper|integration|workflow|saas)\b|\[H\].{0,100}(developer|programmer|dev|build|app|bot|website)/i;
-
-const referralRegex = /\b(does anyone know|can anyone recommend|who('s| is) a good|looking for recommendations for|any recommendations for)\b.{0,40}\b(developer|programmer|coder|dev|agency|freelancer)\b/i;
-
-const devHireExcludeRegex = /\b(i am a|i'm a|i am an|offering|available for hire|available to help|i can build|i build|i develop|i code|my services|my portfolio|hire me|dm me|contact me|i will build|i'll build|i built|i've built|i have built|i am building|i'm building|i am developing|i've developed|already built|already have|already made|working on building|been building|been working on|launched this week|launched recently|check out my|i specialize|looking for work|looking for clients|for hire|freelancer here|open to work|reach out|my rates|\$\d+\/hr|\$\d+\/hour|years of experience|check my profile|check out my profile|dm me for rates|open to opportunities|available for freelance|available for contract|portfolio:|my github|full stack developer here|backend developer here|frontend developer here|senior developer here|available immediately|taking on new clients|booking now|currently accepting clients|slide into my dms|rates start at)\b/i;
-
-const firstPersonOwnershipRegex = /\bi(?:'m| am)\s+(?:currently\s+)?(?:trying to |working on |attempting to |learning to |going to )?(?:build(?:ing)?|develop(?:ing|ed)?|creat(?:e|ing)|cod(?:e|ing)|mak(?:e|ing)|launch(?:ing|ed)?)\b/i;
-
-const noCashCompRegex = /\b(equity only|equity based|for equity|revenue share|rev share|profit share only|no upfront (pay|payment|cash)|unpaid but|percentage of (sales|profit) only)\b/i;
-
-const devShopSubcontractRegex = /\b(our (dev|development|software|tech) (shop|agency|studio)|we('re| are) a (dev|development|software) (shop|agency|studio)|subcontract(or|ing)?\b.{0,40}\b(developer|dev work)|overflow (dev|development|coding) work|white label (dev|development)|need (a )?subcontractor)\b/i;
 
 function extractBudget(text) {
   const m = text.match(/\$[\d,]+(?:k)?(?:\/(?:hr|hour|mo|month))?|\d+(?:\.\d+)?(?:k)?\s*(?:dollars|usd|budget)/i);
   return m ? m[0] : "";
 }
 
-function scoreDevHire(post, leadType) {
+function scoreLead(text, vertical) {
   let score = 50;
-  const text = `${post.title || ""} ${post.selftext || post.body || ""}`.toLowerCase();
-  if (leadType === "DEV_HIRE_URGENT") score += 30;
-  if (leadType === "DEV_HIRE_SUBREDDIT") score += 20;
-  if (leadType === "DEV_HIRE_TAGGED") score += 25;
-  if (leadType === "DEV_HIRE_REFERRAL") score += 5;
-  if (leadType === "DEV_HIRE_COMMENT") score += 10;
-  if (/urgent|asap|immediately|right away|today|tonight|need now/.test(text)) score += 20;
-  if (/\$[\d,]+k?|\d+k?\s*(?:usd|dollars|budget)/.test(text)) score += 25;
-  if (/bot|automation|scraper|workflow|automate/.test(text)) score += 20;
-  if (/website|web app|mobile app|ios|android|app/.test(text)) score += 10;
-  if (/paid|paying|budget|fixed fee|flat fee/.test(text)) score += 15;
-  if (/startup|agency|business|company|client/.test(text)) score += 10;
-  if (hasBusinessContext(text)) score += 30;
+  if (vertical !== "general") score += 30;
+  if (/urgent|asap|immediately|right away|today|tonight/.test(text)) score += 15;
+  if (/\$[\d,]+k?|\d+k?\s*(?:usd|dollars)/.test(text)) score += 25;
+  if (/employees|team|staff|our (store|shop|company)/.test(text)) score += 15;
   return score;
 }
 
-// Money signal is now a HARD requirement. Business context alone can no
-// longer qualify a lead — it only adds to score.
-function devHireQualifies(fullText, tagResult) {
-  const isReferral = referralRegex.test(fullText);
-  const hasRealIntent = devHireIntentRegex.test(fullText) || isReferral;
-  if (!hasRealIntent) return { pass: false };
-  if (devHireExcludeRegex.test(fullText)) return { pass: false };
-  if (firstPersonOwnershipRegex.test(fullText)) return { pass: false };
-  if (noCashCompRegex.test(fullText)) return { pass: false };
-  if (devShopSubcontractRegex.test(fullText)) return { pass: false };
-  if (jobPostingExcludeRegex.test(fullText)) return { pass: false };
-  if (volunteerExcludeRegex.test(fullText)) return { pass: false };
-  if (!hasMoneySignal(fullText)) return { pass: false };
-  return { pass: true, isReferral };
-}
-
-// ─── TRADINGBOT ───────────────────────────────────────────────────────────────
-const TRADINGBOT_SUBREDDITS = [
-  "algotrading", "Daytrading", "FuturesTrading", "Forex", "trading",
-  "TradingView", "technicalanalysis", "optionstrading", "thewallstreet",
-  "stocks", "options",
-  "quant", "CryptoMarkets", "FundedTrading", "PropFirms",
-  // added for reach — traders with real capital, not beginner boards
-  "thetagang", "cryptotrading", "quantfinance",
-];
-
-const TRADINGBOT_QUERIES = [
-  "automate my trading strategy", "trading bot developer", "need a trading bot built",
-  "hire someone trading bot", "custom trading bot", "want to automate my strategy",
-  "profitable strategy automate", "manual strategy automate", "algo trading developer",
-  "trading bot for hire", "pay for trading bot", "funded account strategy automate",
-  "prop firm strategy bot", "mt5 bot developer", "tradingview bot developer",
-  "my strategy automated", "backtested strategy automate", "ninjatrader developer",
-  "interactive brokers bot",
-  "need help automating trades", "pay someone to build trading bot",
-  "looking for algo developer", "budget for trading bot",
-  // added — natural, informal phrasing
-  "wish this was automated", "anyone build bots for", "pay someone to code my strategy",
-  "need help coding my EA", "who can build me an indicator", "hire someone to automate my trades",
-];
-
-const tradingBotIntentRegex = /\b(automat|bot|algo|algorithm)\b.{0,80}\b(strateg|trade|trading|entry|exit|signal|execution)\b|\b(strateg|setup|system|signal)\b.{0,80}\b(automat|bot|algo|running|execut|passive)\b|\b(profitable|proven|backtested|live|working|manual|tested)\b.{0,60}\b(strateg|system|setup|signal|trade|results)\b|\b(hire|pay|budget|looking for|need someone|need a dev|custom|developer)\b.{0,60}\b(bot|algo|trading bot|automat|script|strategy)\b|\b(funded account|prop firm|topstep|apex|FTMO|combine|passed combine|live account)\b/i;
-
-const tradingBotExcludeRegex = /\b(beginner|just started|new to trading|learning to trade|paper trading only|no money|broke|can't afford|free bot|open source|free strategy|copy trading|signals|i built|i've built|already built|already have|already made|working on building|been working on|launched this week|launched recently)\b/i;
-
-// Hard requirement: the post/comment must actually be about trading,
-// not just generic "strategy/automate" business language. Also fixes
-// the specific gap found tonight — a bare "trad(e|ing)" match alone was
-// firing on non-financial "in-game trading" mentions. Now requires a
-// clearly financial-market term, not the word "trade" in isolation.
-const tradingContextRegex = /\bforex\b|\bfutures\b|\bcrypto(currency)?\b|\bstocks?\b|\boptions?\b|\bnq\b|\bes\b|\bgc\b|\bgold\b|\beurusd\b|\bgbpusd\b|\bforex pair\b|\bbroker\b|\bexchange\b|\bmt4\b|\bmt5\b|\btradingview\b|\bninjatrader\b|\bthinkorswim\b|\binteractive brokers\b|\bibkr\b|\btopstep\b|\bftmo\b|\bapex\b|\bprop firm\b|\bpips?\b|\bleverage\b|\blong position\b|\bshort position\b|\bcandlestick\b|\bchart pattern\b|\bbacktest\b|\bdrawdown\b|\bwin rate\b|\btrading strategy\b|\btrading bot\b|\btrading account\b|\bmarket(s)? (open|close)\b/i;
-
-function hasTradingContext(text) {
-  return tradingContextRegex.test(text);
-}
-
-function scoreTradingBot(post) {
-  let score = 70;
-  const text = `${post.title || ""} ${post.selftext || post.body || ""}`.toLowerCase();
-  if (/profitable|proven|backtested|live results|years of|track record/.test(text)) score += 30;
-  if (/funded|prop firm|topstep|apex|ftmo|combine|live account/.test(text)) score += 25;
-  if (/\$[\d,]+k?|\d+k?\s*(?:usd|dollars|budget)|willing to pay|paying|hire|flat fee/.test(text)) score += 35;
-  if (/automate|running automatically|hands off|passive|24\/7/.test(text)) score += 20;
-  if (/futures|nq|es|gc|gold|forex|eur|gbp|gbpusd|eurusd/.test(text)) score += 10;
-  if (/mt4|mt5|tradingview|ninjatrader|thinkorswim|interactive brokers|ibkr|projectx/.test(text)) score += 15;
-  if (/strategy|system|setup|edge|alpha/.test(text)) score += 10;
-  if (hasBusinessContext(text)) score += 15;
-  return score;
-}
-
-function tradingBotQualifies(fullText) {
-  if (!hasTradingContext(fullText)) return false;
-  if (!tradingBotIntentRegex.test(fullText)) return false;
-  if (tradingBotExcludeRegex.test(fullText)) return false;
+function qualifies(fullText) {
+  if (!painPhraseRegex.test(fullText)) return false;
+  if (ownBuildExcludeRegex.test(fullText)) return false;
+  if (noCashCompRegex.test(fullText)) return false;
   if (!hasMoneySignal(fullText)) return false;
   return true;
 }
 
-// ─── SHARED POST HANDLERS ──────────────────────────────────────────────────────
-function evaluateDevHirePost(post, subredditLabel, trigger) {
-  const author = post.author?.name;
-  const fullText = `${post.title} ${post.selftext || ""}`;
-  const tagResult = checkTagFilter(post);
-  if (tagResult === "REJECT") {
-    log("TAG_FILTERED", `u/${author} rejected by tag: ${post.title.slice(0, 60)}`);
-    return null;
-  }
-  const result = devHireQualifies(fullText, tagResult);
-  if (!result.pass) return null;
-
-  const isUrgent = /urgent|asap|immediately|right away|need now/i.test(fullText);
-  const leadType = tagResult === "ADVISORY_PASS" ? "DEV_HIRE_TAGGED"
-    : result.isReferral ? "DEV_HIRE_REFERRAL"
-    : (isUrgent ? "DEV_HIRE_URGENT" : "DEV_HIRE_SUBREDDIT");
-  const budget = extractBudget(fullText);
-  const score = scoreDevHire(post, leadType);
-
-  log("LEAD", `[DEVHIRE] u/${author} in ${subredditLabel} | score:${score} | ${post.title.slice(0, 60)}`);
-
+function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, leadType) {
+  const vertical = detectVertical(fullText);
+  const score = scoreLead(fullText, vertical);
+  const painPhrase = extractPainPhrase(fullText);
+  log("LEAD", `[${vertical.toUpperCase()}] u/${author} in ${subredditLabel} | score:${score} | ${fullText.slice(0, 70)}`);
   return {
     time: new Date().toISOString(), username: author,
-    title: post.title.slice(0, 150), url: `https://reddit.com${post.permalink}`,
-    subreddit: subredditLabel, leadType, product: "DEVHIRE",
-    matchedTrigger: trigger, budget, score,
-    moneySignal: hasMoneySignal(fullText) ? "YES" : (hasBusinessContext(fullText) ? "CONTEXT_ONLY" : "NO"),
-    selftext: (post.selftext || "").slice(0, 500),
-  };
-}
-
-function evaluateTradingBotPost(post, subredditLabel, trigger) {
-  const author = post.author?.name;
-  const fullText = `${post.title} ${post.selftext || ""}`;
-  const tagResult = checkTagFilter(post);
-  if (tagResult === "REJECT") {
-    log("TAG_FILTERED", `u/${author} rejected by tag: ${post.title.slice(0, 60)}`);
-    return null;
-  }
-  if (!tradingBotQualifies(fullText)) return null;
-
-  const score = scoreTradingBot(post);
-  const budget = extractBudget(fullText);
-
-  log("LEAD", `[TRADINGBOT] u/${author} in ${subredditLabel} | score:${score} | ${post.title.slice(0, 60)}`);
-
-  return {
-    time: new Date().toISOString(), username: author,
-    title: post.title.slice(0, 150), url: `https://reddit.com${post.permalink}`,
-    subreddit: subredditLabel, leadType: "TRADING_BOT", product: "TRADINGBOT",
-    matchedTrigger: trigger, budget, score,
-    moneySignal: hasMoneySignal(fullText) ? "YES" : (hasBusinessContext(fullText) ? "CONTEXT_ONLY" : "NO"),
-    selftext: (post.selftext || "").slice(0, 500),
-  };
-}
-
-// ─── SHARED COMMENT HANDLERS (NEW) ─────────────────────────────────────────────
-// Comments have no title/flair — just body text. Reuse the same
-// qualification logic against comment.body, tagResult is always
-// NEUTRAL since comments don't carry post flair.
-function evaluateDevHireComment(comment, subredditLabel, trigger) {
-  const author = comment.author?.name;
-  const fullText = comment.body || "";
-  const result = devHireQualifies(fullText, "NEUTRAL");
-  if (!result.pass) return null;
-
-  const isUrgent = /urgent|asap|immediately|right away|need now/i.test(fullText);
-  const leadType = result.isReferral ? "DEV_HIRE_REFERRAL"
-    : (isUrgent ? "DEV_HIRE_URGENT" : "DEV_HIRE_COMMENT");
-  const budget = extractBudget(fullText);
-  const score = scoreDevHire({ title: "", selftext: fullText }, leadType);
-
-  log("LEAD", `[DEVHIRE-COMMENT] u/${author} in ${subredditLabel} | score:${score} | ${fullText.slice(0, 60)}`);
-
-  return {
-    time: new Date().toISOString(), username: author,
-    title: fullText.slice(0, 150), url: `https://reddit.com${comment.permalink}`,
-    subreddit: subredditLabel, leadType, product: "DEVHIRE",
-    matchedTrigger: trigger, budget, score,
-    moneySignal: hasMoneySignal(fullText) ? "YES" : (hasBusinessContext(fullText) ? "CONTEXT_ONLY" : "NO"),
+    title: fullText.slice(0, 150), url: `https://reddit.com${permalink}`,
+    subreddit: subredditLabel, vertical, leadType,
+    matchedTrigger: trigger, budget: extractBudget(fullText), score,
+    moneySignal: "YES", painPhrase,
     selftext: fullText.slice(0, 500),
   };
 }
 
-function evaluateTradingBotComment(comment, subredditLabel, trigger) {
-  const author = comment.author?.name;
-  const fullText = comment.body || "";
-  if (!tradingBotQualifies(fullText)) return null;
-
-  const score = scoreTradingBot({ title: "", selftext: fullText });
-  const budget = extractBudget(fullText);
-
-  log("LEAD", `[TRADINGBOT-COMMENT] u/${author} in ${subredditLabel} | score:${score} | ${fullText.slice(0, 60)}`);
-
-  return {
-    time: new Date().toISOString(), username: author,
-    title: fullText.slice(0, 150), url: `https://reddit.com${comment.permalink}`,
-    subreddit: subredditLabel, leadType: "TRADING_BOT_COMMENT", product: "TRADINGBOT",
-    matchedTrigger: trigger, budget, score,
-    moneySignal: hasMoneySignal(fullText) ? "YES" : (hasBusinessContext(fullText) ? "CONTEXT_ONLY" : "NO"),
-    selftext: fullText.slice(0, 500),
-  };
-}
-
-// ─── SCRAPE SUBREDDIT (posts) ──────────────────────────────────────────────────
-async function scrapeSubreddit(subredditName, product, contactedUsers) {
+// ─── SCRAPE POSTS ───────────────────────────────────────────────────────────────
+async function scrapeSubredditPosts(subredditName, contactedUsers) {
   const newLeads = [];
   try {
     const posts = await reddit.getSubreddit(subredditName).getNew({ limit: 50 });
-
     for (const post of posts) {
-      const key = `${post.id}_${product}`;
+      const key = `p_${post.id}`;
       if (seenPostKeys.has(key)) continue;
       seenPostKeys.add(key);
 
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
+      if (checkTagFilter(post) === "REJECT") continue;
 
-      const lead = product === "DEVHIRE"
-        ? evaluateDevHirePost(post, subredditName, "subreddit_scan")
-        : evaluateTradingBotPost(post, subredditName, "subreddit_scan");
-      if (lead) newLeads.push(lead);
+      const fullText = `${post.title} ${post.selftext || ""}`;
+      if (!qualifies(fullText)) continue;
+
+      newLeads.push(buildLeadRecord(author, fullText, post.permalink, subredditName, "subreddit_scan", "POST"));
     }
   } catch (err) {
-    log("ERROR", `r/${subredditName} failed: ${err.message}`);
+    log("ERROR", `r/${subredditName} posts failed: ${err.message}`);
   }
   return newLeads;
 }
 
-// ─── SCRAPE SUBREDDIT COMMENTS (NEW) ───────────────────────────────────────────
-async function scrapeSubredditComments(subredditName, product, contactedUsers) {
+// ─── SCRAPE COMMENTS ─────────────────────────────────────────────────────────────
+async function scrapeSubredditComments(subredditName, contactedUsers) {
   const newLeads = [];
   try {
     const comments = await reddit.getSubreddit(subredditName).getNewComments({ limit: 100 });
-
     for (const comment of comments) {
-      const key = `c_${comment.id}_${product}`;
+      const key = `c_${comment.id}`;
       if (seenPostKeys.has(key)) continue;
       seenPostKeys.add(key);
 
       const author = comment.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
-      if (!comment.body || comment.body.length < 15) continue;
+      if (!comment.body || comment.body.length < 20) continue;
 
-      const lead = product === "DEVHIRE"
-        ? evaluateDevHireComment(comment, subredditName, "comment_scan")
-        : evaluateTradingBotComment(comment, subredditName, "comment_scan");
-      if (lead) newLeads.push(lead);
+      const fullText = comment.body;
+      if (!qualifies(fullText)) continue;
+
+      newLeads.push(buildLeadRecord(author, fullText, comment.permalink, subredditName, "comment_scan", "COMMENT"));
     }
   } catch (err) {
     log("ERROR", `r/${subredditName} comments failed: ${err.message}`);
@@ -419,25 +224,25 @@ async function scrapeSubredditComments(subredditName, product, contactedUsers) {
 }
 
 // ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
-async function globalSearch(query, product, contactedUsers) {
+async function globalSearch(query, contactedUsers) {
   const newLeads = [];
   try {
     const results = await reddit.search({ query, sort: "new", time: "week", limit: 25 });
-
     for (const post of results) {
-      const key = `${post.id}_${product}`;
+      const key = `p_${post.id}`;
       if (seenPostKeys.has(key)) continue;
       seenPostKeys.add(key);
 
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
+      if (checkTagFilter(post) === "REJECT") continue;
+
+      const fullText = `${post.title} ${post.selftext || ""}`;
+      if (!qualifies(fullText)) continue;
 
       const subredditLabel = post.subreddit?.display_name || "unknown";
-      const lead = product === "DEVHIRE"
-        ? evaluateDevHirePost(post, subredditLabel, query)
-        : evaluateTradingBotPost(post, subredditLabel, query);
-      if (lead) newLeads.push(lead);
+      newLeads.push(buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST"));
     }
   } catch (err) {
     log("ERROR", `Search "${query}" failed: ${err.message}`);
@@ -445,45 +250,22 @@ async function globalSearch(query, product, contactedUsers) {
   return newLeads;
 }
 
-// ─── MAIN SCRAPE CYCLE ────────────────────────────────────────────────────────
+// ─── MAIN CYCLE ────────────────────────────────────────────────────────────────
 async function runScrapeCycle() {
   log("INFO", "Scrape cycle starting...");
-
   const contactedUsers = loadContactedUsernames();
-
   const allLeads = [];
 
-  for (const sub of DEVHIRE_SUBREDDITS) {
-    const leads = await scrapeSubreddit(sub, "DEVHIRE", contactedUsers);
-    allLeads.push(...leads);
+  for (const sub of SUBREDDITS) {
+    allLeads.push(...await scrapeSubredditPosts(sub, contactedUsers));
     await sleep(3000);
   }
-  for (const sub of TRADINGBOT_SUBREDDITS) {
-    const leads = await scrapeSubreddit(sub, "TRADINGBOT", contactedUsers);
-    allLeads.push(...leads);
+  for (const sub of SUBREDDITS) {
+    allLeads.push(...await scrapeSubredditComments(sub, contactedUsers));
     await sleep(3000);
   }
-
-  // NEW: comment pass across the same subreddit lists
-  for (const sub of DEVHIRE_SUBREDDITS) {
-    const leads = await scrapeSubredditComments(sub, "DEVHIRE", contactedUsers);
-    allLeads.push(...leads);
-    await sleep(3000);
-  }
-  for (const sub of TRADINGBOT_SUBREDDITS) {
-    const leads = await scrapeSubredditComments(sub, "TRADINGBOT", contactedUsers);
-    allLeads.push(...leads);
-    await sleep(3000);
-  }
-
-  for (const query of DEVHIRE_QUERIES) {
-    const leads = await globalSearch(query, "DEVHIRE", contactedUsers);
-    allLeads.push(...leads);
-    await sleep(2500);
-  }
-  for (const query of TRADINGBOT_QUERIES) {
-    const leads = await globalSearch(query, "TRADINGBOT", contactedUsers);
-    allLeads.push(...leads);
+  for (const query of QUERIES) {
+    allLeads.push(...await globalSearch(query, contactedUsers));
     await sleep(2500);
   }
 
@@ -500,12 +282,10 @@ async function runScrapeCycle() {
   }
 }
 
-// ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet Scraper — DEVHIRE + TRADINGBOT — posts + comments, regex classification");
+  console.log("ClientMagnet Scraper v2 — ecommerce / local service / property mgmt");
   console.log("=".repeat(60));
-
   while (true) {
     await runScrapeCycle();
     log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);

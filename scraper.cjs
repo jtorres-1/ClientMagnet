@@ -1,16 +1,20 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v2 — niche pivot)
+// scraper.cjs — ClientMagnet Lead Scraper (v2.1 — incremental writes)
 // Targets: e-commerce operators, local service businesses, property management.
-// Dropped DEVHIRE/TRADINGBOT entirely — both niches had too much hobbyist/
-// commentary noise for regex to separate from real buyers. This version
-// targets people with an actual operating business describing a specific,
-// first-person operational pain, not people discussing a topic.
 //
-// CORE CHANGE: qualification now requires FIRST-PERSON PAIN LANGUAGE
-// ("I keep manually...", "takes me hours to...", "losing sales because...")
-// not just topic keywords. This is what a real operator sounds like when
-// something in their business is broken, and it's structurally harder to
-// fake or accidentally trigger than "strategy" or "automate" appearing
-// anywhere in the text.
+// NEW IN THIS VERSION:
+// - Leads are now written to CSV the instant they're found, not batched
+//   until the end of a full cycle. Tonight's cycles kept getting cut
+//   short by restarts and 503-triggered slowdowns, and every lead found
+//   before the cycle finished was silently lost. Now nothing is lost to
+//   a crash or restart, at most the lead being scanned at that exact
+//   moment.
+// - seenPostKeys now persists to disk (seen_keys.json) and loads back
+//   on startup, instead of living only in memory. Previously every
+//   restart forgot everything it had already seen, causing the same
+//   post to be rediscovered and reprocessed after every restart.
+// - Everything else (money-signal requirement, pain-phrase gate,
+//   vertical detection, comment scanning, subreddit/query lists) is
+//   unchanged from the niche-pivot rebuild.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -31,33 +35,70 @@ if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
 const leadsPath = path.join(baseDir, "clean_leads.csv");
 const usersPath = path.join(baseDir, "contacted_users.json");
+const seenKeysPath = path.join(baseDir, "seen_keys.json");
 
 const SCRAPE_INTERVAL_MS = 30 * 60 * 1000;
+const SEEN_KEYS_SAVE_EVERY = 10; // persist to disk every N new keys added
 
-const leadsWriter = createObjectCsvWriter({
-  path: leadsPath,
-  header: [
-    { id: "time",           title: "Time" },
-    { id: "username",       title: "Username" },
-    { id: "title",          title: "Title" },
-    { id: "url",            title: "URL" },
-    { id: "subreddit",      title: "Subreddit" },
-    { id: "vertical",       title: "Vertical" },
-    { id: "leadType",       title: "Lead Type" },
-    { id: "matchedTrigger", title: "Matched Trigger" },
-    { id: "budget",         title: "Budget" },
-    { id: "score",          title: "Score" },
-    { id: "moneySignal",    title: "Money Signal" },
-    { id: "painPhrase",     title: "Pain Phrase" },
-    { id: "selftext",       title: "Selftext" },
-  ],
-  append: true,
-});
+const csvHeader = [
+  { id: "time",           title: "Time" },
+  { id: "username",       title: "Username" },
+  { id: "title",          title: "Title" },
+  { id: "url",            title: "URL" },
+  { id: "subreddit",      title: "Subreddit" },
+  { id: "vertical",       title: "Vertical" },
+  { id: "leadType",       title: "Lead Type" },
+  { id: "matchedTrigger", title: "Matched Trigger" },
+  { id: "budget",         title: "Budget" },
+  { id: "score",          title: "Score" },
+  { id: "moneySignal",    title: "Money Signal" },
+  { id: "painPhrase",     title: "Pain Phrase" },
+  { id: "selftext",       title: "Selftext" },
+];
+
+// append:true only works correctly if the file already exists with the
+// right header. If it doesn't exist yet, write the header first so the
+// very first incremental append lands on a clean file.
+if (!fs.existsSync(leadsPath)) {
+  const headerOnlyWriter = createObjectCsvWriter({ path: leadsPath, header: csvHeader, append: false });
+  headerOnlyWriter.writeRecords([]).catch(() => {});
+}
+const leadsWriter = createObjectCsvWriter({ path: leadsPath, header: csvHeader, append: true });
 
 function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const seenPostKeys = new Set();
+// ─── SEEN-POST PERSISTENCE ──────────────────────────────────────────────────
+let seenPostKeys = new Set();
+let sinceLastSave = 0;
+
+function loadSeenKeys() {
+  if (!fs.existsSync(seenKeysPath)) return new Set();
+  try {
+    const arr = JSON.parse(fs.readFileSync(seenKeysPath, "utf8"));
+    return new Set(arr);
+  } catch { return new Set(); }
+}
+
+function saveSeenKeys() {
+  try {
+    fs.writeFileSync(seenKeysPath, JSON.stringify([...seenPostKeys]));
+  } catch (err) {
+    log("WARN", `Failed to save seen_keys.json: ${err.message}`);
+  }
+}
+
+function markSeen(key) {
+  seenPostKeys.add(key);
+  sinceLastSave++;
+  if (sinceLastSave >= SEEN_KEYS_SAVE_EVERY) {
+    saveSeenKeys();
+    sinceLastSave = 0;
+  }
+}
+
+seenPostKeys = loadSeenKeys();
+log("INFO", `Loaded ${seenPostKeys.size} previously-seen post/comment keys from disk.`);
 
 function loadContactedUsernames() {
   if (!fs.existsSync(usersPath)) return new Set();
@@ -71,9 +112,7 @@ function loadContactedUsernames() {
 function checkTagFilter(post) {
   const flair = (post.link_flair_text || "").toLowerCase();
   const title = (post.title || "").toLowerCase();
-  if (flair) {
-    if (/for.?hire/.test(flair)) return "REJECT";
-  }
+  if (flair && /for.?hire/.test(flair)) return "REJECT";
   if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
   return "NEUTRAL";
 }
@@ -96,7 +135,6 @@ function extractPainPhrase(text) {
   return m ? m[0].slice(0, 80) : "";
 }
 
-// Still building it themselves = not a buyer. Someone offering services = not a buyer.
 const ownBuildExcludeRegex = /\bi(?:'m| am)\s+(?:currently\s+)?(?:building|developing|creating|coding|making|launching)\b|\bi built\b|\bi've built\b|\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my\b|\bi specialize\b|\bfreelancer here\b/i;
 
 const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but)\b/i;
@@ -114,13 +152,10 @@ function detectVertical(text) {
 }
 
 const SUBREDDITS = [
-  // e-commerce operators
   "FulfillmentByAmazon", "AmazonFBA", "Etsy", "EtsySellers", "shopify",
   "ecommerce", "dropship", "dropshipping",
-  // local service businesses
   "smallbusiness", "Entrepreneur", "HVAC", "Plumbing", "landscaping",
   "cleaningbusiness", "Contractor", "Construction", "handyman",
-  // property management
   "PropertyManagement", "realestateinvesting", "Landlord", "RealEstate",
 ];
 
@@ -160,7 +195,6 @@ function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, l
   const vertical = detectVertical(fullText);
   const score = scoreLead(fullText, vertical);
   const painPhrase = extractPainPhrase(fullText);
-  log("LEAD", `[${vertical.toUpperCase()}] u/${author} in ${subredditLabel} | score:${score} | ${fullText.slice(0, 70)}`);
   return {
     time: new Date().toISOString(), username: author,
     title: fullText.slice(0, 150), url: `https://reddit.com${permalink}`,
@@ -171,15 +205,27 @@ function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, l
   };
 }
 
+// Writes a single lead immediately. Returns true if written successfully.
+async function writeLeadNow(lead) {
+  try {
+    await leadsWriter.writeRecords([lead]);
+    log("LEAD", `[${lead.vertical.toUpperCase()}] u/${lead.username} in ${lead.subreddit} | score:${lead.score} | ${lead.title.slice(0, 70)}`);
+    return true;
+  } catch (err) {
+    log("ERROR", `Failed to write lead for u/${lead.username}: ${err.message}`);
+    return false;
+  }
+}
+
 // ─── SCRAPE POSTS ───────────────────────────────────────────────────────────────
 async function scrapeSubredditPosts(subredditName, contactedUsers) {
-  const newLeads = [];
+  let count = 0;
   try {
     const posts = await reddit.getSubreddit(subredditName).getNew({ limit: 50 });
     for (const post of posts) {
       const key = `p_${post.id}`;
       if (seenPostKeys.has(key)) continue;
-      seenPostKeys.add(key);
+      markSeen(key);
 
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
@@ -189,23 +235,24 @@ async function scrapeSubredditPosts(subredditName, contactedUsers) {
       const fullText = `${post.title} ${post.selftext || ""}`;
       if (!qualifies(fullText)) continue;
 
-      newLeads.push(buildLeadRecord(author, fullText, post.permalink, subredditName, "subreddit_scan", "POST"));
+      const lead = buildLeadRecord(author, fullText, post.permalink, subredditName, "subreddit_scan", "POST");
+      if (await writeLeadNow(lead)) count++;
     }
   } catch (err) {
     log("ERROR", `r/${subredditName} posts failed: ${err.message}`);
   }
-  return newLeads;
+  return count;
 }
 
 // ─── SCRAPE COMMENTS ─────────────────────────────────────────────────────────────
 async function scrapeSubredditComments(subredditName, contactedUsers) {
-  const newLeads = [];
+  let count = 0;
   try {
     const comments = await reddit.getSubreddit(subredditName).getNewComments({ limit: 100 });
     for (const comment of comments) {
       const key = `c_${comment.id}`;
       if (seenPostKeys.has(key)) continue;
-      seenPostKeys.add(key);
+      markSeen(key);
 
       const author = comment.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
@@ -215,23 +262,24 @@ async function scrapeSubredditComments(subredditName, contactedUsers) {
       const fullText = comment.body;
       if (!qualifies(fullText)) continue;
 
-      newLeads.push(buildLeadRecord(author, fullText, comment.permalink, subredditName, "comment_scan", "COMMENT"));
+      const lead = buildLeadRecord(author, fullText, comment.permalink, subredditName, "comment_scan", "COMMENT");
+      if (await writeLeadNow(lead)) count++;
     }
   } catch (err) {
     log("ERROR", `r/${subredditName} comments failed: ${err.message}`);
   }
-  return newLeads;
+  return count;
 }
 
 // ─── GLOBAL SEARCH ────────────────────────────────────────────────────────────
 async function globalSearch(query, contactedUsers) {
-  const newLeads = [];
+  let count = 0;
   try {
     const results = await reddit.search({ query, sort: "new", time: "week", limit: 25 });
     for (const post of results) {
       const key = `p_${post.id}`;
       if (seenPostKeys.has(key)) continue;
-      seenPostKeys.add(key);
+      markSeen(key);
 
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
@@ -242,49 +290,50 @@ async function globalSearch(query, contactedUsers) {
       if (!qualifies(fullText)) continue;
 
       const subredditLabel = post.subreddit?.display_name || "unknown";
-      newLeads.push(buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST"));
+      const lead = buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST");
+      if (await writeLeadNow(lead)) count++;
     }
   } catch (err) {
     log("ERROR", `Search "${query}" failed: ${err.message}`);
   }
-  return newLeads;
+  return count;
 }
 
 // ─── MAIN CYCLE ────────────────────────────────────────────────────────────────
 async function runScrapeCycle() {
   log("INFO", "Scrape cycle starting...");
   const contactedUsers = loadContactedUsernames();
-  const allLeads = [];
+  let totalWritten = 0;
 
   for (const sub of SUBREDDITS) {
-    allLeads.push(...await scrapeSubredditPosts(sub, contactedUsers));
+    totalWritten += await scrapeSubredditPosts(sub, contactedUsers);
     await sleep(3000);
   }
   for (const sub of SUBREDDITS) {
-    allLeads.push(...await scrapeSubredditComments(sub, contactedUsers));
+    totalWritten += await scrapeSubredditComments(sub, contactedUsers);
     await sleep(3000);
   }
   for (const query of QUERIES) {
-    allLeads.push(...await globalSearch(query, contactedUsers));
+    totalWritten += await globalSearch(query, contactedUsers);
     await sleep(2500);
   }
 
-  if (allLeads.length > 0) {
-    await leadsWriter.writeRecords(allLeads);
-    log("INFO", `Wrote ${allLeads.length} new leads to CSV.`);
-  } else {
-    log("INFO", "No new leads this cycle.");
-  }
+  // Always save at the end of a cycle too, even if under the batch threshold.
+  saveSeenKeys();
+  sinceLastSave = 0;
+
+  log("INFO", `Cycle complete — ${totalWritten} lead(s) written this cycle (written incrementally as found).`);
 
   if (seenPostKeys.size > 20000) {
-    log("INFO", `Clearing seenPostKeys (was ${seenPostKeys.size} entries).`);
-    seenPostKeys.clear();
+    log("INFO", `Trimming seenPostKeys (was ${seenPostKeys.size} entries).`);
+    seenPostKeys = new Set([...seenPostKeys].slice(-10000));
+    saveSeenKeys();
   }
 }
 
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet Scraper v2 — ecommerce / local service / property mgmt");
+  console.log("ClientMagnet Scraper v2.1 — incremental writes + persisted dedup");
   console.log("=".repeat(60));
   while (true) {
     await runScrapeCycle();

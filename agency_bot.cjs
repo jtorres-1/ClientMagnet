@@ -1,6 +1,8 @@
-// agency_bot.cjs — ClientMagnet DM Bot (v3 — proof links added)
-// v3: some messages now include a LinkedIn or Instagram link as proof,
-// rotated randomly so outreach doesn't look templated to Reddit's spam systems.
+// agency_bot.cjs — ClientMagnet DM Bot (v4 — no generic post-reference openers)
+// v4: removed "saw your post" / "checked out your post" openers permanently.
+// Recipients kept replying confused since the opener never said what post,
+// so every message now opens by referencing the actual pain phrase or topic
+// directly instead of a generic pointer to "your post."
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -28,10 +30,19 @@ const MAX_DMS_PER_CYCLE = 40;
 const MIN_DELAY_MS      = 45 * 1000;
 const MAX_DELAY_MS      = 90 * 1000;
 const INBOX_POLL_MS     = 60 * 1000;
-const MIN_SCORE_TO_DM   = 40; // matches scraper's MIN_LEAD_SCORE
+const MIN_SCORE_TO_DM   = 60;
 
 const LINKEDIN_URL  = "https://www.linkedin.com/in/jesse-torres11/";
 const INSTAGRAM_URL = "https://www.instagram.com/jtx_ai/";
+
+// Banned forever. Never use these to open a message, even accidentally
+// through a template edit. Every send is checked against this before going out.
+const BANNED_OPENERS = [
+  /\bsaw your post\b/i,
+  /\bsaw what you said\b/i,
+  /\bchecked out your post\b/i,
+  /\bcame across your post\b/i,
+];
 
 function loadUsers() {
   if (!fs.existsSync(usersPath)) return {};
@@ -75,8 +86,6 @@ function classifyReply(text) {
   return "UNCLEAR";
 }
 
-// Proof line rotation. Included on roughly 55% of sends (weighted array),
-// varied in wording and which link so messages don't look templated.
 function proofLine() {
   const options = [
     "", "", "", "", "",
@@ -87,41 +96,48 @@ function proofLine() {
   ];
   return pick(options);
 }
-
 function withProof(base) {
   const proof = proofLine();
   return proof ? `${base}. ${proof}` : base;
 }
 
+// Every opener names the actual thing they described instead of pointing
+// back at "your post." Falls back to the vertical topic if no pain phrase
+// was extracted, never falls back to a generic post reference.
 function ecommerceVariants(pain) {
+  const topic = pain || "the manual side of running the store";
   return [
-    { id: "ECOM_1", text: withProof(`hey, saw what you said about ${pain || "the manual work"}. i build automation for sellers dealing with exactly this, happy to give you a real idea of what it'd take`) },
-    { id: "ECOM_2", text: withProof(`saw your post, that kind of manual tracking eats way more time than people realize. i build tools for exactly this, what platform are you selling on`) },
+    { id: "ECOM_1", text: withProof(`hey, ${topic}, that's exactly the kind of thing i build automation for. happy to give you a real idea of what it'd take`) },
+    { id: "ECOM_2", text: withProof(`hey, that kind of manual tracking eats way more time than people realize. i build tools for exactly this, what platform are you selling on`) },
     { id: "ECOM_3", text: withProof(`hey, this is the kind of thing i automate for sellers. what's it currently costing you time wise, and what would you want it to do instead`) },
   ];
 }
-
 function localServiceVariants(pain) {
+  const topic = pain || "keeping up with it manually";
   return [
-    { id: "LOCAL_1", text: withProof(`hey, saw what you said about ${pain || "keeping up with it manually"}. i build scheduling and tracking automation for service businesses, happy to take a look at what you need`) },
-    { id: "LOCAL_2", text: withProof(`saw your post, that's exactly the kind of manual work i help businesses automate. what's the process look like right now`) },
+    { id: "LOCAL_1", text: withProof(`hey, ${topic}, i build scheduling and tracking automation for service businesses, happy to take a look at what you need`) },
+    { id: "LOCAL_2", text: withProof(`hey, that's exactly the kind of manual work i help businesses automate. what's the process look like right now`) },
     { id: "LOCAL_3", text: withProof(`hey, this is something i build for shops like yours. what are you currently doing by hand that's eating the most time`) },
   ];
 }
-
 function propertyVariants(pain) {
+  const topic = pain || "managing this manually";
   return [
-    { id: "PROP_1", text: withProof(`hey, saw what you said about ${pain || "managing this manually"}. i build automation for property management, tenant and maintenance tracking, that kind of thing. what's the current setup`) },
-    { id: "PROP_2", text: withProof(`saw your post, that's a common pain point for landlords managing this by hand. happy to take a look at what you need automated`) },
+    { id: "PROP_1", text: withProof(`hey, ${topic}, i build automation for property management, tenant and maintenance tracking, that kind of thing. what's the current setup`) },
+    { id: "PROP_2", text: withProof(`hey, that's a common pain point for landlords managing this by hand. happy to take a look at what you need automated`) },
     { id: "PROP_3", text: withProof(`hey, this is something i build. how many units are we talking, and what's eating the most time right now`) },
   ];
 }
-
 function generalVariants(pain) {
+  const topic = pain || "the manual work you mentioned";
   return [
-    { id: "GEN_1", text: withProof(`hey, saw your post about ${pain || "the manual work"}. i build automation for businesses dealing with exactly this. what's the process look like`) },
-    { id: "GEN_2", text: withProof(`saw your post, happy to take a look. what are you currently doing manually that you'd want automated`) },
+    { id: "GEN_1", text: withProof(`hey, ${topic}, i build automation for businesses dealing with exactly this. what's the process look like`) },
+    { id: "GEN_2", text: withProof(`hey, happy to take a look at this. what are you currently doing manually that you'd want automated`) },
   ];
+}
+
+function violatesBannedOpener(text) {
+  return BANNED_OPENERS.some(rx => rx.test(text));
 }
 
 function buildMessage(lead) {
@@ -132,7 +148,11 @@ function buildMessage(lead) {
   else if (vertical === "local_service") variants = localServiceVariants(pain);
   else if (vertical === "property_mgmt") variants = propertyVariants(pain);
   else variants = generalVariants(pain);
-  const chosen = pick(variants);
+
+  // Filter out any variant that somehow matches a banned opener before
+  // picking, this is the hard stop, not just a style preference.
+  const safeVariants = variants.filter(v => !violatesBannedOpener(v.text));
+  const chosen = pick(safeVariants.length ? safeVariants : generalVariants(""));
   return { text: chosen.text, templateId: chosen.id };
 }
 
@@ -221,11 +241,17 @@ async function runOutreachCycle() {
     attempted++;
     const { text: tplText, templateId: tplId } = buildMessage(lead);
 
+    // Hard stop, never send if a banned opener somehow made it through.
+    if (violatesBannedOpener(tplText)) {
+      log("BLOCKED", `u/${username} message blocked, contained a banned opener`);
+      continue;
+    }
+
     try {
       const freshUsers = loadUsers();
       if (getUser(freshUsers, username)?.sent) { log("SKIP", `u/${username} already sent`); continue; }
 
-      await reddit.composeMessage({ to: username, subject: "saw your post", text: tplText });
+      await reddit.composeMessage({ to: username, subject: "quick question", text: tplText });
       confirmed++;
       log("SENT", `u/${username} | ${tplId} | vertical:${lead.Vertical} | score:${score}`);
 
@@ -258,7 +284,7 @@ async function runOutreachCycle() {
 }
 
 (async () => {
-  console.log("ClientMagnet DM Bot v3 — proof links added");
+  console.log("ClientMagnet DM Bot v4 — no generic post-reference openers");
   setInterval(checkInbox, INBOX_POLL_MS);
   while (true) {
     await runOutreachCycle();

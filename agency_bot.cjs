@@ -1,7 +1,6 @@
-// agency_bot.cjs — ClientMagnet DM Bot (v2 — niche pivot)
-// Messages reference the actual operational pain phrase extracted by the
-// scraper, not a guessed topic word. This only works because scraper.cjs
-// now requires real first-person pain language to qualify a lead at all.
+// agency_bot.cjs — ClientMagnet DM Bot (v3 — proof links added)
+// v3: some messages now include a LinkedIn or Instagram link as proof,
+// rotated randomly so outreach doesn't look templated to Reddit's spam systems.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -29,7 +28,10 @@ const MAX_DMS_PER_CYCLE = 40;
 const MIN_DELAY_MS      = 45 * 1000;
 const MAX_DELAY_MS      = 90 * 1000;
 const INBOX_POLL_MS     = 60 * 1000;
-const MIN_SCORE_TO_DM   = 60;
+const MIN_SCORE_TO_DM   = 40; // matches scraper's MIN_LEAD_SCORE
+
+const LINKEDIN_URL  = "https://www.linkedin.com/in/jesse-torres11/";
+const INSTAGRAM_URL = "https://www.instagram.com/jtx_ai/";
 
 function loadUsers() {
   if (!fs.existsSync(usersPath)) return {};
@@ -73,36 +75,52 @@ function classifyReply(text) {
   return "UNCLEAR";
 }
 
-// ─── MESSAGE VARIANTS BY VERTICAL ──────────────────────────────────────────────
-// Reference the real pain phrase the scraper extracted, not a guessed topic.
+// Proof line rotation. Included on roughly 55% of sends (weighted array),
+// varied in wording and which link so messages don't look templated.
+function proofLine() {
+  const options = [
+    "", "", "", "", "",
+    `here's my linkedin if it helps, ${LINKEDIN_URL}`,
+    `i post real client builds on instagram if you want examples, ${INSTAGRAM_URL}`,
+    `happy to share proof of past work, linkedin here ${LINKEDIN_URL}`,
+    `you can check my instagram for examples of what i've built, ${INSTAGRAM_URL}`,
+  ];
+  return pick(options);
+}
+
+function withProof(base) {
+  const proof = proofLine();
+  return proof ? `${base}. ${proof}` : base;
+}
+
 function ecommerceVariants(pain) {
   return [
-    { id: "ECOM_1", text: `hey, saw what you said about ${pain || "the manual work"}. i build automation for sellers dealing with exactly this, happy to give you a real idea of what it'd take` },
-    { id: "ECOM_2", text: `saw your post, that kind of manual tracking eats way more time than people realize. i build tools for exactly this, what platform are you selling on` },
-    { id: "ECOM_3", text: `hey, this is the kind of thing i automate for sellers. what's it currently costing you time-wise, and what would you want it to do instead` },
+    { id: "ECOM_1", text: withProof(`hey, saw what you said about ${pain || "the manual work"}. i build automation for sellers dealing with exactly this, happy to give you a real idea of what it'd take`) },
+    { id: "ECOM_2", text: withProof(`saw your post, that kind of manual tracking eats way more time than people realize. i build tools for exactly this, what platform are you selling on`) },
+    { id: "ECOM_3", text: withProof(`hey, this is the kind of thing i automate for sellers. what's it currently costing you time wise, and what would you want it to do instead`) },
   ];
 }
 
 function localServiceVariants(pain) {
   return [
-    { id: "LOCAL_1", text: `hey, saw what you said about ${pain || "keeping up with it manually"}. i build scheduling/tracking automation for service businesses, happy to take a look at what you need` },
-    { id: "LOCAL_2", text: `saw your post, that's exactly the kind of manual work i help businesses automate. what's the process look like right now` },
-    { id: "LOCAL_3", text: `hey, this is something i build for shops like yours. what are you currently doing by hand that's eating the most time` },
+    { id: "LOCAL_1", text: withProof(`hey, saw what you said about ${pain || "keeping up with it manually"}. i build scheduling and tracking automation for service businesses, happy to take a look at what you need`) },
+    { id: "LOCAL_2", text: withProof(`saw your post, that's exactly the kind of manual work i help businesses automate. what's the process look like right now`) },
+    { id: "LOCAL_3", text: withProof(`hey, this is something i build for shops like yours. what are you currently doing by hand that's eating the most time`) },
   ];
 }
 
 function propertyVariants(pain) {
   return [
-    { id: "PROP_1", text: `hey, saw what you said about ${pain || "managing this manually"}. i build automation for property management, tenant/maintenance tracking, that kind of thing. what's the current setup` },
-    { id: "PROP_2", text: `saw your post, that's a common pain point for landlords managing this by hand. happy to take a look at what you need automated` },
-    { id: "PROP_3", text: `hey, this is something i build. how many units are we talking, and what's eating the most time right now` },
+    { id: "PROP_1", text: withProof(`hey, saw what you said about ${pain || "managing this manually"}. i build automation for property management, tenant and maintenance tracking, that kind of thing. what's the current setup`) },
+    { id: "PROP_2", text: withProof(`saw your post, that's a common pain point for landlords managing this by hand. happy to take a look at what you need automated`) },
+    { id: "PROP_3", text: withProof(`hey, this is something i build. how many units are we talking, and what's eating the most time right now`) },
   ];
 }
 
 function generalVariants(pain) {
   return [
-    { id: "GEN_1", text: `hey, saw your post about ${pain || "the manual work"}. i build automation for businesses dealing with exactly this. what's the process look like` },
-    { id: "GEN_2", text: `saw your post, happy to take a look. what are you currently doing manually that you'd want automated` },
+    { id: "GEN_1", text: withProof(`hey, saw your post about ${pain || "the manual work"}. i build automation for businesses dealing with exactly this. what's the process look like`) },
+    { id: "GEN_2", text: withProof(`saw your post, happy to take a look. what are you currently doing manually that you'd want automated`) },
   ];
 }
 
@@ -118,9 +136,7 @@ function buildMessage(lead) {
   return { text: chosen.text, templateId: chosen.id };
 }
 
-function scoreLead(p) {
-  return parseInt(p.Score || "0") || 50;
-}
+function scoreLead(p) { return parseInt(p.Score || "0") || 0; }
 
 function loadLeads() {
   return new Promise(resolve => {
@@ -144,20 +160,18 @@ async function checkInbox() {
       toMarkRead.push(item);
       const sender = item.author.name.toLowerCase();
       if (sender === botUsername) continue;
-
       const replyType = classifyReply(item.body);
       const users = loadUsers();
       const existing = getUser(users, item.author.name);
       const sentTemplate = existing?.template || "unknown";
-
       if (replyType === "NEGATIVE") {
-        log("REPLY_NEG", `u/${item.author.name} — not interested | template:${sentTemplate}`);
+        log("REPLY_NEG", `u/${item.author.name} not interested | template:${sentTemplate}`);
         upsertUser(users, item.author.name, { replied: true, reply_type: "NEGATIVE", closed: true, closed_reason: "not_interested" });
       } else if (replyType === "POSITIVE") {
-        log("HOT_LEAD", `\n${"=".repeat(60)}\nHOT LEAD — CHECK REDDIT NOW\nu/${item.author.name}: "${item.body.slice(0, 200)}"\ntemplate: ${sentTemplate}\n${"=".repeat(60)}`);
+        log("HOT_LEAD", `HOT LEAD u/${item.author.name}: "${item.body.slice(0, 200)}" template:${sentTemplate}`);
         upsertUser(users, item.author.name, { replied: true, reply_type: "POSITIVE", reply_body: item.body.slice(0, 500), closed: false });
       } else {
-        log("REPLY_UNCLEAR", `u/${item.author.name} replied — REVIEW MANUALLY | template:${sentTemplate}\n"${item.body.slice(0, 200)}"`);
+        log("REPLY_UNCLEAR", `u/${item.author.name} replied, review manually | template:${sentTemplate}`);
         upsertUser(users, item.author.name, { replied: true, reply_type: "UNCLEAR", reply_body: item.body.slice(0, 500), closed: false });
       }
     }
@@ -192,7 +206,6 @@ async function runOutreachCycle() {
 
   for (const lead of deduped) {
     if (attempted >= target) { log("INFO", `Cycle target reached (${target} DMs).`); break; }
-
     const username = (lead.Username || "").trim();
     if (!username) continue;
     if (cycleSeen.has(username.toLowerCase())) continue;
@@ -206,12 +219,11 @@ async function runOutreachCycle() {
 
     cycleSeen.add(username.toLowerCase());
     attempted++;
-
     const { text: tplText, templateId: tplId } = buildMessage(lead);
 
     try {
       const freshUsers = loadUsers();
-      if (getUser(freshUsers, username)?.sent) { log("SKIP", `u/${username} already sent (fresh check)`); continue; }
+      if (getUser(freshUsers, username)?.sent) { log("SKIP", `u/${username} already sent`); continue; }
 
       await reddit.composeMessage({ to: username, subject: "saw your post", text: tplText });
       confirmed++;
@@ -232,7 +244,6 @@ async function runOutreachCycle() {
 
       if (attempted < target) {
         const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
-        log("INFO", `Waiting ${Math.round(delay / 1000)}s...`);
         await sleep(delay);
       }
     } catch (err) {
@@ -243,17 +254,13 @@ async function runOutreachCycle() {
       }
     }
   }
-
-  log("INFO", `Cycle complete — attempted: ${attempted}, confirmed: ${confirmed}`);
+  log("INFO", `Cycle complete, attempted: ${attempted}, confirmed: ${confirmed}`);
 }
 
 (async () => {
-  console.log("=".repeat(60));
-  console.log("ClientMagnet DM Bot v2 — ecommerce / local service / property mgmt");
-  console.log("=".repeat(60));
+  console.log("ClientMagnet DM Bot v3 — proof links added");
   setInterval(checkInbox, INBOX_POLL_MS);
   while (true) {
-    console.log(`\n[${new Date().toLocaleString()}] Starting outreach cycle...`);
     await runOutreachCycle();
     const delay = (6 + Math.floor(Math.random() * 3)) * 60 * 1000;
     log("INFO", `Next cycle in ${Math.round(delay / 60000)} minutes...`);

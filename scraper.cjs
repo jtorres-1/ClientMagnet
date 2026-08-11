@@ -1,18 +1,18 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v2.4 — scored qualification, expanded reach)
+// scraper.cjs — ClientMagnet Lead Scraper (v2.5 — tightened qualification, pruned subreddits)
 // Targets: ecommerce operators, local service businesses, property management.
 //
-// v2.4 changes:
-// - Replaced the hard pain-phrase AND money-signal gate with a weighted score.
-//   Most real leads describe a problem without stating a dollar figure in the
-//   post itself, the old gate was filtering out the majority of real business
-//   posts. Now vertical match, pain phrase, money signal, urgency, and team
-//   size each add points, and a post qualifies at MIN_LEAD_SCORE.
-// - Added hiring-intent language (looking for a developer, need someone to
-//   build, any recommendations for) alongside the original pain phrases.
-// - Roughly doubled subreddit coverage per vertical and added more search
-//   queries to increase raw volume.
-// - ownBuildExcludeRegex and noCashCompRegex still hard-reject regardless of
-//   score, so freelancer/equity-only posts stay filtered.
+// v2.5 changes:
+// - Removed cofounderhunt, SideProject, SaaS, nocode, automation, Zapier.
+//   All produced 0% real leads in testing, wrong audience (equity seekers,
+//   indie hacker showcases, own-project posts), not paying clients.
+// - Removed bare "customers?" from localServiceVerticalRegex, it was
+//   mislabeling nearly any business post as local_service.
+// - Added offeringHelpExcludeRegex and findClientsExcludeRegex to filter
+//   out people offering services themselves or asking how to get clients,
+//   both are peers/competitors, not leads.
+// - Raised MIN_LEAD_SCORE to 60 so a single weak signal (bare pain phrase)
+//   no longer qualifies alone, now needs pain/hiring intent plus a vertical
+//   match, money signal, or urgency signal together.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -35,9 +35,9 @@ const leadsPath = path.join(baseDir, "clean_leads.csv");
 const usersPath = path.join(baseDir, "contacted_users.json");
 const seenKeysPath = path.join(baseDir, "seen_keys.json");
 
-const SCRAPE_INTERVAL_MS = 20 * 60 * 1000; // tightened from 30 to 20 given more subreddits/queries
+const SCRAPE_INTERVAL_MS = 20 * 60 * 1000;
 const SEEN_KEYS_SAVE_EVERY = 10;
-const MIN_LEAD_SCORE = 40;
+const MIN_LEAD_SCORE = 60;
 
 const csvHeader = [
   { id: "time",           title: "Time" },
@@ -117,7 +117,6 @@ function hasMoneySignal(text) {
   return true;
 }
 
-// Original operational pain language, plus hiring intent language added in v2.4
 const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bwish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bneed (a |to )?automate\b|\bneed help (managing|tracking|keeping up with)\b|\btakes (me )?(hours|forever|too long)\b|\blosing (sales|customers|money) because\b|\bcan'?t keep up with\b|\bfalling behind on\b|\bno time to keep up with\b|\bjuggling too many\b/i;
 
 const hiringIntentRegex = /\blooking for (a |someone to )?(developer|dev|programmer|automation|freelancer)\b|\bneed (a |someone to )?(build|create|develop|code)\b|\bany recommendations for\b|\bcan anyone (build|make|create)\b|\bhire (a )?(developer|dev|programmer)\b|\bwho can build\b|\blooking to (hire|automate|build)\b|\bneed (an|a) app (built|made)\b|\bneed custom (software|tool|script|bot)\b/i;
@@ -127,11 +126,18 @@ function extractPainPhrase(text) {
   return m ? m[0].slice(0, 80) : "";
 }
 
-const ownBuildExcludeRegex = /\bi(?:'m| am)\s+(?:currently\s+)?(?:building|developing|creating|coding|making|launching)\b|\bi built\b|\bi've built\b|\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my\b|\bi specialize\b|\bfreelancer here\b/i;
+const ownBuildExcludeRegex = /\bi(?:'m| am)\s+(?:currently\s+)?(?:building|developing|creating|coding|making|launching)\b|\bi built\b|\bi've built\b|\bbuilt (a|an|my)\b|\bshipped (a|an|my)\b|\blaunched (a|an|my)\b|\bi told an ai\b|\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my\b|\bi specialize\b|\bfreelancer here\b/i;
+
 const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but)\b/i;
 
+const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|equity only|founding (engineer|builder)|join (my|our) startup as)\b/i;
+
+const offeringHelpExcludeRegex = /\b(i want to help|reaching out to offer|here to help (small )?business owners|happy to help you|dm me if you (need|want) help|i offer|i provide services|check out my agency|our agency helps)\b/i;
+
+const findClientsExcludeRegex = /\bfind clients\b|\bget clients\b|\bland clients\b|\bhow (do|can) i get clients\b|\bclient acquisition\b/i;
+
 const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?|dropship(ping)?|print on demand)\b/i;
-const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|customers?|electrician|roofing|pest control|auto repair|locksmith)\b/i;
+const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|electrician|roofing|pest control|auto repair|locksmith)\b/i;
 const propertyVerticalRegex = /\b(tenant|lease|rent(al)?|property (management|manager)|landlord|maintenance request|units?\b|section ?8)/i;
 
 function detectVertical(text) {
@@ -146,7 +152,7 @@ const SUBREDDITS = [
   "FulfillmentByAmazon", "AmazonFBA", "amazonseller", "AmazonSellerCentral",
   "Etsy", "EtsySellers", "shopify", "ecommerce", "dropship", "dropshipping",
   "printondemand", "EcommerceMarketing", "woocommerce", "FacebookAds", "PPC",
-  "Flipping", "juststart", "FulfillmentByAmazon2",
+  "Flipping", "juststart",
   // local service
   "sweatystartup", "smallbusiness", "Entrepreneur", "EntrepreneurRideAlong",
   "startups", "HVAC", "Plumbing", "landscaping", "cleaningbusiness",
@@ -156,10 +162,8 @@ const SUBREDDITS = [
   // property management
   "PropertyManagement", "realestateinvesting", "Landlord", "RealEstate",
   "LandlordLove", "Section8", "Airbnb", "realestateinvestor",
-  // hiring-intent / cross-vertical, catches direct "need someone to build" posts
-  "forhire", "slavelabour", "Jobs4Bitcoins", "smallbusinessowners",
-  "cofounderhunt", "AlgoTrading", "startup_ideas", "SideProject",
-  "SaaS", "nocode", "automation", "Zapier",
+  // hiring-intent, real client-posting communities
+  "forhire", "slavelabour", "smallbusinessowners",
 ];
 
 const QUERIES = [
@@ -182,8 +186,9 @@ function extractBudget(text) {
 
 function computeLeadScore(text, vertical) {
   let score = 0;
-  if (painPhraseRegex.test(text) || hiringIntentRegex.test(text)) score += 40;
-  if (hasMoneySignal(text)) score += 30;
+  if (painPhraseRegex.test(text)) score += 30;
+  if (hiringIntentRegex.test(text)) score += 45;
+  if (hasMoneySignal(text)) score += 25;
   if (vertical !== "general") score += 20;
   if (/urgent|asap|immediately|right away|today|tonight/i.test(text)) score += 10;
   if (/employees|team|staff|our (store|shop|company)/i.test(text)) score += 10;
@@ -193,6 +198,9 @@ function computeLeadScore(text, vertical) {
 function qualifies(fullText, vertical) {
   if (ownBuildExcludeRegex.test(fullText)) return false;
   if (noCashCompRegex.test(fullText)) return false;
+  if (coFounderExcludeRegex.test(fullText)) return false;
+  if (offeringHelpExcludeRegex.test(fullText)) return false;
+  if (findClientsExcludeRegex.test(fullText)) return false;
   return computeLeadScore(fullText, vertical) >= MIN_LEAD_SCORE;
 }
 
@@ -324,7 +332,7 @@ async function runScrapeCycle() {
 }
 
 (async () => {
-  console.log("ClientMagnet Scraper v2.4 — scored qualification, expanded reach");
+  console.log("ClientMagnet Scraper v2.5 — tightened qualification, pruned subreddits");
   while (true) {
     await runScrapeCycle();
     log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);

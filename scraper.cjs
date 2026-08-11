@@ -1,20 +1,21 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v2.1 — incremental writes)
+// scraper.cjs — ClientMagnet Lead Scraper (v2.2 — incremental writes + blocklist)
 // Targets: e-commerce operators, local service businesses, property management.
 //
 // NEW IN THIS VERSION:
-// - Leads are now written to CSV the instant they're found, not batched
-//   until the end of a full cycle. Tonight's cycles kept getting cut
-//   short by restarts and 503-triggered slowdowns, and every lead found
-//   before the cycle finished was silently lost. Now nothing is lost to
-//   a crash or restart, at most the lead being scanned at that exact
-//   moment.
-// - seenPostKeys now persists to disk (seen_keys.json) and loads back
-//   on startup, instead of living only in memory. Previously every
-//   restart forgot everything it had already seen, causing the same
-//   post to be rediscovered and reprocessed after every restart.
-// - Everything else (money-signal requirement, pain-phrase gate,
-//   vertical detection, comment scanning, subreddit/query lists) is
-//   unchanged from the niche-pivot rebuild.
+// - Added BLOCKED_SUBREDDITS. globalSearch runs across all of Reddit with no
+//   subreddit restriction, and generic pain phrases (tired of, drowning in,
+//   sick of) plus a loose money signal (pay for, would pay) were qualifying
+//   posts from crisis and personal subs (offmychest, teenagers, griefsupport,
+//   rants, relationship_advice, and similar) as business leads. Those posts
+//   are now skipped before qualification runs at all.
+//
+// CARRIED FROM PREVIOUS VERSION:
+// - Leads are written to CSV the instant they're found, not batched until
+//   the end of a full cycle, so a crash or restart mid-cycle no longer loses
+//   everything found before it.
+// - seenPostKeys persists to disk (seen_keys.json) and loads back on startup.
+// - Money signal requirement, pain phrase gate, vertical detection, comment
+//   scanning, subreddit/query lists otherwise unchanged.
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -106,6 +107,21 @@ function loadContactedUsernames() {
     const data = JSON.parse(fs.readFileSync(usersPath, "utf8"));
     return new Set(Object.keys(data));
   } catch { return new Set(); }
+}
+
+// ─── SUBREDDIT BLOCKLIST ────────────────────────────────────────────────────
+// globalSearch has no subreddit restriction, so this catches personal/crisis
+// subs where generic distress language can otherwise pass the pain phrase and
+// money signal checks. Extend this list if new false positive subs show up.
+const BLOCKED_SUBREDDITS = new Set([
+  "offmychest", "teenagers", "griefsupport", "rants", "askdocs",
+  "relationship_advice", "depression", "suicidewatch", "anxiety",
+  "vent", "trueoffmychest", "confession", "confessions", "sad",
+  "lonely", "mentalhealth", "ptsd", "grief", "venting",
+]);
+
+function isBlockedSubreddit(name) {
+  return BLOCKED_SUBREDDITS.has((name || "").toLowerCase());
 }
 
 // ─── TAG FILTER ─────────────────────────────────────────────────────────────
@@ -281,6 +297,9 @@ async function globalSearch(query, contactedUsers) {
       if (seenPostKeys.has(key)) continue;
       markSeen(key);
 
+      const subredditLabel = post.subreddit?.display_name || "unknown";
+      if (isBlockedSubreddit(subredditLabel)) continue;
+
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
@@ -289,7 +308,6 @@ async function globalSearch(query, contactedUsers) {
       const fullText = `${post.title} ${post.selftext || ""}`;
       if (!qualifies(fullText)) continue;
 
-      const subredditLabel = post.subreddit?.display_name || "unknown";
       const lead = buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST");
       if (await writeLeadNow(lead)) count++;
     }
@@ -333,7 +351,7 @@ async function runScrapeCycle() {
 
 (async () => {
   console.log("=".repeat(60));
-  console.log("ClientMagnet Scraper v2.1 — incremental writes + persisted dedup");
+  console.log("ClientMagnet Scraper v2.2 — incremental writes + persisted dedup + blocklist");
   console.log("=".repeat(60));
   while (true) {
     await runScrapeCycle();

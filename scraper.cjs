@@ -148,7 +148,7 @@ const SUBREDDITS = [
   "algotrading", "Daytrading", "FuturesTrading", "Forex", "Trading", "quant",
   "TradingView", "FTMO", "swingtrading", "options",
   // Paid dev work
-  "forhire", "hireadeveloper", "freelance_forhire", "jobbit", "remotejs",
+  "forhire", "hireadeveloper", "jobbit", "remotejs",
   "SaaS", "startups", "Entrepreneur", "EntrepreneurRideAlong", "smallbusiness",
   "sweatystartup", "smallbusinessowner", "juststart", "nocode", "automation",
   // Original verticals

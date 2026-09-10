@@ -1,4 +1,9 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v3.4 — restored hire, kept for-hire block)
+// scraper.cjs — ClientMagnet Lead Scraper (v4 — buyer-first rebuild)
+// v4: hiring flair is now the top signal, trading-automation buyers added as
+// a first-class vertical, global search no longer throws away hits from outside
+// the sub list, exclusions loosened so builders asking for help aren't filtered
+// as competitors, and the scrape interval dropped to 5 min so hiring posts get
+// caught while first reply still matters.
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -16,13 +21,13 @@ const reddit = new snoowrap({
 const baseDir   = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
 
-const leadsPath = path.join(baseDir, "clean_leads.csv");
-const usersPath = path.join(baseDir, "contacted_users.json");
+const leadsPath    = path.join(baseDir, "clean_leads.csv");
+const usersPath    = path.join(baseDir, "contacted_users.json");
 const seenKeysPath = path.join(baseDir, "seen_keys.json");
 
-const SCRAPE_INTERVAL_MS = 20 * 60 * 1000;
+const SCRAPE_INTERVAL_MS   = 5 * 60 * 1000;
 const SEEN_KEYS_SAVE_EVERY = 10;
-const MIN_BODY_LENGTH = 40;
+const MIN_BODY_LENGTH      = 40;
 
 const csvHeader = [
   { id: "time", title: "Time" }, { id: "username", title: "Username" },
@@ -30,8 +35,8 @@ const csvHeader = [
   { id: "subreddit", title: "Subreddit" }, { id: "vertical", title: "Vertical" },
   { id: "leadType", title: "Lead Type" }, { id: "matchedTrigger", title: "Matched Trigger" },
   { id: "budget", title: "Budget" }, { id: "score", title: "Score" },
-  { id: "moneySignal", title: "Money Signal" }, { id: "painPhrase", title: "Pain Phrase" },
-  { id: "selftext", title: "Selftext" },
+  { id: "moneySignal", title: "Money Signal" }, { id: "hiringFlair", title: "Hiring Flair" },
+  { id: "painPhrase", title: "Pain Phrase" }, { id: "selftext", title: "Selftext" },
 ];
 
 if (!fs.existsSync(leadsPath)) {
@@ -65,16 +70,22 @@ function loadContactedUsernames() {
   try { return new Set(Object.keys(JSON.parse(fs.readFileSync(usersPath, "utf8")))); } catch { return new Set(); }
 }
 
-function checkTagFilter(post) {
+// ---------- Flair: reject self-promo, PROMOTE hiring ----------
+// Hiring flair is the single strongest buyer signal on Reddit. It was never
+// detected before, only for-hire was rejected. Now it's scored at the top.
+function flairSignal(post) {
   const flair = (post.link_flair_text || "").toLowerCase();
   const title = (post.title || "").toLowerCase();
-  if (flair && /for.?hire/.test(flair)) return "REJECT";
+  if (flair && /for.?hire|offer(ing)?|available|services/.test(flair)) return "REJECT";
   if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
+  if (flair && /hiring|task|job|request|looking/.test(flair)) return "HIRING";
+  if (/\[hiring\]|\[task\]|\[request\]|\[job\]/i.test(title)) return "HIRING";
   return "NEUTRAL";
 }
 
+// ---------- Money ----------
 function hasMoneySignal(text) {
-  const moneyRegex = /\$[\d,]+k?|\d+k?\s*(?:usd|dollars)|budget of|paying \$|willing to pay|flat fee|would pay|i'?d pay|pay someone|pay for|pay to have/i;
+  const moneyRegex = /\$\s?[\d,]+k?|\d+k?\s*(?:usd|dollars|bucks)|budget (of|is|around)|paying \$|willing to pay|flat fee|would pay|i'?d pay|pay someone|pay for|pay to have|pay well|paid (gig|work|project)/i;
   const match = text.match(moneyRegex);
   if (!match) return false;
   const before = text.slice(Math.max(0, match.index - 25), match.index);
@@ -82,84 +93,116 @@ function hasMoneySignal(text) {
   return true;
 }
 
+function extractBudget(text) {
+  const m = text.match(/\$\s?[\d,]+(?:k)?(?:\/(?:hr|hour|mo|month))?|\d+(?:\.\d+)?(?:k)?\s*(?:dollars|usd|budget)/i);
+  return m ? m[0] : "";
+}
+
+// ---------- Intent regexes ----------
 const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bwish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bneed (a |to )?automate\b|\bneed help (managing|tracking|keeping up with)\b|\btakes (me )?(hours|forever|too long)\b|\blosing (sales|customers|money) because\b|\bcan'?t keep up with\b|\bfalling behind on\b|\bno time to keep up with\b|\bjuggling too many\b/i;
 
-// "hire" restored via negative lookbehind/lookahead: blocks "for hire" and
-// "hire me" (freelancer self-promo) while allowing "want to hire," "need to
-// hire," "hire a developer" (real employer intent) to match again.
-const hiringIntentRegex = /(?<!for\s)(?<!for the\s)\bhire\b(?!\s+me\b)|\b(hiring|looking for|in search of|searching for|need|want|wanted)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?)\b|\bany recommendations for\b|\bcan anyone (build|make|create)\b|\bwho can build\b|\blooking to (hire|automate|build)\b|\bneed (an|a) app (built|made)\b|\bneed custom (software|tool|script|bot)\b|\bneed (a |someone to )?(build|create|develop|code)\b/i;
+// "hire" allowed via lookbehind/lookahead: blocks "for hire" and "hire me"
+// while letting "want to hire," "need to hire," "hire a developer" through.
+const hiringIntentRegex = /(?<!for\s)(?<!for the\s)\bhire\b(?!\s+me\b)|\b(hiring|looking for|in search of|searching for|need|want|wanted|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?|someone (who|to) (can )?(build|code|make|create))\b|\bany recommendations for\b|\bcan anyone (build|make|create|code)\b|\bwho can (build|code|make)\b|\blooking to (hire|automate|build)\b|\bneed (an|a) app (built|made)\b|\bneed custom (software|tool|script|bot)\b|\bneed (a |someone to )?(build|create|develop|code)\b|\bwilling to pay (for|someone)\b/i;
+
+// Trading automation buyers, the audience that already pays $400 for Shadow Trade.
+const tradingIntentRegex = /\b(automate|automating|automated) (my|a|this) (strategy|system|setup|trading)\b|\b(trading|trade) bot\b|\bbot (for|to trade)\b|\bexpert advisor\b|\bEA (developer|coder|built|made)\b|\bcode (my|this) (strategy|indicator|ea)\b|\bconvert (my|this) (strategy|indicator)\b|\bpine ?script\b|\bmql ?[45]\b|\bninja ?script\b|\btradovate\b|\bmt[45]\b|\bprop firm\b[^.!?]{0,40}\b(bot|automat)\b|\balgo (trading|bot)\b|\bbacktest\b[^.!?]{0,40}\b(help|someone|developer|coder)\b|\bstrategy (coded|automated|built)\b/i;
 
 function extractPainPhrase(text) {
-  const m = text.match(painPhraseRegex) || text.match(hiringIntentRegex);
+  const m = text.match(tradingIntentRegex) || text.match(hiringIntentRegex) || text.match(painPhraseRegex);
   return m ? m[0].slice(0, 80) : "";
 }
 
-const ownBuildExcludeRegex = /\bi(?:'m| am)\s+(?:currently\s+)?(?:building|developing|creating|coding|making|launching)\b|\bi built\b|\bi've built\b|\bbuilt (a|an|my)\b|\bshipped (a|an|my)\b|\blaunched (a|an|my)\b|\bi told an ai\b|\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my\b|\bi specialize\b|\bfreelancer here\b/i;
-const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but)\b/i;
-const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|equity only|founding (engineer|builder)|join (my|our) startup as)\b/i;
-const offeringHelpExcludeRegex = /\b(i want to help|reaching out to offer|here to help (small )?business owners|happy to help you|dm me if you (need|want) help|i offer|i provide services|check out my agency|our agency helps)\b/i;
-const forHireExcludeRegex = /\bfor\s+hire\b/i;
-const findClientsExcludeRegex = /\bfind clients\b|\bget clients\b|\bland clients\b|\bhow (do|can) i get clients\b|\bclient acquisition\b|\bsearching for clients\b|\blooking for (new )?clients\b|\blooking for work\b|\bsearching for work\b|\blooking for (freelance |contract )?(gigs|projects)\b/i;
+// ---------- Exclusions ----------
+// Loosened. "I built X" is no longer an exclusion by itself, someone who built
+// something and is stuck is a lead. Only clear self-promo, equity-only, and
+// cofounder pitches get dropped.
+const selfPromoExcludeRegex = /\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my (agency|portfolio|services|work)\b|\bi specialize in\b|\bfreelancer here\b|\bi offer\b|\bi provide services\b|\bour agency helps\b|\breaching out to offer\b|\bhappy to help you with\b|\bi can build (this|that|it) for you\b/i;
+const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but|profit share only)\b/i;
+const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|founding (engineer|builder)|join (my|our) startup as)\b/i;
+const findClientsExcludeRegex = /\bhow (do|can) i (find|get|land) clients\b|\blooking for (new )?clients\b|\bsearching for clients\b|\bclient acquisition (tips|advice)\b|\blooking for (freelance |contract )?(gigs|work)\b/i;
 const careerChangeExcludeRegex = /\bwant(ed)? to (become|be|learn to be)\b[\s\w]{0,15}\b(developer|dev|programmer|coder|engineer)\b/i;
 
-const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?|dropship(ping)?|print on demand)\b/i;
-const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|electrician|roofing|pest control|auto repair|locksmith)\b/i;
+function failsExcludes(fullText) {
+  return selfPromoExcludeRegex.test(fullText) || noCashCompRegex.test(fullText) ||
+    coFounderExcludeRegex.test(fullText) || findClientsExcludeRegex.test(fullText) ||
+    careerChangeExcludeRegex.test(fullText);
+}
+
+// ---------- Verticals ----------
+const tradingVerticalRegex = /\b(trading|trader|futures|forex|prop firm|topstep|apex|mt[45]|tradovate|ninjatrader|tradingview|pine ?script|mql|nasdaq|nq|es futures|gold futures|xauusd|backtest|strategy|indicator|expert advisor|algo)\b/i;
+const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?|dropship(ping)?|print on demand|woocommerce)\b/i;
+const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|electrician|roofing|pest control|auto repair|locksmith|detailing)\b/i;
 const propertyVerticalRegex = /\b(tenant|lease|rent(al)?|property (management|manager)|landlord|maintenance request|units?\b)/i;
 
 function detectVertical(text) {
+  if (tradingVerticalRegex.test(text)) return "trading";
   if (ecommerceVerticalRegex.test(text)) return "ecommerce";
   if (propertyVerticalRegex.test(text)) return "property_mgmt";
   if (localServiceVerticalRegex.test(text)) return "local_service";
   return "general";
 }
 
+// ---------- Where to look ----------
+// Buyers first. Trading and hiring subs are at the top because those are the
+// two audiences that already pay. Slavelabour removed, budgets too low.
 const SUBREDDITS = [
-  "FulfillmentByAmazon", "AmazonFBA", "amazonseller", "AmazonSellerCentral",
-  "Etsy", "EtsySellers", "shopify", "ecommerce", "dropship", "dropshipping",
-  "printondemand", "EcommerceMarketing", "woocommerce", "FacebookAds", "PPC",
-  "Flipping", "juststart",
-  "sweatystartup", "smallbusiness", "Entrepreneur", "EntrepreneurRideAlong",
-  "startups", "HVAC", "Plumbing", "landscaping", "cleaningbusiness",
-  "Contractor", "Construction", "handyman", "Carpentry", "Electricians",
-  "Roofing", "PestControl", "Locksmith", "autorepair", "HomeImprovement",
-  "smallbusinessowner", "junkremoval",
-  "PropertyManagement", "realestateinvesting", "Landlord", "RealEstate",
-  "LandlordLove", "Airbnb", "realestateinvestor",
-  "forhire", "slavelabour", "smallbusinessowners",
+  // Trading automation buyers
+  "algotrading", "Daytrading", "FuturesTrading", "Forex", "Trading", "quant",
+  "TradingView", "Tradovate", "NinjaTrader", "MetaTrader", "propfirms", "FTMO",
+  "swingtrading", "options",
+  // Paid dev work
+  "forhire", "hireadeveloper", "freelance_forhire", "jobbit", "remotejs",
+  "SaaS", "startups", "Entrepreneur", "EntrepreneurRideAlong", "smallbusiness",
+  "sweatystartup", "smallbusinessowner", "juststart", "nocode", "automation",
+  // Original verticals
+  "FulfillmentByAmazon", "AmazonFBA", "amazonseller", "Etsy", "EtsySellers",
+  "shopify", "ecommerce", "dropship", "printondemand", "woocommerce",
+  "HVAC", "Plumbing", "landscaping", "cleaningbusiness", "Contractor",
+  "handyman", "Electricians", "Roofing", "PestControl", "autorepair",
+  "PropertyManagement", "realestateinvesting", "Landlord",
 ];
-const ALLOWED_SUBREDDITS = new Set(SUBREDDITS.map(s => s.toLowerCase()));
 
 const QUERIES = [
+  // Trading buyers
+  "automate my strategy", "looking for a bot developer", "EA developer",
+  "need someone to code my strategy", "prop firm bot", "tradovate bot",
+  "mt5 ea", "code my indicator", "convert my strategy to a bot",
+  "trading bot developer", "pine script developer", "backtest my strategy",
+  "someone to automate my trading",
+  // Hiring dev
+  "looking for a developer", "hiring a developer", "want to hire",
+  "need to hire", "need someone to build", "can anyone build",
+  "need custom software", "need an app built", "who can build me",
+  "looking to automate", "need a script for", "need a programmer",
+  "looking for a web developer", "willing to pay someone to build",
+  // Pain
   "keep manually", "takes me hours", "spending too much time",
   "wish there was a tool", "manually updating", "manually tracking",
   "losing sales because", "can't keep up with", "need to automate this",
   "is there a way to automate", "tired of doing this manually",
-  "would pay someone to automate", "need help managing", "falling behind on",
-  "juggling too many", "no time to keep up with", "is there an app for",
-  "wasting hours on", "drowning in", "sick of doing this by hand",
-  "looking for a developer", "hiring a developer", "want to hire",
-  "need to hire", "need someone to build", "any recommendations for a tool",
-  "can anyone build", "need custom software", "need an app built",
-  "who can build me", "looking to automate", "need a script for",
-  "need a programmer", "looking for a web developer",
+  "would pay someone to automate", "need help managing", "wasting hours on",
+  "sick of doing this by hand",
 ];
 
-function extractBudget(text) {
-  const m = text.match(/\$[\d,]+(?:k)?(?:\/(?:hr|hour|mo|month))?|\d+(?:\.\d+)?(?:k)?\s*(?:dollars|usd|budget)/i);
-  return m ? m[0] : "";
+// ---------- Scoring ----------
+// Ordered by intent strength. Hiring flair sits on top because it's someone
+// explicitly opening their wallet in public.
+function scoreLead(fullText, flair, vertical) {
+  if (flair === "HIRING") return 100;
+  if (hasMoneySignal(fullText)) return 90;
+  if (vertical === "trading" && tradingIntentRegex.test(fullText)) return 85;
+  if (hiringIntentRegex.test(fullText)) return 80;
+  return 70;
 }
 
-function failsExcludes(fullText) {
-  return ownBuildExcludeRegex.test(fullText) || noCashCompRegex.test(fullText) ||
-    coFounderExcludeRegex.test(fullText) || offeringHelpExcludeRegex.test(fullText) ||
-    findClientsExcludeRegex.test(fullText) || forHireExcludeRegex.test(fullText) ||
-    careerChangeExcludeRegex.test(fullText);
-}
-
-function qualifiesPost(fullText, vertical) {
+function qualifiesPost(fullText, vertical, flair) {
   if (fullText.length < MIN_BODY_LENGTH) return false;
+  if (flair === "REJECT") return false;
   if (failsExcludes(fullText)) return false;
+  if (flair === "HIRING") return true;
   if (hiringIntentRegex.test(fullText)) return true;
+  if (vertical === "trading" && tradingIntentRegex.test(fullText)) return true;
   if (vertical !== "general" && painPhraseRegex.test(fullText)) return true;
   return false;
 }
@@ -167,19 +210,22 @@ function qualifiesPost(fullText, vertical) {
 function qualifiesComment(fullText, vertical) {
   if (fullText.length < MIN_BODY_LENGTH) return false;
   if (failsExcludes(fullText)) return false;
-  if (vertical === "general") return false;
-  return hiringIntentRegex.test(fullText) || painPhraseRegex.test(fullText);
+  if (hiringIntentRegex.test(fullText)) return true;
+  if (vertical === "trading" && tradingIntentRegex.test(fullText)) return true;
+  if (vertical !== "general" && painPhraseRegex.test(fullText)) return true;
+  return false;
 }
 
-function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, leadType) {
+function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, leadType, flair) {
   const vertical = detectVertical(fullText);
   return {
     time: new Date().toISOString(), username: author,
     title: fullText.slice(0, 150), url: `https://reddit.com${permalink}`,
     subreddit: subredditLabel, vertical, leadType,
     matchedTrigger: trigger, budget: extractBudget(fullText),
-    score: hasMoneySignal(fullText) ? 90 : 70,
+    score: scoreLead(fullText, flair, vertical),
     moneySignal: hasMoneySignal(fullText) ? "YES" : "NO",
+    hiringFlair: flair === "HIRING" ? "YES" : "NO",
     painPhrase: extractPainPhrase(fullText), selftext: fullText.slice(0, 500),
   };
 }
@@ -187,7 +233,7 @@ function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, l
 async function writeLeadNow(lead) {
   try {
     await leadsWriter.writeRecords([lead]);
-    log("LEAD", `[${lead.vertical.toUpperCase()}] u/${lead.username} in ${lead.subreddit} | ${lead.title.slice(0, 70)}`);
+    log("LEAD", `[${lead.vertical.toUpperCase()}] score:${lead.score} u/${lead.username} in ${lead.subreddit} | ${lead.title.slice(0, 70)}`);
     return true;
   } catch (err) {
     log("ERROR", `Failed to write lead for u/${lead.username}: ${err.message}`);
@@ -206,11 +252,12 @@ async function scrapeSubredditPosts(subredditName, contactedUsers) {
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
-      if (checkTagFilter(post) === "REJECT") continue;
+      const flair = flairSignal(post);
+      if (flair === "REJECT") continue;
       const fullText = `${post.title} ${post.selftext || ""}`;
       const vertical = detectVertical(fullText);
-      if (!qualifiesPost(fullText, vertical)) continue;
-      const lead = buildLeadRecord(author, fullText, post.permalink, subredditName, "subreddit_scan", "POST");
+      if (!qualifiesPost(fullText, vertical, flair)) continue;
+      const lead = buildLeadRecord(author, fullText, post.permalink, subredditName, "subreddit_scan", "POST", flair);
       if (await writeLeadNow(lead)) count++;
     }
   } catch (err) { log("ERROR", `r/${subredditName} posts failed: ${err.message}`); }
@@ -232,13 +279,16 @@ async function scrapeSubredditComments(subredditName, contactedUsers) {
       const fullText = comment.body;
       const vertical = detectVertical(fullText);
       if (!qualifiesComment(fullText, vertical)) continue;
-      const lead = buildLeadRecord(author, fullText, comment.permalink, subredditName, "comment_scan", "COMMENT");
+      const lead = buildLeadRecord(author, fullText, comment.permalink, subredditName, "comment_scan", "COMMENT", "NEUTRAL");
       if (await writeLeadNow(lead)) count++;
     }
   } catch (err) { log("ERROR", `r/${subredditName} comments failed: ${err.message}`); }
   return count;
 }
 
+// Global search no longer throws away hits from outside the sub list. If
+// someone in any sub is asking for a developer with money attached, that's a
+// lead. The sub list is where we look proactively, not a gate on what counts.
 async function globalSearch(query, contactedUsers) {
   let count = 0;
   try {
@@ -248,15 +298,15 @@ async function globalSearch(query, contactedUsers) {
       if (seenPostKeys.has(key)) continue;
       markSeen(key);
       const subredditLabel = post.subreddit?.display_name || "unknown";
-      if (!ALLOWED_SUBREDDITS.has(subredditLabel.toLowerCase())) continue;
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
-      if (checkTagFilter(post) === "REJECT") continue;
+      const flair = flairSignal(post);
+      if (flair === "REJECT") continue;
       const fullText = `${post.title} ${post.selftext || ""}`;
       const vertical = detectVertical(fullText);
-      if (!qualifiesPost(fullText, vertical)) continue;
-      const lead = buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST");
+      if (!qualifiesPost(fullText, vertical, flair)) continue;
+      const lead = buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST", flair);
       if (await writeLeadNow(lead)) count++;
     }
   } catch (err) { log("ERROR", `Search "${query}" failed: ${err.message}`); }
@@ -267,9 +317,9 @@ async function runScrapeCycle() {
   log("INFO", "Scrape cycle starting...");
   const contactedUsers = loadContactedUsernames();
   let totalWritten = 0;
-  for (const sub of SUBREDDITS) { totalWritten += await scrapeSubredditPosts(sub, contactedUsers); await sleep(3000); }
-  for (const sub of SUBREDDITS) { totalWritten += await scrapeSubredditComments(sub, contactedUsers); await sleep(3000); }
-  for (const query of QUERIES) { totalWritten += await globalSearch(query, contactedUsers); await sleep(2500); }
+  for (const sub of SUBREDDITS) { totalWritten += await scrapeSubredditPosts(sub, contactedUsers); await sleep(2500); }
+  for (const sub of SUBREDDITS) { totalWritten += await scrapeSubredditComments(sub, contactedUsers); await sleep(2500); }
+  for (const query of QUERIES) { totalWritten += await globalSearch(query, contactedUsers); await sleep(2000); }
   saveSeenKeys();
   sinceLastSave = 0;
   log("INFO", `Cycle complete — ${totalWritten} lead(s) written this cycle.`);
@@ -280,7 +330,7 @@ async function runScrapeCycle() {
 }
 
 (async () => {
-  console.log("ClientMagnet Scraper v3.4 — restored hire, kept for-hire block");
+  console.log("ClientMagnet Scraper v4 — buyer-first rebuild");
   while (true) {
     await runScrapeCycle();
     log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);

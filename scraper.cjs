@@ -1,8 +1,11 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v5 — noise cut, buyer-intent tightened)
-// v5: removed support/troubleshooting subs (Tradovate, NinjaTrader, MetaTrader,
-// propfirms) that were producing topic-overlap noise instead of buyers.
-// tradingIntentRegex now requires explicit request-for-help/hire language
-// combined with a trading object, not just presence of trading terms.
+// scraper.cjs — ClientMagnet Lead Scraper (v6 — subreddit boundary restored, flair tightened)
+// v6: v5 removed the subreddit allowlist entirely on global search, which let
+// completely unrelated communities (city subs, friendship subs) through the
+// moment a query keyword matched. Restored a real boundary, expanded from the
+// original list rather than removed. Flair matching on bare "looking" was
+// producing false positives from dating/roommate subs, now requires an
+// explicit hire/gig/task/job term. Intent regexes now require first-person
+// framing so advice-giving comments ("you can hire...") stop qualifying.
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -69,14 +72,38 @@ function loadContactedUsernames() {
   try { return new Set(Object.keys(JSON.parse(fs.readFileSync(usersPath, "utf8")))); } catch { return new Set(); }
 }
 
+// ---------- Where to look ----------
+// This list is now also the boundary for global search, not just a proactive
+// scan target. Expanded from the original, not removed — that's the fix.
+const SUBREDDITS = [
+  // Trading automation buyers
+  "algotrading", "Daytrading", "FuturesTrading", "Forex", "Trading", "quant",
+  "TradingView", "FTMO", "swingtrading", "options",
+  // Paid dev work
+  "forhire", "hireadeveloper", "jobbit", "remotejs",
+  "SaaS", "startups", "Entrepreneur", "EntrepreneurRideAlong", "smallbusiness",
+  "sweatystartup", "smallbusinessowner", "juststart", "nocode", "automation",
+  "webdev", "freelance", "digitalnomad", "sideproject", "indiehackers",
+  // Original verticals
+  "FulfillmentByAmazon", "AmazonFBA", "amazonseller", "Etsy", "EtsySellers",
+  "shopify", "ecommerce", "dropship", "printondemand", "woocommerce",
+  "HVAC", "Plumbing", "landscaping", "cleaningbusiness", "Contractor",
+  "handyman", "Electricians", "Roofing", "PestControl", "autorepair",
+  "PropertyManagement", "realestateinvesting", "Landlord",
+];
+const ALLOWED_SUBREDDITS = new Set(SUBREDDITS.map(s => s.toLowerCase()));
+
 // ---------- Flair ----------
+// Requires an explicit hire/gig/job/task term. Bare "looking" alone matched
+// dating and roommate sub flairs ("Looking for friends") and was the direct
+// cause of false positives scoring 100.
 function flairSignal(post) {
   const flair = (post.link_flair_text || "").toLowerCase();
   const title = (post.title || "").toLowerCase();
   if (flair && /for.?hire|offer(ing)?|available|services/.test(flair)) return "REJECT";
   if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
-  if (flair && /hiring|task|job|request|looking/.test(flair)) return "HIRING";
-  if (/\[hiring\]|\[task\]|\[request\]|\[job\]/i.test(title)) return "HIRING";
+  if (flair && /\b(hiring|gig|task|job|contract|freelancer needed|developer needed)\b/.test(flair)) return "HIRING";
+  if (/\[hiring\]|\[task\]|\[job\]|\[gig\]/i.test(title)) return "HIRING";
   return "NEUTRAL";
 }
 
@@ -96,15 +123,16 @@ function extractBudget(text) {
 }
 
 // ---------- Intent regexes ----------
-const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bwish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bneed (a |to )?automate\b|\bneed help (managing|tracking|keeping up with)\b|\btakes (me )?(hours|forever|too long)\b|\blosing (sales|customers|money) because\b|\bcan'?t keep up with\b|\bfalling behind on\b|\bno time to keep up with\b|\bjuggling too many\b/i;
+// Now require first-person framing. "You can hire..." (advice to someone
+// else) no longer matches — only "I need to hire," "looking to hire someone
+// for my," etc. This is the fix for advice-comments getting pulled as leads.
+const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bi wish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bi need (a |to )?automate\b|\bi need help (managing|tracking|keeping up with)\b|\bit takes me (hours|forever|too long)\b|\bi'?m losing (sales|customers|money) because\b|\bi can'?t keep up with\b|\bi'?m falling behind on\b|\bi have no time to keep up with\b|\bi'?m juggling too many\b/i;
 
-const hiringIntentRegex = /(?<!for\s)(?<!for the\s)\bhire\b(?!\s+me\b)|\b(hiring|looking for|in search of|searching for|need|want|wanted|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?|someone (who|to) (can )?(build|code|make|create))\b|\bany recommendations for\b|\bcan anyone (build|make|create|code)\b|\bwho can (build|code|make)\b|\blooking to (hire|automate|build)\b|\bneed (an|a) app (built|made)\b|\bneed custom (software|tool|script|bot)\b|\bneed (a |someone to )?(build|create|develop|code)\b|\bwilling to pay (for|someone)\b/i;
+const hiringIntentRegex = /\bi(?:'m| am)?\s*(?:hiring|looking for|in search of|searching for|need|want|wanted|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?|someone (who|to) (can )?(build|code|make|create))\b|\bwe(?:'re| are)?\s*(?:hiring|looking for|in search of|searching for|need|want|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer)\b|\bany(one)? (recommendations for|know) a (good )?(developer|coder|programmer)\b|\bcan anyone (build|make|create|code) (this|me|my)\b|\bi'?m looking to (hire|automate|build)\b|\bi need (an|a) app (built|made)\b|\bi need custom (software|tool|script|bot)\b|\bi need (a |someone to )?(build|create|develop|code)\b|\bi'?m willing to pay (for|someone)\b/i;
 
-// Tightened. Requires explicit request-for-help/hire language combined with
-// a trading object. Topic mentions alone ("MT5 EA", "backtest") no longer
-// qualify, since those match support questions and other people's builds
-// just as often as real buyers.
-const tradingIntentRegex = /\b(automate|convert|code|build|program) (my|this|the) (strategy|indicator|system|ea|expert advisor)\b|\blooking for (a |an )?(ea|algo|bot|pine ?script)?\s?(developer|coder|programmer)\b|\bneed (a |an )?(ea|bot|algo)\s?(developer|coder|built|made|coded)\b|\bwho can (build|code|make|automate)\b[^.!?]{0,40}\b(ea|bot|strategy|indicator)\b|\bpay (someone|you|a developer)\b[^.!?]{0,30}\b(automate|build|code)\b|\bhire (someone|a developer|a coder)\b[^.!?]{0,30}\b(trading|strategy|bot|ea)\b|\bcan (anyone|someone) (build|code|make|automate)\b[^.!?]{0,30}\b(strategy|ea|bot|indicator)\b|\blooking for someone to (build|code|automate)\b|\bneed someone to (build|code|automate)\b[^.!?]{0,30}\b(strategy|ea|bot|indicator)\b/i;
+// Tightened to first-person + explicit request-for-help/hire language
+// combined with a trading object.
+const tradingIntentRegex = /\bi (need|want|am looking for|'m looking for) (someone|a developer|a coder|an ea developer)\b[^.!?]{0,40}\b(automate|build|code)\b|\bcan (anyone|someone) (build|code|make|automate)\b[^.!?]{0,30}\b(my )?(strategy|ea|bot|indicator)\b|\bi'?m looking for someone to (build|code|automate)\b|\bi need someone to (build|code|automate)\b[^.!?]{0,30}\b(strategy|ea|bot|indicator)\b|\bwilling to pay (someone|a developer)\b[^.!?]{0,30}\b(automate|build|code)\b|\bi want to hire\b[^.!?]{0,30}\b(trading|strategy|bot|ea)\b/i;
 
 function extractPainPhrase(text) {
   const m = text.match(tradingIntentRegex) || text.match(hiringIntentRegex) || text.match(painPhraseRegex);
@@ -117,15 +145,18 @@ const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|
 const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|founding (engineer|builder)|join (my|our) startup as)\b/i;
 const findClientsExcludeRegex = /\bhow (do|can) i (find|get|land) clients\b|\blooking for (new )?clients\b|\bsearching for clients\b|\bclient acquisition (tips|advice)\b|\blooking for (freelance |contract )?(gigs|work)\b/i;
 const careerChangeExcludeRegex = /\bwant(ed)? to (become|be|learn to be)\b[\s\w]{0,15}\b(developer|dev|programmer|coder|engineer)\b/i;
+// New: catches advice-to-others framing directly, belt and suspenders on
+// top of the first-person requirement in the intent regexes themselves.
+const advicePatternExcludeRegex = /\byou (can|should|could|might want to)\b[^.!?]{0,40}\bhire\b|\bi would (avoid|recommend|suggest)\b|\btry (using|looking at)\b|\bmy (advice|suggestion) (is|would be)\b/i;
 
 function failsExcludes(fullText) {
   return selfPromoExcludeRegex.test(fullText) || noCashCompRegex.test(fullText) ||
     coFounderExcludeRegex.test(fullText) || findClientsExcludeRegex.test(fullText) ||
-    careerChangeExcludeRegex.test(fullText);
+    careerChangeExcludeRegex.test(fullText) || advicePatternExcludeRegex.test(fullText);
 }
 
 // ---------- Verticals ----------
-const tradingVerticalRegex = /\b(trading|trader|futures|forex|prop firm|topstep|apex|mt[45]|tradovate|ninjatrader|tradingview|pine ?script|mql|nasdaq|nq|es futures|gold futures|xauusd|backtest|strategy|indicator|expert advisor|algo)\b/i;
+const tradingVerticalRegex = /\b(trading|trader|futures|forex|prop firm|topstep|apex|mt[45]|tradovate|ninjatrader|tradingview|pine ?script|mql|nasdaq|nq futures|es futures|gold futures|xauusd|backtest|expert advisor|algo ?trading)\b/i;
 const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?|dropship(ping)?|print on demand|woocommerce)\b/i;
 const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|electrician|roofing|pest control|auto repair|locksmith|detailing)\b/i;
 const propertyVerticalRegex = /\b(tenant|lease|rent(al)?|property (management|manager)|landlord|maintenance request|units?\b)/i;
@@ -138,42 +169,18 @@ function detectVertical(text) {
   return "general";
 }
 
-// ---------- Where to look ----------
-// Removed Tradovate, NinjaTrader, MetaTrader, propfirms — these are
-// support/troubleshooting communities. High post volume, almost no buyer
-// intent, that's what was producing noise. Kept the subs where people
-// actually post build requests.
-const SUBREDDITS = [
-  // Trading automation buyers
-  "algotrading", "Daytrading", "FuturesTrading", "Forex", "Trading", "quant",
-  "TradingView", "FTMO", "swingtrading", "options",
-  // Paid dev work
-  "forhire", "hireadeveloper", "jobbit", "remotejs",
-  "SaaS", "startups", "Entrepreneur", "EntrepreneurRideAlong", "smallbusiness",
-  "sweatystartup", "smallbusinessowner", "juststart", "nocode", "automation",
-  // Original verticals
-  "FulfillmentByAmazon", "AmazonFBA", "amazonseller", "Etsy", "EtsySellers",
-  "shopify", "ecommerce", "dropship", "printondemand", "woocommerce",
-  "HVAC", "Plumbing", "landscaping", "cleaningbusiness", "Contractor",
-  "handyman", "Electricians", "Roofing", "PestControl", "autorepair",
-  "PropertyManagement", "realestateinvesting", "Landlord",
-];
-
 const QUERIES = [
-  // Trading buyers, tightened to intent phrases
   "automate my strategy", "looking for a bot developer", "EA developer",
   "need someone to code my strategy", "who can build me an EA",
   "code my indicator", "convert my strategy to a bot",
   "trading bot developer", "pine script developer",
   "someone to automate my trading", "pay someone to build my EA",
   "hire a developer for my strategy",
-  // Hiring dev
   "looking for a developer", "hiring a developer", "want to hire",
   "need to hire", "need someone to build", "can anyone build",
   "need custom software", "need an app built", "who can build me",
   "looking to automate", "need a script for", "need a programmer",
   "looking for a web developer", "willing to pay someone to build",
-  // Pain
   "keep manually", "takes me hours", "spending too much time",
   "wish there was a tool", "manually updating", "manually tracking",
   "losing sales because", "can't keep up with", "need to automate this",
@@ -191,8 +198,6 @@ function scoreLead(fullText, flair, vertical) {
   return 70;
 }
 
-// Trading vertical now requires the tightened intent regex specifically,
-// not just topic overlap. Being about Tradovate or MT5 isn't buying intent.
 function qualifiesPost(fullText, vertical, flair) {
   if (fullText.length < MIN_BODY_LENGTH) return false;
   if (flair === "REJECT") return false;
@@ -204,12 +209,14 @@ function qualifiesPost(fullText, vertical, flair) {
   return false;
 }
 
+// Comments are inherently noisier — most are replies to someone else's post,
+// not the commenter's own need. Require the explicit hiring/trading intent
+// regex here, drop the looser pain-phrase match that was catching advice.
 function qualifiesComment(fullText, vertical) {
   if (fullText.length < MIN_BODY_LENGTH) return false;
   if (failsExcludes(fullText)) return false;
   if (hiringIntentRegex.test(fullText)) return true;
   if (vertical === "trading") return tradingIntentRegex.test(fullText);
-  if (vertical !== "general" && painPhraseRegex.test(fullText)) return true;
   return false;
 }
 
@@ -283,6 +290,8 @@ async function scrapeSubredditComments(subredditName, contactedUsers) {
   return count;
 }
 
+// Restored the subreddit boundary. A hit outside ALLOWED_SUBREDDITS is
+// skipped — this is what was missing in v5 and let city/friendship subs in.
 async function globalSearch(query, contactedUsers) {
   let count = 0;
   try {
@@ -292,6 +301,7 @@ async function globalSearch(query, contactedUsers) {
       if (seenPostKeys.has(key)) continue;
       markSeen(key);
       const subredditLabel = post.subreddit?.display_name || "unknown";
+      if (!ALLOWED_SUBREDDITS.has(subredditLabel.toLowerCase())) continue;
       const author = post.author?.name;
       if (!author || author === "[deleted]" || author === "AutoModerator") continue;
       if (contactedUsers.has(author.toLowerCase())) continue;
@@ -324,7 +334,7 @@ async function runScrapeCycle() {
 }
 
 (async () => {
-  console.log("ClientMagnet Scraper v5 — noise cut, buyer-intent tightened");
+  console.log("ClientMagnet Scraper v6 — subreddit boundary restored, flair tightened");
   while (true) {
     await runScrapeCycle();
     log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);

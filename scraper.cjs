@@ -1,11 +1,10 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v6 — subreddit boundary restored, flair tightened)
-// v6: v5 removed the subreddit allowlist entirely on global search, which let
-// completely unrelated communities (city subs, friendship subs) through the
-// moment a query keyword matched. Restored a real boundary, expanded from the
-// original list rather than removed. Flair matching on bare "looking" was
-// producing false positives from dating/roommate subs, now requires an
-// explicit hire/gig/task/job term. Intent regexes now require first-person
-// framing so advice-giving comments ("you can hire...") stop qualifying.
+// scraper.cjs — ClientMagnet Lead Scraper (v7 — flair tightened to title tags only, self-promo exclusion widened)
+// v7: free-text flair matching was unreliable across subs and produced false
+// 100-score hits (r/bromance "Looking for friends" flair, r/indiehackers
+// launch posts). HIRING signal now only comes from explicit bracketed title
+// tags ([Hiring], [Task], [Job], [Gig]), not free-text flair. Also widened
+// selfPromoExcludeRegex to catch "looking for X users to test my project"
+// style launch posts that were slipping through as leads.
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -73,18 +72,13 @@ function loadContactedUsernames() {
 }
 
 // ---------- Where to look ----------
-// This list is now also the boundary for global search, not just a proactive
-// scan target. Expanded from the original, not removed — that's the fix.
 const SUBREDDITS = [
-  // Trading automation buyers
   "algotrading", "Daytrading", "FuturesTrading", "Forex", "Trading", "quant",
   "TradingView", "FTMO", "swingtrading", "options",
-  // Paid dev work
   "forhire", "hireadeveloper", "jobbit", "remotejs",
   "SaaS", "startups", "Entrepreneur", "EntrepreneurRideAlong", "smallbusiness",
   "sweatystartup", "smallbusinessowner", "juststart", "nocode", "automation",
   "webdev", "freelance", "digitalnomad", "sideproject", "indiehackers",
-  // Original verticals
   "FulfillmentByAmazon", "AmazonFBA", "amazonseller", "Etsy", "EtsySellers",
   "shopify", "ecommerce", "dropship", "printondemand", "woocommerce",
   "HVAC", "Plumbing", "landscaping", "cleaningbusiness", "Contractor",
@@ -94,15 +88,15 @@ const SUBREDDITS = [
 const ALLOWED_SUBREDDITS = new Set(SUBREDDITS.map(s => s.toLowerCase()));
 
 // ---------- Flair ----------
-// Requires an explicit hire/gig/job/task term. Bare "looking" alone matched
-// dating and roommate sub flairs ("Looking for friends") and was the direct
-// cause of false positives scoring 100.
+// HIRING now only comes from explicit bracketed title tags, not free-text
+// flair. Flair text is inconsistent across subs ("Looking for friends" in
+// r/bromance, launch-post flairs in r/indiehackers) and kept producing false
+// positives that scored 100 and skipped the intent check entirely.
 function flairSignal(post) {
-  const flair = (post.link_flair_text || "").toLowerCase();
   const title = (post.title || "").toLowerCase();
+  const flair = (post.link_flair_text || "").toLowerCase();
   if (flair && /for.?hire|offer(ing)?|available|services/.test(flair)) return "REJECT";
   if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
-  if (flair && /\b(hiring|gig|task|job|contract|freelancer needed|developer needed)\b/.test(flair)) return "HIRING";
   if (/\[hiring\]|\[task\]|\[job\]|\[gig\]/i.test(title)) return "HIRING";
   return "NEUTRAL";
 }
@@ -123,15 +117,10 @@ function extractBudget(text) {
 }
 
 // ---------- Intent regexes ----------
-// Now require first-person framing. "You can hire..." (advice to someone
-// else) no longer matches — only "I need to hire," "looking to hire someone
-// for my," etc. This is the fix for advice-comments getting pulled as leads.
 const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bi wish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bi need (a |to )?automate\b|\bi need help (managing|tracking|keeping up with)\b|\bit takes me (hours|forever|too long)\b|\bi'?m losing (sales|customers|money) because\b|\bi can'?t keep up with\b|\bi'?m falling behind on\b|\bi have no time to keep up with\b|\bi'?m juggling too many\b/i;
 
 const hiringIntentRegex = /\bi(?:'m| am)?\s*(?:hiring|looking for|in search of|searching for|need|want|wanted|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?|someone (who|to) (can )?(build|code|make|create))\b|\bwe(?:'re| are)?\s*(?:hiring|looking for|in search of|searching for|need|want|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer)\b|\bany(one)? (recommendations for|know) a (good )?(developer|coder|programmer)\b|\bcan anyone (build|make|create|code) (this|me|my)\b|\bi'?m looking to (hire|automate|build)\b|\bi need (an|a) app (built|made)\b|\bi need custom (software|tool|script|bot)\b|\bi need (a |someone to )?(build|create|develop|code)\b|\bi'?m willing to pay (for|someone)\b/i;
 
-// Tightened to first-person + explicit request-for-help/hire language
-// combined with a trading object.
 const tradingIntentRegex = /\bi (need|want|am looking for|'m looking for) (someone|a developer|a coder|an ea developer)\b[^.!?]{0,40}\b(automate|build|code)\b|\bcan (anyone|someone) (build|code|make|automate)\b[^.!?]{0,30}\b(my )?(strategy|ea|bot|indicator)\b|\bi'?m looking for someone to (build|code|automate)\b|\bi need someone to (build|code|automate)\b[^.!?]{0,30}\b(strategy|ea|bot|indicator)\b|\bwilling to pay (someone|a developer)\b[^.!?]{0,30}\b(automate|build|code)\b|\bi want to hire\b[^.!?]{0,30}\b(trading|strategy|bot|ea)\b/i;
 
 function extractPainPhrase(text) {
@@ -140,13 +129,13 @@ function extractPainPhrase(text) {
 }
 
 // ---------- Exclusions ----------
-const selfPromoExcludeRegex = /\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my (agency|portfolio|services|work)\b|\bi specialize in\b|\bfreelancer here\b|\bi offer\b|\bi provide services\b|\bour agency helps\b|\breaching out to offer\b|\bhappy to help you with\b|\bi can build (this|that|it) for you\b|\bi built\b|\bi've built\b|\bi published\b|\blooking for (feedback|beta testers|people to test)\b/i;
+// Widened to catch launch/self-promo posts recruiting testers or users,
+// which were slipping through as leads ("looking for X users to test").
+const selfPromoExcludeRegex = /\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my (agency|portfolio|services|work)\b|\bi specialize in\b|\bfreelancer here\b|\bi offer\b|\bi provide services\b|\bour agency helps\b|\breaching out to offer\b|\bhappy to help you with\b|\bi can build (this|that|it) for you\b|\bi built\b|\bi've built\b|\bi published\b|\blaunching (a |my )?(new )?(project|product|app|tool|startup)\b|\blooking for (feedback|beta testers|people to test|users to test|early users|early adopters|x users)\b|\bwould (love|appreciate) (feedback|beta testers)\b/i;
 const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but|profit share only)\b/i;
 const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|founding (engineer|builder)|join (my|our) startup as)\b/i;
 const findClientsExcludeRegex = /\bhow (do|can) i (find|get|land) clients\b|\blooking for (new )?clients\b|\bsearching for clients\b|\bclient acquisition (tips|advice)\b|\blooking for (freelance |contract )?(gigs|work)\b/i;
 const careerChangeExcludeRegex = /\bwant(ed)? to (become|be|learn to be)\b[\s\w]{0,15}\b(developer|dev|programmer|coder|engineer)\b/i;
-// New: catches advice-to-others framing directly, belt and suspenders on
-// top of the first-person requirement in the intent regexes themselves.
 const advicePatternExcludeRegex = /\byou (can|should|could|might want to)\b[^.!?]{0,40}\bhire\b|\bi would (avoid|recommend|suggest)\b|\btry (using|looking at)\b|\bmy (advice|suggestion) (is|would be)\b/i;
 
 function failsExcludes(fullText) {
@@ -209,9 +198,6 @@ function qualifiesPost(fullText, vertical, flair) {
   return false;
 }
 
-// Comments are inherently noisier — most are replies to someone else's post,
-// not the commenter's own need. Require the explicit hiring/trading intent
-// regex here, drop the looser pain-phrase match that was catching advice.
 function qualifiesComment(fullText, vertical) {
   if (fullText.length < MIN_BODY_LENGTH) return false;
   if (failsExcludes(fullText)) return false;
@@ -290,8 +276,6 @@ async function scrapeSubredditComments(subredditName, contactedUsers) {
   return count;
 }
 
-// Restored the subreddit boundary. A hit outside ALLOWED_SUBREDDITS is
-// skipped — this is what was missing in v5 and let city/friendship subs in.
 async function globalSearch(query, contactedUsers) {
   let count = 0;
   try {
@@ -334,7 +318,7 @@ async function runScrapeCycle() {
 }
 
 (async () => {
-  console.log("ClientMagnet Scraper v6 — subreddit boundary restored, flair tightened");
+  console.log("ClientMagnet Scraper v7 — flair tightened to title tags only, self-promo exclusion widened");
   while (true) {
     await runScrapeCycle();
     log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);

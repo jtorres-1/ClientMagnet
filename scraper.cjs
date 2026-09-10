@@ -1,10 +1,7 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v7 — flair tightened to title tags only, self-promo exclusion widened)
-// v7: free-text flair matching was unreliable across subs and produced false
-// 100-score hits (r/bromance "Looking for friends" flair, r/indiehackers
-// launch posts). HIRING signal now only comes from explicit bracketed title
-// tags ([Hiring], [Task], [Job], [Gig]), not free-text flair. Also widened
-// selfPromoExcludeRegex to catch "looking for X users to test my project"
-// style launch posts that were slipping through as leads.
+// scraper.cjs — ClientMagnet Lead Scraper (v8 — near-miss diagnostic logging)
+// v8: adds temporary NEAR_MISS logging so filtering behavior can be debugged
+// from real data (what matched intent but got excluded, and why) instead of
+// guessing at another round of regex changes blind.
 require("dotenv").config();
 const snoowrap = require("snoowrap");
 const fs = require("fs");
@@ -88,10 +85,6 @@ const SUBREDDITS = [
 const ALLOWED_SUBREDDITS = new Set(SUBREDDITS.map(s => s.toLowerCase()));
 
 // ---------- Flair ----------
-// HIRING now only comes from explicit bracketed title tags, not free-text
-// flair. Flair text is inconsistent across subs ("Looking for friends" in
-// r/bromance, launch-post flairs in r/indiehackers) and kept producing false
-// positives that scored 100 and skipped the intent check entirely.
 function flairSignal(post) {
   const title = (post.title || "").toLowerCase();
   const flair = (post.link_flair_text || "").toLowerCase();
@@ -129,8 +122,6 @@ function extractPainPhrase(text) {
 }
 
 // ---------- Exclusions ----------
-// Widened to catch launch/self-promo posts recruiting testers or users,
-// which were slipping through as leads ("looking for X users to test").
 const selfPromoExcludeRegex = /\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my (agency|portfolio|services|work)\b|\bi specialize in\b|\bfreelancer here\b|\bi offer\b|\bi provide services\b|\bour agency helps\b|\breaching out to offer\b|\bhappy to help you with\b|\bi can build (this|that|it) for you\b|\bi built\b|\bi've built\b|\bi published\b|\blaunching (a |my )?(new )?(project|product|app|tool|startup)\b|\blooking for (feedback|beta testers|people to test|users to test|early users|early adopters|x users)\b|\bwould (love|appreciate) (feedback|beta testers)\b/i;
 const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but|profit share only)\b/i;
 const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|founding (engineer|builder)|join (my|our) startup as)\b/i;
@@ -246,7 +237,14 @@ async function scrapeSubredditPosts(subredditName, contactedUsers) {
       if (flair === "REJECT") continue;
       const fullText = `${post.title} ${post.selftext || ""}`;
       const vertical = detectVertical(fullText);
-      if (!qualifiesPost(fullText, vertical, flair)) continue;
+      const passes = qualifiesPost(fullText, vertical, flair);
+      // Temporary diagnostic: surfaces anything matching real intent
+      // language that got excluded, and why, so filtering can be tuned from
+      // real data instead of guesswork.
+      if (!passes && (hiringIntentRegex.test(fullText) || tradingIntentRegex.test(fullText))) {
+        log("NEAR_MISS", `u/${author} in ${subredditName} | excluded:${failsExcludes(fullText)} | flair:${flair} | "${fullText.slice(0, 90)}"`);
+      }
+      if (!passes) continue;
       const lead = buildLeadRecord(author, fullText, post.permalink, subredditName, "subreddit_scan", "POST", flair);
       if (await writeLeadNow(lead)) count++;
     }
@@ -268,7 +266,11 @@ async function scrapeSubredditComments(subredditName, contactedUsers) {
       if (!comment.body) continue;
       const fullText = comment.body;
       const vertical = detectVertical(fullText);
-      if (!qualifiesComment(fullText, vertical)) continue;
+      const passes = qualifiesComment(fullText, vertical);
+      if (!passes && (hiringIntentRegex.test(fullText) || tradingIntentRegex.test(fullText))) {
+        log("NEAR_MISS", `u/${author} in ${subredditName} | excluded:${failsExcludes(fullText)} | "${fullText.slice(0, 90)}"`);
+      }
+      if (!passes) continue;
       const lead = buildLeadRecord(author, fullText, comment.permalink, subredditName, "comment_scan", "COMMENT", "NEUTRAL");
       if (await writeLeadNow(lead)) count++;
     }
@@ -293,7 +295,11 @@ async function globalSearch(query, contactedUsers) {
       if (flair === "REJECT") continue;
       const fullText = `${post.title} ${post.selftext || ""}`;
       const vertical = detectVertical(fullText);
-      if (!qualifiesPost(fullText, vertical, flair)) continue;
+      const passes = qualifiesPost(fullText, vertical, flair);
+      if (!passes && (hiringIntentRegex.test(fullText) || tradingIntentRegex.test(fullText))) {
+        log("NEAR_MISS", `u/${author} in ${subredditLabel} (search:${query}) | excluded:${failsExcludes(fullText)} | flair:${flair} | "${fullText.slice(0, 90)}"`);
+      }
+      if (!passes) continue;
       const lead = buildLeadRecord(author, fullText, post.permalink, subredditLabel, query, "POST", flair);
       if (await writeLeadNow(lead)) count++;
     }
@@ -318,7 +324,7 @@ async function runScrapeCycle() {
 }
 
 (async () => {
-  console.log("ClientMagnet Scraper v7 — flair tightened to title tags only, self-promo exclusion widened");
+  console.log("ClientMagnet Scraper v8 — near-miss diagnostic logging");
   while (true) {
     await runScrapeCycle();
     log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);

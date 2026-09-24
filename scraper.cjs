@@ -58,7 +58,11 @@ const seenKeysPath = path.join(baseDir, "seen_keys.json");
 
 const SCRAPE_INTERVAL_MS = 5 * 60 * 1000;
 const SEEN_KEYS_SAVE_EVERY = 25;
-const MIN_BODY_LENGTH = 40;
+const MIN_BODY_LENGTH = 40;   // comments, which are noisier
+// v9.1: posts were held to 40 too, which rejected "Anyone know a good MQL5
+// dev?" at 28 characters. Plenty of the best leads are a short title and an
+// empty body.
+const MIN_POST_LENGTH = 25;
 
 const MAX_AGE_DAYS_HIRING = 30;   // flaired/budgeted gigs get filled fast
 const MAX_AGE_DAYS_PAIN   = 180;  // an unbuilt bot stays unbuilt
@@ -131,6 +135,7 @@ const OWNER_SUBS = [
 ];
 const SUBREDDITS = [...TRADING_SUBS, ...HIRING_SUBS, ...OWNER_SUBS];
 const ALLOWED_SUBREDDITS = new Set(SUBREDDITS.map(s => s.toLowerCase()));
+const TRADING_SUB_SET = new Set(TRADING_SUBS.map(s => s.toLowerCase()));
 
 // ---------- Flair ----------
 function flairSignal(post) {
@@ -161,7 +166,30 @@ const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|w
 
 const hiringIntentRegex = /\bi(?:'m| am)?\s*(?:hiring|looking for|in search of|searching for|need|want|wanted|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?|someone (who|to) (can )?(build|code|make|create))\b|\bwe(?:'re| are)?\s*(?:hiring|looking for|in search of|searching for|need|want|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer)\b|\bany(one)? (recommendations for|know) a (good )?(developer|coder|programmer)\b|\bcan anyone (build|make|create|code) (this|me|my)\b|\bi'?m looking to (hire|automate|build)\b|\bi need (an|a) app (built|made)\b|\bi need custom (software|tool|script|bot)\b|\bi need (a |someone to )?(build|create|develop|code)\b|\bi'?m willing to pay (for|someone)\b/i;
 
-const tradingIntentRegex = /\bi (need|want|am looking for|'m looking for) (someone|a developer|a coder|an ea developer)\b[^.!?]{0,40}\b(automate|build|code)\b|\bcan (anyone|someone) (build|code|make|automate)\b[^.!?]{0,30}\b(my )?(strategy|ea|bot|indicator)\b|\bi'?m looking for someone to (build|code|automate)\b|\bi need someone to (build|code|automate)\b[^.!?]{0,30}\b(strategy|ea|bot|indicator)\b|\bwilling to pay (someone|a developer)\b[^.!?]{0,30}\b(automate|build|code)\b|\bi want to hire\b[^.!?]{0,30}\b(trading|strategy|bot|ea)\b|\b(can'?t|cannot|don'?t know how to) (code|program)\b[^.!?]{0,40}\b(strategy|ea|bot|indicator)\b|\bi have (a|my) strategy\b[^.!?]{0,60}\b(automate|automated|coded|built)\b|\blooking (to get|for someone) (my )?(strategy|ea|bot) (coded|built|automated)\b/i;
+// v9.1: the original only matched a handful of exact phrasings. Tested
+// against 16 real ways people ask for this on r/algotrading and r/Forex it
+// caught zero, which is why a 180 day sweep of Forex returned nothing. This
+// version is built from three signals (an ask, a build verb, a trading
+// object) in either order, plus a direct "<trading word> developer" form.
+// 15/16 on that same sample, and the one false positive it lets through
+// ("available for hire, i build trading bots") is already killed by the
+// self-promo exclusion below.
+const T_OBJ = "(?:ea|eas|expert advisors?|bots?|robots?|algos?|algorithms?|indicators?|strategy|strategies|system|script|automation)";
+const T_BLD = "(?:builds?|building|built|codes?|coding|coded|develops?|developing|developed|programs?|programming|programmed|automates?|automating|automated|converts?|converting|creates?|creating|makes?|making|writ(?:e|es|ing)|turn(?:s|ing)?[^.!?]{0,25}into|port(?:ing|ed|s)?)";
+const T_ASK = "(?:need|needs|needed|want|wants|looking for|looking to|hoping to|in search of|searching for|hire|hiring|pay|paying|willing to pay|would pay|happy to pay|commission|how much|how do i (?:get|turn|make)|where (?:can|do) i (?:find|get)|trying to find|who can|can (?:anyone|someone)|any(?:one)? (?:know|recommend)|recommendations for|help me|is there (?:anyone|someone)|(?:i.?d|i would) like to)";
+const T_PAY = "(?:hire|hiring|commission|pay|paying|willing to pay|would pay|happy to pay|how much|quote for)";
+const T_CANT = "(?:can.?t|cannot|unable to|don.?t know how to|no idea how to)";
+const T_DEV = "(?:dev|devs|developer|developers|coder|coders|programmer|programmers|engineer)";
+const T_WORD = "(?:mql[45]?|pine ?script|ea|expert advisor|mt[45]|metatrader|ninjatrader|thinkscript|trading|algo|forex|futures|bot)";
+const tradingIntentRegex = new RegExp([
+  `\\b${T_ASK}\\b[^.!?]{0,70}\\b${T_BLD}\\b[^.!?]{0,45}\\b${T_OBJ}\\b`,
+  `\\b${T_ASK}\\b[^.!?]{0,70}\\b${T_OBJ}\\b[^.!?]{0,45}\\b${T_BLD}\\b`,
+  `\\b${T_WORD}\\b[ -]?\\b${T_DEV}\\b`,
+  `\\b${T_DEV}\\b[^.!?]{0,30}\\b${T_BLD}\\b[^.!?]{0,30}\\b${T_OBJ}\\b`,
+  `\\b${T_PAY}\\b[^.!?]{0,40}\\b${T_OBJ}\\b`,
+  `\\b${T_CANT}\\b[^.!?]{0,25}\\b${T_BLD}\\b[^.!?]{0,45}\\b${T_OBJ}\\b`,
+  `\\b${T_OBJ}\\b[^.!?]{0,40}\\b${T_ASK}\\b[^.!?]{0,25}\\b${T_BLD}\\b`,
+].join("|"), "i");
 
 // Someone running several prop accounts is the dashboard buyer, not the bot
 // buyer. Different message, so the DM bot needs it flagged here.
@@ -212,12 +240,19 @@ function failsExcludes(fullText) {
 // v9: "6 prop accounts across three firms" used to fall through to general,
 // which sent the dashboard buyer the business automation copy. prop/funded/
 // eval account language now counts as trading on its own.
-const tradingVerticalRegex = /\b(trading|trader|futures|forex|prop ?(firm|account)s?|funded account|eval(uation)? accounts?|evals?|combine|topstep|apex|tradeify|lucid|mt[45]|tradovate|ninjatrader|tradingview|pine ?script|mql|nasdaq|nq futures|es futures|gold futures|xauusd|backtest|expert advisor|algo ?trading)\b/i;
+const tradingVerticalRegex = /\b(trading|trader|futures|forex|prop ?(firm|account)s?|funded account|eval(uation)? accounts?|evals?|combine|topstep|apex|tradeify|lucid|mt[45]|tradovate|ninjatrader|tradingview|pine ?script|mql|nasdaq|nq futures|es futures|gold futures|xauusd|backtest|expert advisors?|trading bots?|forex bots?|algo ?trading|algotrading)\b/i;
 const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?|dropship(ping)?|print on demand|woocommerce)\b/i;
 const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|electrician|roofing|pest control|auto repair|locksmith|detailing)\b/i;
 const propertyVerticalRegex = /\b(tenant|lease|rent(al)?|property (management|manager)|landlord|maintenance request)\b/i;
 
-function detectVertical(text) {
+// v9.1: the subreddit decides context before the text does. "turn my
+// strategy into an EA" contains no word from the vertical list, so it used
+// to come back general, fail the business filter, and never reach the
+// trading intent check at all. A post in r/algotrading is trading, full
+// stop. Bare "ea" deliberately stays out of the keyword list because in
+// r/Entrepreneur it means executive assistant.
+function detectVertical(text, sub) {
+  if (sub && TRADING_SUB_SET.has(String(sub).toLowerCase())) return "trading";
   if (tradingVerticalRegex.test(text)) return "trading";
   if (ecommerceVerticalRegex.test(text)) return "ecommerce";
   if (propertyVerticalRegex.test(text)) return "property_mgmt";
@@ -294,13 +329,23 @@ function maxAgeFor(flair) {
   return flair === "HIRING" ? MAX_AGE_DAYS_HIRING : MAX_AGE_DAYS_PAIN;
 }
 
+// v9.1: the dashboard buyer had no path through here. "I run 6 prop accounts
+// and need something to track them all" has no build verb and no trading
+// object, so the intent regex rejected the highest ticket lead on the board.
+// Multiple accounts plus any ask is enough on its own.
+const dashAskRegex = /\b(need|want|looking for|trying to|how do (?:i|you)|is there|any(?:one|thing)|wish|struggl|keep(?:ing)? track|track(?:ing)?|monitor(?:ing)?|manage|managing)\b/i;
+
 function qualifiesPost(fullText, vertical, flair) {
-  if (fullText.length < MIN_BODY_LENGTH) return false;
+  if (fullText.length < MIN_POST_LENGTH) return false;
   if (flair === "REJECT") return false;
   if (failsExcludes(fullText)) return false;
   if (flair === "HIRING") return true;
   if (hiringIntentRegex.test(fullText)) return true;
-  if (vertical === "trading") return tradingIntentRegex.test(fullText);
+  if (vertical === "trading") {
+    if (tradingIntentRegex.test(fullText)) return true;
+    if (multiAccountRegex.test(fullText) && dashAskRegex.test(fullText)) return true;
+    return false;
+  }
   if (vertical !== "general" && painPhraseRegex.test(fullText)) return true;
   return false;
 }
@@ -319,7 +364,7 @@ function ageDaysOf(createdUtc) {
 }
 
 function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, leadType, flair, createdUtc) {
-  const vertical = detectVertical(fullText);
+  const vertical = detectVertical(fullText, subredditLabel);
   const intent = detectIntent(fullText, vertical);
   const ageDays = ageDaysOf(createdUtc);
   return {
@@ -374,7 +419,7 @@ async function considerPost(post, subredditLabel, trigger, contactedUsers, writt
   if (ageDays > maxAgeFor(flair)) return 0;
 
   const fullText = `${post.title || ""} ${post.selftext || ""}`;
-  const vertical = detectVertical(fullText);
+  const vertical = detectVertical(fullText, subredditLabel);
   const passes = qualifiesPost(fullText, vertical, flair);
 
   if (!passes && VERBOSE && (hiringIntentRegex.test(fullText) || tradingIntentRegex.test(fullText))) {
@@ -411,7 +456,7 @@ async function scrapeSubredditComments(sub, contactedUsers, writtenUsers) {
       if (contactedUsers.has(authorKey) || writtenUsers.has(authorKey)) continue;
       if (!comment.body) continue;
       const fullText = comment.body;
-      const vertical = detectVertical(fullText);
+      const vertical = detectVertical(fullText, sub);
       if (!qualifiesComment(fullText, vertical)) continue;
       const lead = buildLeadRecord(author, fullText, comment.permalink, sub, "comment_scan", "COMMENT", "NEUTRAL", comment.created_utc);
       if (await writeLeadNow(lead)) { writtenUsers.add(authorKey); count++; }

@@ -227,13 +227,34 @@ const advicePatternExcludeRegex = /\byou (can|should|could|might want to)\b[^.!?
 // person who is going to write it themselves is the one to skip, not the
 // person who already wrote something.
 const diyHardExcludeRegex = /\bi'?(ll|m going to| will) (build|code|write|make) (it|this|my own)\b|\bdecided to (build|code|write) (it|this) myself\b|\bbuilding (it|this|my own) myself\b|\bwriting (it|the code) myself\b|\bdon'?t want to (pay|hire)\b|\bno budget\b|\bcan'?t afford (a |to )?(dev|developer|hire)\b|\bfree (alternative|option|tool)\b|\bopen source (alternative|option)\b/i;
+// v9.2. The first broadening went too far the other way: r/forhire returned
+// 72 leads that were butchers, video editors and QA testers, and algotrading
+// filled up with people talking rather than buying. Three gates added below.
+
+// 1. A hiring post has to be hiring for something we do. [Hiring] flair used
+//    to auto-qualify anything, which in r/forhire is every job on Reddit.
+const relevantWorkRegex = /\b(develop(er|ment)?|dev|programm(er|ing)|coder?|coding|software|engineer|script(ing)?|automat(e|ion|ed)|bot|api|integration|scraper|scraping|web ?app|webapp|application|backend|full ?stack|python|javascript|node|dashboard|data|algo|trading|mql[45]?|pine ?script|ea\b|expert advisor)\b/i;
+
+// 2. Somebody who is going to build it themselves is not a customer, and
+//    neither is somebody who wants to be taught how.
+const diyLearnerRegex = /\b(want(ing)?|plan(ning)?|trying|going|hoping|looking) to (build|code|write|make|develop|create|learn)\b[^.!?]{0,25}\b(my|your|their|his|her)? ?own\b|\b(build|code|writ|mak|develop|creat)(ing|e)? my own\b|\bmy own (bot|algo|algorithm|platform|system|strategy|engine|framework)\b|\bwant(ing)? to learn\b|\blearn(ing)? (to|how to) (code|build|program|automate)\b|\bnew to (algo|algorithmic|trading|coding|programming|python)\b|\bjust (getting |got )?start(ed|ing)\b|\bbeginner\b|\bwhere (do|should) i (start|begin)\b|\bhow (do|did) (i|you) (start|learn|get into)\b|\bteach(ing)? myself\b|\broadmap\b|\bany (advice|tips)\b|\bneed some advice\b/i;
+
+// 3. People sharing results or opening a debate. These read as leads to a
+//    keyword filter and are worth nothing.
+const discussionRegex = /\b(backtested|here.?s (my|the) (backtest|result|code|strategy|setup)|is (there )?any(one|body) (actually |really )?(making|profitable|using)|anyone (else )?(using|tried|running|have experience)|what (do|are) you (guys |all )?(think|use|using)|thoughts on|am i (doing|missing)|vs\.? (python|pine|mt[45]|ninjatrader)|discussion|opinions?)\b/i;
+
+// 4. A trading post with no hiring flair has to show it intends to pay
+//    someone. Interest is not a lead.
+const commercialSignalRegex = /\b(hire|hiring|pay|paying|paid|budget|quote|cost|charge|rate|commission|freelance|contractor|developer|dev|coder|programmer|someone to|somebody to|for me\b|willing to|how much)\b/i;
+
 const diySoftSignalRegex = /\bi'?m a (developer|programmer|software engineer|swe)\b|\bi code for a living\b|\bi'?m learning (python|to code|programming)\b|\bteaching myself (python|to code)\b|\bi know (python|java|c\+\+)\b/i;
 
 function failsExcludes(fullText) {
   return selfPromoExcludeRegex.test(fullText) || noCashCompRegex.test(fullText) ||
     coFounderExcludeRegex.test(fullText) || findClientsExcludeRegex.test(fullText) ||
     careerChangeExcludeRegex.test(fullText) || advicePatternExcludeRegex.test(fullText) ||
-    diyHardExcludeRegex.test(fullText);
+    diyHardExcludeRegex.test(fullText) || diyLearnerRegex.test(fullText) ||
+    discussionRegex.test(fullText);
 }
 
 // ---------- Verticals ----------
@@ -339,12 +360,15 @@ function qualifiesPost(fullText, vertical, flair) {
   if (fullText.length < MIN_POST_LENGTH) return false;
   if (flair === "REJECT") return false;
   if (failsExcludes(fullText)) return false;
-  if (flair === "HIRING") return true;
-  if (hiringIntentRegex.test(fullText)) return true;
+  // v9.2: hiring flair is necessary, not sufficient. It has to be hiring for
+  // work we actually do.
+  if (flair === "HIRING") return relevantWorkRegex.test(fullText);
+  if (hiringIntentRegex.test(fullText)) return relevantWorkRegex.test(fullText);
   if (vertical === "trading") {
-    if (tradingIntentRegex.test(fullText)) return true;
     if (multiAccountRegex.test(fullText) && dashAskRegex.test(fullText)) return true;
-    return false;
+    // v9.2: intent alone let in every "should I learn to code a bot" thread.
+    // Has to show it plans to pay someone.
+    return tradingIntentRegex.test(fullText) && commercialSignalRegex.test(fullText);
   }
   if (vertical !== "general" && painPhraseRegex.test(fullText)) return true;
   return false;

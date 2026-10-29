@@ -1,35 +1,11 @@
-// scraper.cjs — ClientMagnet Lead Scraper (v9 — backlog harvest + buyer-only targeting)
+// scraper.cjs — ClientMagnet Scraper v10 (every active trader in ICP subs)
 //
-// v9, Sep 23. Three changes that matter.
+// v10, Oct 28. Keyword qualification is gone. Every poster and commenter in
+// the trading subs is a lead, minus bot makers, mods, and anyone already
+// contacted. The DM bot qualifies them in the conversation instead.
 //
-// 1. BACKLOG. v8 only ever read new posts going forward, which capped the
-//    whole engine at whatever those subs happened to produce today. Reddit
-//    has months of people asking for exactly what we sell and none of them
-//    have been contacted. `node scraper.cjs --backfill` sweeps up to 180
-//    days once, then the live loop takes over. The backlog is the volume.
-//
-// 2. TARGETING. Cut 50 subs to 18. Dropped the trades subs, Etsy, dropship,
-//    woocommerce and friends (never produced a lead) and dropped webdev,
-//    freelance and digitalnomad, which are full of competitors rather than
-//    buyers. Kept the trading subs, the three hiring subs, and the business
-//    owner subs that produced the biggest past quotes.
-//
-// 3. FILTERS. Two exclusions in v8 were throwing out the best leads:
-//      - `i built` / `i've built` was tagged as self-promo. The single most
-//        common qualified post on r/algotrading opens "I built a strategy in
-//        Pine Script but I can't code it into a bot." That is the customer.
-//        Promo is still caught by `check out my`, `launching`, `feedback`.
-//      - `try using` / `try looking at` killed any post that mentioned a
-//        tool the person had already tried, which qualified leads always do.
-//    Added a DIY detector instead: someone saying they're learning Python to
-//    build it themselves is not a buyer, and that is a far better filter than
-//    either of the two removed.
-//
-// Age handling: hiring posts with a flair and a budget are filled or
-// abandoned within weeks, so those cap at 30 days. Pain and intent posts
-// don't decay the same way — an unautomated strategy is usually still
-// unautomated six months later — so those run to 180. The DM bot reads
-// Age Days off the CSV and changes the opener accordingly.
+//   node scraper.cjs              live loop: new posts + new comments every 10 min
+//   node scraper.cjs --backfill   one pass over the last month of top/hot threads
 
 require("dotenv").config();
 const snoowrap = require("snoowrap");
@@ -47,531 +23,247 @@ const reddit = new snoowrap({
 reddit.config({ requestDelay: 1100, continueAfterRatelimitError: true, retryErrorCodes: [502, 503, 504, 522] });
 
 const BACKFILL = process.argv.includes("--backfill");
-const VERBOSE  = process.argv.includes("--verbose");
 
 const baseDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
-
 const leadsPath    = path.join(baseDir, "clean_leads.csv");
 const usersPath    = path.join(baseDir, "contacted_users.json");
 const seenKeysPath = path.join(baseDir, "seen_keys.json");
+const vendorsPath  = path.join(baseDir, "vendors.json");
 
-const SCRAPE_INTERVAL_MS = 5 * 60 * 1000;
-const SEEN_KEYS_SAVE_EVERY = 25;
-const MIN_BODY_LENGTH = 40;   // comments, which are noisier
-// v9.1: posts were held to 40 too, which rejected "Anyone know a good MQL5
-// dev?" at 28 characters. Plenty of the best leads are a short title and an
-// empty body.
-const MIN_POST_LENGTH = 25;
+const SCRAPE_INTERVAL_MS = 10 * 60 * 1000;
+const MAX_AGE_DAYS = 30;               // inactive people don't answer DMs
+const BACKFILL_COMMENT_THREADS = 40;   // per sub, busiest threads first
 
-const MAX_AGE_DAYS_HIRING = 30;   // flaired/budgeted gigs get filled fast
-const MAX_AGE_DAYS_PAIN   = 180;  // an unbuilt bot stays unbuilt
+// ---------- Subreddits ----------
+// Any that don't exist or went private get dropped at startup.
+const FUTURES_SUBS = [
+  "FuturesTrading", "Daytrading", "algotrading", "Trading", "TradingView",
+  "Topstep", "apextraderfunding", "propfirm", "Tradeify", "ninjatrader",
+  "tradovate", "FundedFutures",
+];
+const MT5_SUBS = ["Forex", "FTMO", "Forexstrategy", "XAUUSD", "Metatrader", "FundedNext"];
+const MT5_SET = new Set(MT5_SUBS.map(s => s.toLowerCase()));
 
+// ---------- Bot makers / sellers ----------
+// Anyone who builds, sells or offers bots, EAs, signals or dev work is out.
+const VENDOR_PATTERNS = [
+  /\b(?:i|we) (?:build|code|develop|program|make|create|sell|offer|write)s? (?:custom |private |automated )?(?:trading )?(?:bots?|eas?|expert advisors?|algos?|indicators?|scripts?|strateg(?:y|ies)|software)\b/,
+  /\bi (?:built|coded|wrote|made|developed|programmed|created) (?:a|an|my|this|our)(?: own)?(?: \w+){0,2} (?:bot|ea|expert advisor|algo|algorithm|indicator|script|system|copier)\b/,
+  /\b(?:my|our) (?:bot|ea|algo|indicator|software|tool|service|signals?|course|mentorship|discord|telegram) (?:is|are) (?:available|for sale|live|now|open)\b/,
+  /\bfor sale\b|\bselling (?:my|our|a|an)\b/,
+  /\bdm (?:me )?for (?:access|details|price|pricing|info|the link)\b/,
+  /\blink in (?:my )?bio\b|\bcheck out my\b|\bjoin (?:my|our) (?:discord|telegram|group|community)\b/,
+  /\bfree (?:trial|signals)\b|\b(?:available|open) for (?:hire|commissions?|work)\b|\bhire me\b|\[for ?hire\]/,
+  /\b(?:developer|dev|programmer|coder) here\b|\bi'?m an? (?:mql[45]? |pine ?script |algo |quant |freelance |software )?(?:developer|programmer|coder|dev)\b/,
+  /\bi can (?:code|build|program|automate|convert) (?:it|this|that|your|any)\b/,
+  /github\.com\/|whop\.com|gumroad\.com|mql5\.com\/\w+\/(?:market|signals|users)/,
+];
+const VENDOR_TEXT = new RegExp(VENDOR_PATTERNS.map(r => r.source).join("|"), "i");
+const VENDOR_NAME = /(bot|algo|signal|labs?|studio|official|solutions|coder|developer|dev$|^dev)/i;
+
+function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function readJSON(p, fallback) {
+  try { return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf8")) : fallback; } catch { return fallback; }
+}
+const clean = s => String(s || "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+function ageDaysOf(createdUtc) { return createdUtc ? Math.max(0, (Date.now() / 1000 - createdUtc) / 86400) : 0; }
+
+// ---------- CSV ----------
 const csvHeader = [
   { id: "time", title: "Time" }, { id: "username", title: "Username" },
-  { id: "title", title: "Title" }, { id: "url", title: "URL" },
-  { id: "subreddit", title: "Subreddit" }, { id: "vertical", title: "Vertical" },
-  { id: "leadType", title: "Lead Type" }, { id: "matchedTrigger", title: "Matched Trigger" },
-  { id: "budget", title: "Budget" }, { id: "score", title: "Score" },
-  { id: "moneySignal", title: "Money Signal" }, { id: "hiringFlair", title: "Hiring Flair" },
-  { id: "painPhrase", title: "Pain Phrase" },
-  { id: "ageDays", title: "Age Days" }, { id: "postedAt", title: "Posted At" },
-  { id: "intent", title: "Intent" }, { id: "accounts", title: "Accounts" },
-  { id: "selftext", title: "Selftext" },
+  { id: "subreddit", title: "Subreddit" }, { id: "family", title: "Family" },
+  { id: "leadType", title: "Lead Type" }, { id: "title", title: "Title" },
+  { id: "snippet", title: "Snippet" }, { id: "url", title: "URL" },
+  { id: "postedAt", title: "Posted At" },
 ];
-
-// v9 added columns. If an old v8 CSV is sitting there, move it aside rather
-// than appending rows the DM bot can't read.
 if (fs.existsSync(leadsPath)) {
   const firstLine = fs.readFileSync(leadsPath, "utf8").split("\n")[0] || "";
-  if (!firstLine.includes("Age Days")) {
-    const archived = path.join(baseDir, `clean_leads_v8_${Date.now()}.csv`);
+  if (!firstLine.includes("Family")) {
+    const archived = path.join(baseDir, `clean_leads_v9_${Date.now()}.csv`);
     fs.renameSync(leadsPath, archived);
     console.log(`Archived old-format CSV to ${path.basename(archived)}`);
   }
 }
-if (!fs.existsSync(leadsPath)) {
-  fs.writeFileSync(leadsPath, csvHeader.map(h => h.title).join(",") + "\n");
-}
+if (!fs.existsSync(leadsPath)) fs.writeFileSync(leadsPath, csvHeader.map(h => h.title).join(",") + "\n");
 const leadsWriter = createObjectCsvWriter({ path: leadsPath, header: csvHeader, append: true });
 
-function log(tag, msg) { console.log(`[${new Date().toLocaleTimeString()}] ${tag}: ${msg}`); }
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Usernames already in the CSV, so nobody gets written twice across runs.
+const knownUsers = new Set(
+  fs.readFileSync(leadsPath, "utf8").split("\n").slice(1)
+    .map(l => (l.split(",")[1] || "").replace(/"/g, "").trim().toLowerCase()).filter(Boolean)
+);
 
-let seenPostKeys = new Set();
+// ---------- Seen keys ----------
+let seenPostKeys = new Set(readJSON(seenKeysPath, []));
 let sinceLastSave = 0;
-function loadSeenKeys() {
-  if (!fs.existsSync(seenKeysPath)) return new Set();
-  try { return new Set(JSON.parse(fs.readFileSync(seenKeysPath, "utf8"))); } catch { return new Set(); }
-}
 function saveSeenKeys() {
   try { fs.writeFileSync(seenKeysPath, JSON.stringify([...seenPostKeys])); }
-  catch (err) { log("WARN", `Failed to save seen_keys.json: ${err.message}`); }
+  catch (err) { log("WARN", `seen_keys save failed: ${err.message}`); }
 }
 function markSeen(key) {
   seenPostKeys.add(key);
-  if (++sinceLastSave >= SEEN_KEYS_SAVE_EVERY) { saveSeenKeys(); sinceLastSave = 0; }
-}
-seenPostKeys = loadSeenKeys();
-log("INFO", `Loaded ${seenPostKeys.size} previously seen keys from disk.`);
-
-function loadContactedUsernames() {
-  if (!fs.existsSync(usersPath)) return new Set();
-  try { return new Set(Object.keys(JSON.parse(fs.readFileSync(usersPath, "utf8")))); } catch { return new Set(); }
+  if (++sinceLastSave >= 50) { saveSeenKeys(); sinceLastSave = 0; }
 }
 
-// ---------- Where to look ----------
-// 18 subs. Trading is the core offer, the hiring subs are where people post
-// with a budget already in hand, and the owner subs are where every big past
-// quote came from (the $2K RFQ tool, the $1.5K flat, the Upwork screener).
-const TRADING_SUBS = [
-  "algotrading", "Daytrading", "FuturesTrading", "Forex", "Trading",
-  "TradingView", "FTMO", "quant", "swingtrading",
-];
-const HIRING_SUBS = ["forhire", "hireadeveloper", "jobbit"];
-const OWNER_SUBS = [
-  "smallbusiness", "Entrepreneur", "EntrepreneurRideAlong",
-  "sweatystartup", "SaaS", "ecommerce",
-];
-const SUBREDDITS = [...TRADING_SUBS, ...HIRING_SUBS, ...OWNER_SUBS];
-const ALLOWED_SUBREDDITS = new Set(SUBREDDITS.map(s => s.toLowerCase()));
-const TRADING_SUB_SET = new Set(TRADING_SUBS.map(s => s.toLowerCase()));
-
-// ---------- Flair ----------
-function flairSignal(post) {
-  const title = (post.title || "").toLowerCase();
-  const flair = (post.link_flair_text || "").toLowerCase();
-  if (flair && /for.?hire|offer(ing)?|available|services/.test(flair)) return "REJECT";
-  if (/\[for ?hire\]|\[offer\]|\[services\]|\[available\]|\[freelancer\]/i.test(title)) return "REJECT";
-  if (/\[hiring\]|\[task\]|\[job\]|\[gig\]/i.test(title)) return "HIRING";
-  return "NEUTRAL";
+// ---------- Vendors ----------
+const vendorSet = new Set(Object.keys(readJSON(vendorsPath, {})));
+function addVendor(name, reason) {
+  if (vendorSet.has(name)) return;
+  vendorSet.add(name);
+  const v = readJSON(vendorsPath, {});
+  v[name] = { reason, at: new Date().toISOString() };
+  fs.writeFileSync(vendorsPath, JSON.stringify(v));
 }
 
-// ---------- Money ----------
-function hasMoneySignal(text) {
-  const moneyRegex = /\$\s?[\d,]+k?|\d+k?\s*(?:usd|dollars|bucks)|budget (of|is|around)|paying \$|willing to pay|flat fee|would pay|i'?d pay|pay someone|pay for|pay to have|pay well|paid (gig|work|project)/i;
-  const match = text.match(moneyRegex);
-  if (!match) return false;
-  const before = text.slice(Math.max(0, match.index - 25), match.index);
-  if (/\b(no|not|n't|zero|without|can'?t afford|unpaid|lacking)\b/i.test(before)) return false;
-  return true;
-}
-function extractBudget(text) {
-  const m = text.match(/\$\s?[\d,]+(?:k)?(?:\/(?:hr|hour|mo|month))?|\d+(?:\.\d+)?(?:k)?\s*(?:dollars|usd|budget)/i);
-  return m ? m[0] : "";
-}
+function loadContacted() { return new Set(Object.keys(readJSON(usersPath, {}))); }
+const modSet = new Set();
 
-// ---------- Intent ----------
-const painPhraseRegex = /\bi(?:'m| am)?\s*(?:keep|constantly|manually|spending|wasting|losing|struggling|falling behind|drowning in|tired of|sick of)\b[^.!?]{0,80}\b(manually|by hand|myself|every (day|week|time))\b|\bi wish there was\b|\bis there a tool\b|\bis there an app (for|that)\b|\bis there a way to automate\b|\bi need (a |to )?automate\b|\bi need help (managing|tracking|keeping up with)\b|\bit takes me (hours|forever|too long)\b|\bi'?m losing (sales|customers|money) because\b|\bi can'?t keep up with\b|\bi'?m falling behind on\b|\bi have no time to keep up with\b|\bi'?m juggling too many\b/i;
-
-const hiringIntentRegex = /\bi(?:'m| am)?\s*(?:hiring|looking for|in search of|searching for|need|want|wanted|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer|automation (expert|specialist)?|someone (who|to) (can )?(build|code|make|create))\b|\bwe(?:'re| are)?\s*(?:hiring|looking for|in search of|searching for|need|want|seeking)\b[\s\w]{0,20}\b(developer|dev|programmer|coder|engineer|freelancer)\b|\bany(one)? (recommendations for|know) a (good )?(developer|coder|programmer)\b|\bcan anyone (build|make|create|code) (this|me|my)\b|\bi'?m looking to (hire|automate|build)\b|\bi need (an|a) app (built|made)\b|\bi need custom (software|tool|script|bot)\b|\bi need (a |someone to )?(build|create|develop|code)\b|\bi'?m willing to pay (for|someone)\b/i;
-
-// v9.1: the original only matched a handful of exact phrasings. Tested
-// against 16 real ways people ask for this on r/algotrading and r/Forex it
-// caught zero, which is why a 180 day sweep of Forex returned nothing. This
-// version is built from three signals (an ask, a build verb, a trading
-// object) in either order, plus a direct "<trading word> developer" form.
-// 15/16 on that same sample, and the one false positive it lets through
-// ("available for hire, i build trading bots") is already killed by the
-// self-promo exclusion below.
-const T_OBJ = "(?:ea|eas|expert advisors?|bots?|robots?|algos?|algorithms?|indicators?|strategy|strategies|system|script|automation)";
-const T_BLD = "(?:builds?|building|built|codes?|coding|coded|develops?|developing|developed|programs?|programming|programmed|automates?|automating|automated|converts?|converting|creates?|creating|makes?|making|writ(?:e|es|ing)|turn(?:s|ing)?[^.!?]{0,25}into|port(?:ing|ed|s)?)";
-const T_ASK = "(?:need|needs|needed|want|wants|looking for|looking to|hoping to|in search of|searching for|hire|hiring|pay|paying|willing to pay|would pay|happy to pay|commission|how much|how do i (?:get|turn|make)|where (?:can|do) i (?:find|get)|trying to find|who can|can (?:anyone|someone)|any(?:one)? (?:know|recommend)|recommendations for|help me|is there (?:anyone|someone)|(?:i.?d|i would) like to)";
-const T_PAY = "(?:hire|hiring|commission|pay|paying|willing to pay|would pay|happy to pay|how much|quote for)";
-const T_CANT = "(?:can.?t|cannot|unable to|don.?t know how to|no idea how to)";
-const T_DEV = "(?:dev|devs|developer|developers|coder|coders|programmer|programmers|engineer)";
-const T_WORD = "(?:mql[45]?|pine ?script|ea|expert advisor|mt[45]|metatrader|ninjatrader|thinkscript|trading|algo|forex|futures|bot)";
-const tradingIntentRegex = new RegExp([
-  `\\b${T_ASK}\\b[^.!?]{0,70}\\b${T_BLD}\\b[^.!?]{0,45}\\b${T_OBJ}\\b`,
-  `\\b${T_ASK}\\b[^.!?]{0,70}\\b${T_OBJ}\\b[^.!?]{0,45}\\b${T_BLD}\\b`,
-  `\\b${T_WORD}\\b[ -]?\\b${T_DEV}\\b`,
-  `\\b${T_DEV}\\b[^.!?]{0,30}\\b${T_BLD}\\b[^.!?]{0,30}\\b${T_OBJ}\\b`,
-  `\\b${T_PAY}\\b[^.!?]{0,40}\\b${T_OBJ}\\b`,
-  `\\b${T_CANT}\\b[^.!?]{0,25}\\b${T_BLD}\\b[^.!?]{0,45}\\b${T_OBJ}\\b`,
-  `\\b${T_OBJ}\\b[^.!?]{0,40}\\b${T_ASK}\\b[^.!?]{0,25}\\b${T_BLD}\\b`,
-].join("|"), "i");
-
-// Someone running several prop accounts is the dashboard buyer, not the bot
-// buyer. Different message, so the DM bot needs it flagged here.
-const multiAccountRegex = /\b(\d{1,2})\s*(prop|funded|eval(uation)?|combine|challenge)?\s*(accounts?|evals?|challenges?)\b|\b(multiple|several|a few|bunch of)\s*(prop|funded|eval(uation)?)?\s*(accounts?|evals?|firms?)\b|\bacross\s*(\d{1,2}|multiple|several)\s*(firms?|accounts?|evals?)\b/i;
-
-function extractAccountCount(text) {
-  const m = text.match(/\b(\d{1,2})\s*(?:prop |funded |eval(?:uation)? |combine |challenge )?(?:accounts?|evals?|challenges?)\b/i);
-  if (m) {
-    const n = parseInt(m[1], 10);
-    if (n >= 2 && n <= 60) return String(n);
+function familyFor(sub, text) {
+  if (MT5_SET.has(sub.toLowerCase())) {
+    return /\b(futures|nq|mnq|mes|mgc|topstep|apex|lucid|tradeify|tradovate|ninjatrader|rithmic)\b/i.test(text) ? "futures" : "mt5";
   }
-  return multiAccountRegex.test(text) ? "multiple" : "";
+  return /\b(mt[45]|metatrader|ftmo|xauusd|cfds?|forex)\b/i.test(text) ? "mt5" : "futures";
 }
 
-function extractPainPhrase(text) {
-  const m = text.match(tradingIntentRegex) || text.match(hiringIntentRegex) || text.match(painPhraseRegex);
-  if (!m) return "";
-  // Commas break the CSV downstream and the DM bot drops this straight into
-  // a sentence, so trim to a clean fragment.
-  return m[0].replace(/[\r\n]+/g, " ").replace(/,/g, "").trim().slice(0, 90);
-}
-
-// ---------- Exclusions ----------
-// v9: `i built` / `i've built` and `try using` / `try looking at` removed.
-// See the header note. Self-promo is still caught by the launch/feedback/
-// check-out-my patterns, which is what actually marks a promo post.
-const selfPromoExcludeRegex = /\bavailable for hire\b|\bmy services\b|\bhire me\b|\bdm me for rates\b|\bcheck out my (agency|portfolio|services|work|tool|app|project)\b|\bi specialize in\b|\bfreelancer here\b|\bi provide services\b|\bour agency helps\b|\breaching out to offer\b|\bi can build (this|that|it) for you\b|\bi published\b|\blaunching (a |my )?(new )?(project|product|app|tool|startup)\b|\b(just|i) (launched|released|shipped)\b|\blooking for (feedback|beta testers|people to test|users to test|early users|early adopters)\b|\bwould (love|appreciate) (feedback|beta testers)\b|\bfree to (try|use), (link|dm)\b/i;
-const noCashCompRegex = /\b(equity only|revenue share|rev share|no upfront (pay|payment|cash)|unpaid but|profit share only)\b/i;
-const coFounderExcludeRegex = /\b(co-?founder|technical co-?founder|equity[- ]based|founding (engineer|builder)|join (my|our) startup as)\b/i;
-const findClientsExcludeRegex = /\bhow (do|can) i (find|get|land) clients\b|\blooking for (new )?clients\b|\bsearching for clients\b|\bclient acquisition (tips|advice)\b|\blooking for (freelance |contract )?(gigs|work)\b/i;
-const careerChangeExcludeRegex = /\bwant(ed)? to (become|be|learn to be)\b[\s\w]{0,15}\b(developer|dev|programmer|coder|engineer)\b/i;
-const advicePatternExcludeRegex = /\byou (can|should|could|might want to)\b[^.!?]{0,40}\bhire\b|\bi would (avoid|recommend|suggest)\b|\bmy (advice|suggestion) (is|would be)\b/i;
-
-// New in v9. Replaces the two removed exclusions and does a better job: the
-// person who is going to write it themselves is the one to skip, not the
-// person who already wrote something.
-const diyHardExcludeRegex = /\bi'?(ll|m going to| will) (build|code|write|make) (it|this|my own)\b|\bdecided to (build|code|write) (it|this) myself\b|\bbuilding (it|this|my own) myself\b|\bwriting (it|the code) myself\b|\bdon'?t want to (pay|hire)\b|\bno budget\b|\bcan'?t afford (a |to )?(dev|developer|hire)\b|\bfree (alternative|option|tool)\b|\bopen source (alternative|option)\b/i;
-// v9.2. The first broadening went too far the other way: r/forhire returned
-// 72 leads that were butchers, video editors and QA testers, and algotrading
-// filled up with people talking rather than buying. Three gates added below.
-
-// 1. A hiring post has to be hiring for something we do. [Hiring] flair used
-//    to auto-qualify anything, which in r/forhire is every job on Reddit.
-const relevantWorkRegex = /\b(develop(er|ment)?|dev|programm(er|ing)|coder?|coding|software|engineer|script(ing)?|automat(e|ion|ed)|bot|api|integration|scraper|scraping|web ?app|webapp|application|backend|full ?stack|python|javascript|node|dashboard|data|algo|trading|mql[45]?|pine ?script|ea\b|expert advisor)\b/i;
-
-// 2. Somebody who is going to build it themselves is not a customer, and
-//    neither is somebody who wants to be taught how.
-const diyLearnerRegex = /\b(want(ing)?|plan(ning)?|trying|going|hoping|looking) to (build|code|write|make|develop|create|learn)\b[^.!?]{0,25}\b(my|your|their|his|her)? ?own\b|\b(build|code|writ|mak|develop|creat)(ing|e)? my own\b|\bmy own (bot|algo|algorithm|platform|system|strategy|engine|framework)\b|\bwant(ing)? to learn\b|\blearn(ing)? (to|how to) (code|build|program|automate)\b|\bnew to (algo|algorithmic|trading|coding|programming|python)\b|\bjust (getting |got )?start(ed|ing)\b|\bbeginner\b|\bwhere (do|should) i (start|begin)\b|\bhow (do|did) (i|you) (start|learn|get into)\b|\bteach(ing)? myself\b|\broadmap\b|\bany (advice|tips)\b|\bneed some advice\b/i;
-
-// 3. People sharing results or opening a debate. These read as leads to a
-//    keyword filter and are worth nothing.
-const discussionRegex = /\b(backtested|here.?s (my|the) (backtest|result|code|strategy|setup)|is (there )?any(one|body) (actually |really )?(making|profitable|using)|anyone (else )?(using|tried|running|have experience)|what (do|are) you (guys |all )?(think|use|using)|thoughts on|am i (doing|missing)|vs\.? (python|pine|mt[45]|ninjatrader)|discussion|opinions?)\b/i;
-
-// 4. A trading post with no hiring flair has to show it intends to pay
-//    someone. Interest is not a lead.
-const commercialSignalRegex = /\b(hire|hiring|pay|paying|paid|budget|quote|cost|charge|rate|commission|freelance|contractor|developer|dev|coder|programmer|someone to|somebody to|for me\b|willing to|how much)\b/i;
-
-const diySoftSignalRegex = /\bi'?m a (developer|programmer|software engineer|swe)\b|\bi code for a living\b|\bi'?m learning (python|to code|programming)\b|\bteaching myself (python|to code)\b|\bi know (python|java|c\+\+)\b/i;
-
-function failsExcludes(fullText) {
-  return selfPromoExcludeRegex.test(fullText) || noCashCompRegex.test(fullText) ||
-    coFounderExcludeRegex.test(fullText) || findClientsExcludeRegex.test(fullText) ||
-    careerChangeExcludeRegex.test(fullText) || advicePatternExcludeRegex.test(fullText) ||
-    diyHardExcludeRegex.test(fullText) || diyLearnerRegex.test(fullText) ||
-    discussionRegex.test(fullText);
-}
-
-// ---------- Verticals ----------
-// v9: "6 prop accounts across three firms" used to fall through to general,
-// which sent the dashboard buyer the business automation copy. prop/funded/
-// eval account language now counts as trading on its own.
-const tradingVerticalRegex = /\b(trading|trader|futures|forex|prop ?(firm|account)s?|funded account|eval(uation)? accounts?|evals?|combine|topstep|apex|tradeify|lucid|mt[45]|tradovate|ninjatrader|tradingview|pine ?script|mql|nasdaq|nq futures|es futures|gold futures|xauusd|backtest|expert advisors?|trading bots?|forex bots?|algo ?trading|algotrading)\b/i;
-const ecommerceVerticalRegex = /\b(amazon|fba|etsy|shopify|inventory|listings?|repricing|product reviews?|dropship(ping)?|print on demand|woocommerce)\b/i;
-const localServiceVerticalRegex = /\b(hvac|plumb(ing|er)?|landscap(ing|er)?|clean(ing)? (business|company)|handyman|contractor|job site|scheduling|appointments|invoic(e|ing)|electrician|roofing|pest control|auto repair|locksmith|detailing)\b/i;
-const propertyVerticalRegex = /\b(tenant|lease|rent(al)?|property (management|manager)|landlord|maintenance request)\b/i;
-
-// v9.1: the subreddit decides context before the text does. "turn my
-// strategy into an EA" contains no word from the vertical list, so it used
-// to come back general, fail the business filter, and never reach the
-// trading intent check at all. A post in r/algotrading is trading, full
-// stop. Bare "ea" deliberately stays out of the keyword list because in
-// r/Entrepreneur it means executive assistant.
-function detectVertical(text, sub) {
-  if (sub && TRADING_SUB_SET.has(String(sub).toLowerCase())) return "trading";
-  if (tradingVerticalRegex.test(text)) return "trading";
-  if (ecommerceVerticalRegex.test(text)) return "ecommerce";
-  if (propertyVerticalRegex.test(text)) return "property_mgmt";
-  if (localServiceVerticalRegex.test(text)) return "local_service";
-  return "general";
-}
-
-// Which message the DM bot should reach for. Vertical says what industry,
-// intent says what they actually want built.
-function detectIntent(text, vertical) {
-  if (vertical === "trading" && multiAccountRegex.test(text)) return "dashboard";
-  if (vertical === "trading") {
-    if (/\b(my|our) (strategy|ea|system|setup|indicator)\b|\bpine ?script\b|\bmql[45]?\b|\bi have (a|my) (strategy|system)\b/i.test(text)) {
-      return "trading_custom";
-    }
-    return "trading_install";
-  }
-  return "business";
-}
-
-// ---------- Queries ----------
-const LIVE_QUERIES = [
-  "automate my strategy", "looking for a bot developer", "EA developer",
-  "need someone to code my strategy", "who can build me an EA",
-  "code my indicator", "convert my strategy to a bot",
-  "trading bot developer", "pine script developer",
-  "someone to automate my trading", "pay someone to build my EA",
-  "hire a developer for my strategy",
-  "looking for a developer", "hiring a developer", "need someone to build",
-  "can anyone build", "need custom software", "need an app built",
-  "looking to automate", "need a script for", "need a programmer",
-  "willing to pay someone to build",
-  "keep manually", "takes me hours", "spending too much time",
-  "wish there was a tool", "manually tracking", "can't keep up with",
-  "is there a way to automate", "would pay someone to automate",
-];
-
-// Backfill runs per subreddit, so these stay short and high signal. Reddit
-// caps any single listing around 1000 items, which is why this is many
-// narrow queries across several sorts rather than one deep crawl.
-const BACKFILL_QUERIES = [
-  "automate my strategy", "code my strategy", "build my EA", "EA developer",
-  "pine script developer", "convert my strategy", "someone to code",
-  "someone to build", "looking for a developer", "hire a developer",
-  "need a programmer", "custom bot", "automate this", "need this automated",
-  "willing to pay", "paid project", "can anyone build", "doing it manually",
-  "takes me hours", "wish there was a tool",
-];
-const BACKFILL_SORTS = ["new", "relevance", "top"];
-
-// ---------- Scoring ----------
-function scoreLead(fullText, flair, vertical, ageDays, intent) {
-  let score;
-  if (flair === "HIRING") score = 100;
-  else if (hasMoneySignal(fullText)) score = 90;
-  else if (vertical === "trading" && tradingIntentRegex.test(fullText)) score = 85;
-  else if (hiringIntentRegex.test(fullText)) score = 80;
-  else score = 70;
-
-  if (intent === "dashboard") score += 8;          // highest ticket offer
-  if (diySoftSignalRegex.test(fullText)) score -= 15; // may well build it himself
-
-  // Age decay. Fresh posts convert far better, so they sort to the top of
-  // the DM queue, but an old one still gets contacted.
-  if (ageDays > 120) score -= 12;
-  else if (ageDays > 60) score -= 8;
-  else if (ageDays > 21) score -= 4;
-  else if (ageDays <= 1) score += 5;
-
-  return Math.max(1, Math.min(120, Math.round(score)));
-}
-
-function maxAgeFor(flair) {
-  return flair === "HIRING" ? MAX_AGE_DAYS_HIRING : MAX_AGE_DAYS_PAIN;
-}
-
-// v9.1: the dashboard buyer had no path through here. "I run 6 prop accounts
-// and need something to track them all" has no build verb and no trading
-// object, so the intent regex rejected the highest ticket lead on the board.
-// Multiple accounts plus any ask is enough on its own.
-const dashAskRegex = /\b(need|want|looking for|trying to|how do (?:i|you)|is there|any(?:one|thing)|wish|struggl|keep(?:ing)? track|track(?:ing)?|monitor(?:ing)?|manage|managing)\b/i;
-
-function qualifiesPost(fullText, vertical, flair) {
-  if (fullText.length < MIN_POST_LENGTH) return false;
-  if (flair === "REJECT") return false;
-  if (failsExcludes(fullText)) return false;
-  // v9.2: hiring flair is necessary, not sufficient. It has to be hiring for
-  // work we actually do.
-  if (flair === "HIRING") return relevantWorkRegex.test(fullText);
-  if (hiringIntentRegex.test(fullText)) return relevantWorkRegex.test(fullText);
-  if (vertical === "trading") {
-    if (multiAccountRegex.test(fullText) && dashAskRegex.test(fullText)) return true;
-    // v9.2: intent alone let in every "should I learn to code a bot" thread.
-    // Has to show it plans to pay someone.
-    return tradingIntentRegex.test(fullText) && commercialSignalRegex.test(fullText);
-  }
-  if (vertical !== "general" && painPhraseRegex.test(fullText)) return true;
-  return false;
-}
-
-function qualifiesComment(fullText, vertical) {
-  if (fullText.length < MIN_BODY_LENGTH) return false;
-  if (failsExcludes(fullText)) return false;
-  if (hiringIntentRegex.test(fullText)) return true;
-  if (vertical === "trading") return tradingIntentRegex.test(fullText);
-  return false;
-}
-
-function ageDaysOf(createdUtc) {
-  if (!createdUtc) return 0;
-  return Math.max(0, (Date.now() / 1000 - createdUtc) / 86400);
-}
-
-function buildLeadRecord(author, fullText, permalink, subredditLabel, trigger, leadType, flair, createdUtc) {
-  const vertical = detectVertical(fullText, subredditLabel);
-  const intent = detectIntent(fullText, vertical);
-  const ageDays = ageDaysOf(createdUtc);
-  return {
-    time: new Date().toISOString(),
-    username: author,
-    title: fullText.slice(0, 150).replace(/[\r\n]+/g, " ").replace(/,/g, " "),
-    url: `https://reddit.com${permalink}`,
-    subreddit: subredditLabel,
-    vertical,
-    leadType,
-    matchedTrigger: trigger,
-    budget: extractBudget(fullText),
-    score: scoreLead(fullText, flair, vertical, ageDays, intent),
-    moneySignal: hasMoneySignal(fullText) ? "YES" : "NO",
-    hiringFlair: flair === "HIRING" ? "YES" : "NO",
-    painPhrase: extractPainPhrase(fullText),
-    ageDays: ageDays.toFixed(1),
-    postedAt: createdUtc ? new Date(createdUtc * 1000).toISOString() : "",
-    intent,
-    accounts: extractAccountCount(fullText),
-    selftext: fullText.slice(0, 500).replace(/[\r\n]+/g, " ").replace(/,/g, " "),
-  };
-}
-
-async function writeLeadNow(lead) {
-  try {
-    await leadsWriter.writeRecords([lead]);
-    log("LEAD", `[${lead.intent}] score:${lead.score} age:${lead.ageDays}d u/${lead.username} in ${lead.subreddit} | ${lead.title.slice(0, 62)}`);
-    return true;
-  } catch (err) {
-    log("ERROR", `Failed to write lead for u/${lead.username}: ${err.message}`);
-    return false;
-  }
-}
-
-// Shared handling for anything that looks like a post.
-async function considerPost(post, subredditLabel, trigger, contactedUsers, writtenUsers) {
-  const key = `p_${post.id}`;
+// ---------- Core ----------
+async function consider(item, type, sub, threadTitle, ctx) {
+  const key = (type === "POST" ? "p_" : "c_") + item.id;
   if (seenPostKeys.has(key)) return 0;
   markSeen(key);
 
-  const author = post.author && post.author.name;
+  const author = item.author && item.author.name;
   if (!author || author === "[deleted]" || author === "AutoModerator") return 0;
-  const authorKey = author.toLowerCase();
-  if (contactedUsers.has(authorKey)) return 0;
-  if (writtenUsers.has(authorKey)) return 0; // one row per person per run
+  if (item.distinguished || item.stickied) return 0;
+  const k = author.toLowerCase();
+  if (ctx.contacted.has(k) || knownUsers.has(k) || vendorSet.has(k) || modSet.has(k)) return 0;
+  if (VENDOR_NAME.test(author)) { addVendor(k, "username"); return 0; }
+  if (ageDaysOf(item.created_utc) > MAX_AGE_DAYS) return 0;
 
-  const flair = flairSignal(post);
-  if (flair === "REJECT") return 0;
+  const text = type === "POST" ? `${item.title || ""} ${item.selftext || ""}` : (item.body || "");
+  if (VENDOR_TEXT.test(text)) { addVendor(k, "text"); return 0; }
 
-  const ageDays = ageDaysOf(post.created_utc);
-  if (ageDays > maxAgeFor(flair)) return 0;
-
-  const fullText = `${post.title || ""} ${post.selftext || ""}`;
-  const vertical = detectVertical(fullText, subredditLabel);
-  const passes = qualifiesPost(fullText, vertical, flair);
-
-  if (!passes && VERBOSE && (hiringIntentRegex.test(fullText) || tradingIntentRegex.test(fullText))) {
-    log("NEAR_MISS", `u/${author} in ${subredditLabel} | excluded:${failsExcludes(fullText)} | flair:${flair} | "${fullText.slice(0, 90)}"`);
+  const lead = {
+    time: new Date().toISOString(),
+    username: author,
+    subreddit: sub,
+    family: familyFor(sub, text),
+    leadType: type,
+    title: clean(type === "POST" ? item.title : (threadTitle || item.link_title || "")).slice(0, 140),
+    snippet: clean(text).slice(0, 300),
+    url: `https://reddit.com${item.permalink}`,
+    postedAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : "",
+  };
+  try {
+    await leadsWriter.writeRecords([lead]);
+    knownUsers.add(k);
+    return 1;
+  } catch (err) {
+    log("ERROR", `write failed u/${author}: ${err.message}`);
+    return 0;
   }
-  if (!passes) return 0;
-
-  const lead = buildLeadRecord(author, fullText, post.permalink, subredditLabel, trigger, "POST", flair, post.created_utc);
-  if (await writeLeadNow(lead)) { writtenUsers.add(authorKey); return 1; }
-  return 0;
 }
 
-// ---------- Live mode ----------
-async function scrapeSubredditPosts(sub, contactedUsers, writtenUsers) {
-  let count = 0;
-  try {
-    const posts = await reddit.getSubreddit(sub).getNew({ limit: 75 });
-    for (const post of posts) count += await considerPost(post, sub, "subreddit_scan", contactedUsers, writtenUsers);
-  } catch (err) { log("ERROR", `r/${sub} posts failed: ${err.message}`); }
-  return count;
+async function validateSubs(list) {
+  const ok = [];
+  for (const name of list) {
+    try {
+      const s = await reddit.getSubreddit(name).fetch();
+      if (s.subreddit_type === "public" || s.subreddit_type === "restricted") {
+        ok.push(s.display_name);
+        log("SUB", `r/${s.display_name} ok, ${s.subscribers} members`);
+        try {
+          const mods = await reddit.getSubreddit(s.display_name).getModerators();
+          for (const m of mods) modSet.add(String(m.name).toLowerCase());
+        } catch { /* mod list hidden, fine */ }
+      } else log("SKIP", `r/${name} is ${s.subreddit_type}`);
+    } catch { log("SKIP", `r/${name} not available`); }
+    await sleep(900);
+  }
+  return ok;
 }
 
-async function scrapeSubredditComments(sub, contactedUsers, writtenUsers) {
-  let count = 0;
-  try {
-    const comments = await reddit.getSubreddit(sub).getNewComments({ limit: 100 });
-    for (const comment of comments) {
-      const key = `c_${comment.id}`;
-      if (seenPostKeys.has(key)) continue;
-      markSeen(key);
-      const author = comment.author && comment.author.name;
-      if (!author || author === "[deleted]" || author === "AutoModerator") continue;
-      const authorKey = author.toLowerCase();
-      if (contactedUsers.has(authorKey) || writtenUsers.has(authorKey)) continue;
-      if (!comment.body) continue;
-      const fullText = comment.body;
-      const vertical = detectVertical(fullText, sub);
-      if (!qualifiesComment(fullText, vertical)) continue;
-      const lead = buildLeadRecord(author, fullText, comment.permalink, sub, "comment_scan", "COMMENT", "NEUTRAL", comment.created_utc);
-      if (await writeLeadNow(lead)) { writtenUsers.add(authorKey); count++; }
-    }
-  } catch (err) { log("ERROR", `r/${sub} comments failed: ${err.message}`); }
-  return count;
-}
-
-async function globalSearch(query, contactedUsers, writtenUsers) {
-  let count = 0;
-  try {
-    const results = await reddit.search({ query, sort: "new", time: "week", limit: 50 });
-    for (const post of results) {
-      const label = (post.subreddit && post.subreddit.display_name) || "unknown";
-      if (!ALLOWED_SUBREDDITS.has(label.toLowerCase())) continue;
-      count += await considerPost(post, label, query, contactedUsers, writtenUsers);
-    }
-  } catch (err) { log("ERROR", `Search "${query}" failed: ${err.message}`); }
-  return count;
-}
-
-async function runScrapeCycle() {
-  log("INFO", "Live scrape cycle starting...");
-  const contactedUsers = loadContactedUsernames();
-  const writtenUsers = new Set();
+async function runCycle(subs) {
+  const ctx = { contacted: loadContacted() };
   let total = 0;
-  for (const sub of SUBREDDITS) { total += await scrapeSubredditPosts(sub, contactedUsers, writtenUsers); await sleep(1500); }
-  for (const sub of TRADING_SUBS) { total += await scrapeSubredditComments(sub, contactedUsers, writtenUsers); await sleep(1500); }
-  for (const q of LIVE_QUERIES) { total += await globalSearch(q, contactedUsers, writtenUsers); await sleep(1200); }
+  for (const sub of subs) {
+    let n = 0;
+    try {
+      const posts = await reddit.getSubreddit(sub).getNew({ limit: 100 });
+      for (const p of posts) n += await consider(p, "POST", sub, "", ctx);
+    } catch (err) { log("ERROR", `r/${sub} posts: ${err.message}`); }
+    await sleep(1200);
+    try {
+      const comments = await reddit.getSubreddit(sub).getNewComments({ limit: 100 });
+      for (const c of comments) n += await consider(c, "COMMENT", sub, c.link_title, ctx);
+    } catch (err) { log("ERROR", `r/${sub} comments: ${err.message}`); }
+    await sleep(1200);
+    if (n) log("LEADS", `r/${sub}: ${n} new`);
+    total += n;
+  }
   saveSeenKeys(); sinceLastSave = 0;
-  log("INFO", `Cycle complete — ${total} lead(s) written.`);
-  if (seenPostKeys.size > 200000) {
-    seenPostKeys = new Set([...seenPostKeys].slice(-120000));
-    saveSeenKeys();
-  }
+  log("INFO", `Cycle done, ${total} new leads, ${knownUsers.size} total in CSV, ${vendorSet.size} bot makers excluded`);
+  if (seenPostKeys.size > 300000) { seenPostKeys = new Set([...seenPostKeys].slice(-150000)); saveSeenKeys(); }
 }
 
-// ---------- Backfill mode ----------
-// Reddit won't page a single listing past roughly 1000 items, so depth comes
-// from breadth: every sub crossed with every query crossed with three sorts,
-// each returning a different slice of the same 180 days.
-async function backfillSubreddit(sub, contactedUsers, writtenUsers) {
-  let count = 0;
-  const subreddit = reddit.getSubreddit(sub);
+async function walkComments(list, sub, title, ctx, depth = 0) {
+  let n = 0;
+  if (!list) return 0;
+  for (const c of list) {
+    if (!c || !c.id || c.body === undefined) continue;
+    n += await consider(c, "COMMENT", sub, title, ctx);
+    if (depth < 3 && c.replies && c.replies.length) n += await walkComments(c.replies, sub, title, ctx, depth + 1);
+  }
+  return n;
+}
 
-  try {
-    const recent = await subreddit.getNew({ limit: 300 });
-    for (const post of recent) count += await considerPost(post, sub, "backfill_new", contactedUsers, writtenUsers);
-  } catch (err) { log("ERROR", `r/${sub} getNew failed: ${err.message}`); }
-  await sleep(1200);
-
-  for (const query of BACKFILL_QUERIES) {
-    for (const sort of BACKFILL_SORTS) {
-      try {
-        const results = await subreddit.search({ query, sort, time: "year", limit: 100, restrictSr: true, syntax: "lucene" });
-        for (const post of results) count += await considerPost(post, sub, `backfill:${query}`, contactedUsers, writtenUsers);
-      } catch (err) {
-        log("ERROR", `r/${sub} search "${query}" (${sort}) failed: ${err.message}`);
+async function backfillSub(sub, ctx) {
+  let n = 0;
+  const threads = new Map();
+  const listings = [
+    ["top",  s => s.getTop({ time: "month", limit: 100 })],
+    ["hot",  s => s.getHot({ limit: 100 })],
+    ["new",  s => s.getNew({ limit: 300 })],
+  ];
+  for (const [label, fn] of listings) {
+    try {
+      const posts = await fn(reddit.getSubreddit(sub));
+      for (const p of posts) {
+        n += await consider(p, "POST", sub, "", ctx);
+        if (p.num_comments > 0 && ageDaysOf(p.created_utc) <= MAX_AGE_DAYS) threads.set(p.id, p);
       }
-      await sleep(1200);
-    }
+    } catch (err) { log("ERROR", `r/${sub} ${label}: ${err.message}`); }
+    await sleep(1200);
   }
-  log("INFO", `r/${sub} backfill done — ${count} lead(s).`);
-  return count;
-}
-
-async function runBackfill() {
-  const started = Date.now();
-  log("INFO", `BACKFILL starting — ${SUBREDDITS.length} subs x ${BACKFILL_QUERIES.length} queries x ${BACKFILL_SORTS.length} sorts.`);
-  log("INFO", `Age caps: ${MAX_AGE_DAYS_PAIN}d for intent/pain posts, ${MAX_AGE_DAYS_HIRING}d for hiring posts.`);
-  log("INFO", "This takes a few hours. Leave it running, it writes each lead as it finds it.");
-  const contactedUsers = loadContactedUsernames();
-  const writtenUsers = new Set();
-  let total = 0;
-  for (const sub of SUBREDDITS) {
-    total += await backfillSubreddit(sub, contactedUsers, writtenUsers);
-    saveSeenKeys();
+  const busiest = [...threads.values()].sort((a, b) => b.num_comments - a.num_comments).slice(0, BACKFILL_COMMENT_THREADS);
+  for (const p of busiest) {
+    try {
+      const full = await reddit.getSubmission(p.id).fetch();
+      n += await walkComments(full.comments, sub, p.title, ctx);
+    } catch (err) { log("ERROR", `thread ${p.id}: ${err.message}`); }
+    await sleep(1200);
   }
   saveSeenKeys();
-  const mins = Math.round((Date.now() - started) / 60000);
-  log("INFO", `BACKFILL COMPLETE — ${total} lead(s) written in ${mins} min. Now run: node scraper.cjs`);
+  log("BACKFILL", `r/${sub} done, ${n} leads`);
+  return n;
 }
 
-// ---------- Entry ----------
 (async () => {
-  console.log(`ClientMagnet Scraper v9 — ${BACKFILL ? "BACKFILL (one-time historical harvest)" : "live mode"}`);
-  console.log(`Subs: ${SUBREDDITS.length} | trading ${TRADING_SUBS.length}, hiring ${HIRING_SUBS.length}, owners ${OWNER_SUBS.length}`);
-  if (BACKFILL) { await runBackfill(); return; }
+  console.log(`ClientMagnet Scraper v10 — ${BACKFILL ? "BACKFILL" : "live"} — every active trader, no keyword filter`);
+  const subs = await validateSubs([...FUTURES_SUBS, ...MT5_SUBS]);
+  if (!subs.length) { log("FATAL", "No subreddits available"); process.exit(1); }
+  log("INFO", `${subs.length} subs live, ${modSet.size} mods excluded, ${knownUsers.size} users already in CSV`);
+
+  if (BACKFILL) {
+    const ctx = { contacted: loadContacted() };
+    let total = 0;
+    for (const sub of subs) total += await backfillSub(sub, ctx);
+    log("BACKFILL", `COMPLETE, ${total} leads written`);
+    return;
+  }
   while (true) {
-    await runScrapeCycle();
-    log("INFO", `Next scrape in ${SCRAPE_INTERVAL_MS / 60000} minutes.`);
+    await runCycle(subs);
     await sleep(SCRAPE_INTERVAL_MS);
   }
 })();
